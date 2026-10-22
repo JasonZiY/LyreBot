@@ -1,3 +1,0 @@
-speed=100
-# Three equally spaced notes occupy one beat; three more beats follow.
-a{1/3}s{1/3}d{1/3}f-g-a-|z---0-

@@ -1,206 +1,144 @@
-from fractions import Fraction
+from fractions import Fraction as F
 from pathlib import Path
-import tempfile
+import math
 import unittest
 
-from lyrebot.score import MAX_FILE_BYTES, Score, ScoreError, load_score, parse_score
+from lyrebot.score import ScoreError, Strike, load_score, parse_score
+
+MUSIC = Path(__file__).resolve().parent.parent / "music"
 
 
-class ScoreParserTests(unittest.TestCase):
-    def test_exact_punctuation_durations_chords_and_rests(self):
-        score = parse_score("speed=120\nhjq-.a.~s~*0*\n")
-        self.assertEqual(score.bpm, 120)
-        self.assertEqual(score.parts, 1)
-        self.assertEqual(score.measures, 1)
-        self.assertEqual(score.events[0].keys, ("h", "j", "q"))
-        self.assertEqual(
-            [event.duration for event in score.events],
-            [Fraction(3, 2), Fraction(3, 4), Fraction(3, 8), Fraction(1, 8)],
-        )
-        self.assertEqual(
-            [event.start for event in score.events],
-            [Fraction(0), Fraction(3, 2), Fraction(9, 4), Fraction(21, 8)],
-        )
-        self.assertEqual(score.events[-1].keys, ())
-        self.assertEqual(score.total_beats, Fraction(11, 4))
-        self.assertEqual(score.duration_seconds, 1.375)
+def notes(text, part=0):
+    """(start, duration, keys) of the pitched events in one part."""
+    return [(e.start, e.duration, e.keys) for e in parse_score(text).events if e.part == part and e.strikes]
 
-    def test_simultaneous_parts_share_absolute_timeline(self):
-        score = parse_score("speed=60\na.s.g-|z--\nf--|x.c.v-\n")
-        self.assertEqual(score.total_beats, 4)
-        self.assertEqual(score.measures, 2)
-        self.assertEqual(score.parts, 2)
-        upper = [event for event in score.events if event.part == 0]
-        lower = [event for event in score.events if event.part == 1]
-        self.assertEqual([event.start for event in upper], [0, Fraction(1, 2), 1, 2])
-        self.assertEqual([event.start for event in lower], [0, 2, Fraction(5, 2), 3])
-        self.assertEqual([event.keys for event in lower], [("z",), ("x",), ("c",), ("v",)])
-        self.assertEqual(score.events, tuple(sorted(score.events, key=lambda event: (event.start, event.part))))
 
-    def test_cross_measure_ties_extend_correct_parts_without_reattack(self):
-        score = parse_score("speed=90\nq--|z--\n-.w.|--\n0--|x--\n")
-        upper = [event for event in score.events if event.part == 0]
-        lower = [event for event in score.events if event.part == 1]
-        self.assertEqual(len(score.events), 5)
-        self.assertEqual(upper[0].start, 0)
-        self.assertEqual(upper[0].duration, Fraction(7, 2))
-        self.assertEqual(upper[0].line, 2)
-        self.assertEqual(upper[1].start, Fraction(7, 2))
-        self.assertEqual(upper[1].line, 3)
-        self.assertEqual(lower[0].duration, 4)
-        self.assertEqual(lower[1].start, 4)
-        self.assertEqual(score.total_beats, 6)
+class Durations(unittest.TestCase):
+    def test_symbols_add_up(self):
+        self.assertEqual(notes("speed=60\na-s.d~f*g--h-.j.~*"), [
+            (0, 1, ("a",)), (1, F(1, 2), ("s",)), (F(3, 2), F(1, 4), ("d",)), (F(7, 4), F(1, 8), ("f",)),
+            (F(15, 8), 2, ("g",)), (F(31, 8), F(3, 2), ("h",)), (F(43, 8), F(7, 8), ("j",)),
+        ])
 
-    def test_rest_can_continue_across_multiple_measures(self):
-        score = parse_score("speed=100\n0-\n-\n.a.\n")
-        self.assertEqual(len(score.events), 2)
-        self.assertEqual(score.events[0].keys, ())
-        self.assertEqual(score.events[0].duration, Fraction(5, 2))
-        self.assertEqual(score.events[1].start, Fraction(5, 2))
-        self.assertEqual(score.total_beats, 3)
+    def test_braces_are_exact_and_mix_with_symbols(self):
+        self.assertEqual(notes("speed=60\na{1/3}s{2}d-{1/3}"),
+                         [(0, F(1, 3), ("a",)), (F(1, 3), 2, ("s",)), (F(7, 3), F(4, 3), ("d",))])
 
-    def test_exact_tuplets_and_fractional_continuation(self):
-        score = parse_score("speed=120\na{1/3}s{1/3}d{1/3}|z-\n{2/3}f{1/3}|x{1}\n")
-        upper = [event for event in score.events if event.part == 0]
-        self.assertEqual([event.start for event in upper], [0, Fraction(1, 3), Fraction(2, 3), Fraction(5, 3)])
-        self.assertEqual(upper[2].duration, 1)
-        self.assertEqual(score.total_beats, 2)
-        self.assertEqual(score.duration_seconds, 1)
+    def test_chords_and_rests(self):
+        score = parse_score("speed=60\nadg-0.q.")
+        self.assertEqual([(e.start, e.keys) for e in score.events], [(0, ("a", "d", "g")), (1, ()), (F(3, 2), ("q",))])
 
-    def test_explicit_integer_duration_and_reduced_fraction(self):
-        score = parse_score("speed=80\nas{2}0{2/4}\n")
-        self.assertEqual(score.events[0].duration, 2)
-        self.assertEqual(score.events[1].duration, Fraction(1, 2))
+    def test_leading_duration_extends_previous_note_across_lines(self):
+        score = parse_score("speed=60\na-s-|z--\n--d-|---")
+        self.assertEqual([(e.start, e.duration, e.keys) for e in score.events if e.part == 0],
+                         [(0, 1, ("a",)), (1, 3, ("s",)), (4, 1, ("d",))])
+        self.assertEqual([(e.duration, e.keys) for e in score.events if e.part == 1], [(5, ("z",))])
+        self.assertEqual(score.total_beats, 5)
 
-    def test_comments_whitespace_and_original_line_numbers(self):
-        score = parse_score("# title\n\nspeed = 120 # bpm\n\n a - s . 0 . # measure one\n")
-        self.assertEqual(score.total_beats, 2)
-        self.assertEqual(score.events[0].line, 5)
-        self.assertEqual(score.measures, 1)
 
-    def test_utf8_bom_and_unicode_filename(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as directory:
-            path = Path(directory) / "琴仙乐谱_测试.txt"
-            path.write_text("speed=99\na-\n", encoding="utf-8-sig")
-            score = load_score(path)
-        self.assertEqual(score.bpm, 99)
-        self.assertEqual(score.events[0].keys, ("a",))
-        self.assertEqual(parse_score("\ufeffspeed=99\na-\n"), score)
+class Groups(unittest.TestCase):
+    def test_triplet_fits_into_the_group_duration(self):
+        self.assertEqual(notes("speed=60\n(a.s.d.)-f-"),
+                         [(0, F(1, 3), ("a",)), (F(1, 3), F(1, 3), ("s",)), (F(2, 3), F(1, 3), ("d",)), (1, 1, ("f",))])
 
-    def test_tempo_accepts_decimals_and_scientific_notation(self):
-        self.assertEqual(parse_score("speed=99.5\na-").bpm, 99.5)
-        self.assertEqual(parse_score("speed=1.2e2\na-").bpm, 120)
-        self.assertEqual(parse_score("speed=1000\na-").bpm, 1000)
+    def test_uneven_and_nested_groups(self):
+        self.assertEqual(notes("speed=60\n(a-s.)-"), [(0, F(2, 3), ("a",)), (F(2, 3), F(1, 3), ("s",))])
+        self.assertEqual(notes("speed=60\n(a-(s.d.f.)-)-"),
+                         [(0, F(1, 2), ("a",)), (F(1, 2), F(1, 6), ("s",)), (F(2, 3), F(1, 6), ("d",)),
+                          (F(5, 6), F(1, 6), ("f",))])
 
-    def test_invalid_tempos(self):
-        for tempo in ("", "0", "-1", "0.999", "1e-300", "1000.1", "nan", "NaN", "inf", "1e309", "1e-999", "1_20", "fast", "１２３"):
-            with self.subTest(tempo=tempo):
-                with self.assertRaisesRegex(ScoreError, "第 1 行"):
-                    parse_score(f"speed={tempo}\na-\n")
+    def test_quintuplet_with_rest_and_chord(self):
+        found = notes("speed=60\n(a~s~0~dg~h~)..")
+        self.assertEqual([start for start, _, _ in found], [0, F(1, 5), F(3, 5), F(4, 5)])
+        self.assertEqual(found[2][2], ("d", "g"))
 
-    def test_missing_header_and_missing_measures(self):
-        for source in ("", "# comment only", "a-", "speed=120"):
-            with self.subTest(source=source):
-                with self.assertRaises(ScoreError):
-                    parse_score(source)
 
-    def test_rejects_malformed_tokens(self):
-        malformed = (
-            "a", "a-s", "A-", "k-", "a#-", "aa-", "asda-", "00-", "0a-",
-            "a/", "a{0}", "a{1/0}", "a{0/3}", "a{-1}", "a{1/-3}",
-            "a{1.5}", "a{}", "a{1/3", "a{1//3}", "a{1/3}.", "a-{1/3}",
-            "a{1}{2}", "a-{-1}", "a-}", "a()", "a{１/３}",
-        )
-        for measure in malformed:
-            with self.subTest(measure=measure):
-                with self.assertRaisesRegex(ScoreError, "第 2 行，第 1 声部"):
-                    parse_score(f"speed=120\n{measure}\n")
+class Ornaments(unittest.TestCase):
+    def test_roll_spreads_keys_in_written_order(self):
+        event = parse_score("speed=60\n^adg-").events[0]
+        self.assertEqual(event.strikes, (Strike(("a",), 0), Strike(("d",), 30), Strike(("g",), 60)))
+        down = parse_score("speed=60\nroll=50\n^gda-").events[0]
+        self.assertEqual([(s.keys, s.delay_ms) for s in down.strikes], [(("g",), 0), (("d",), 50), (("a",), 100)])
 
-    def test_leading_continuation_requires_predecessor_in_same_part(self):
-        for measure in ("-", "{1/3}", "a-|-", "-|a-"):
-            with self.subTest(measure=measure):
-                with self.assertRaisesRegex(ScoreError, "前面必须有同一声部的音符"):
-                    parse_score(f"speed=120\n{measure}\n")
+    def test_grace_notes_come_first_and_delay_the_main_note(self):
+        event = parse_score("speed=60\ns'a-").events[0]
+        self.assertEqual(event.strikes, (Strike(("s",), 0), Strike(("a",), 60)))
+        event = parse_score("speed=60\ngrace=40\nd's'^adg-").events[0]
+        self.assertEqual([(s.keys, s.delay_ms) for s in event.strikes],
+                         [(("d",), 0), (("s",), 40), (("a",), 80), (("d",), 110), (("g",), 140)])
+        self.assertEqual(event.duration, 1)
 
-    def test_mismatched_parts_report_line_and_lengths(self):
-        with self.assertRaisesRegex(ScoreError, r"第 2 行：.*声部 1 = 1 拍，声部 2 = 2 拍"):
-            parse_score("speed=120\na-|z--\n")
-        with self.assertRaisesRegex(ScoreError, "第 3 行：应为 2 个声部"):
-            parse_score("speed=120\na-|z-\ns-\n")
-        with self.assertRaisesRegex(ScoreError, "第 3 行：应为 1 个声部"):
-            parse_score("speed=120\na-\ns-|x-\n")
 
-    def test_empty_parts_and_excess_parts_are_rejected(self):
-        for measure in ("a-|", "|a-", "a-||z-", "a-|s-|d-"):
-            with self.subTest(measure=measure):
-                with self.assertRaises(ScoreError):
-                    parse_score(f"speed=120\n{measure}\n")
+class Tempo(unittest.TestCase):
+    def test_jump_between_measures(self):
+        score = parse_score("speed=60\na-\nspeed=120\na-")
+        self.assertEqual(score.tempo_changes, 1)
+        self.assertAlmostEqual(score.duration_seconds, 1.5)
 
-    def test_final_rests_are_preserved(self):
-        score = parse_score("speed=120\na-\n0---\n")
-        self.assertEqual(score.total_beats, 4)
-        self.assertEqual(score.events[-1].keys, ())
-        self.assertEqual(score.events[-1].start, 1)
-        self.assertEqual(score.events[-1].duration, 3)
+    def test_glide_reaches_target_at_next_mark(self):
+        score = parse_score("speed=120\na-a-\nspeed=>60\na-a-\nspeed=120\na-")
+        tempo = score.tempo_map()
+        self.assertAlmostEqual(tempo.seconds(F(2)), 1.0)
+        # 120 -> 60 over two beats: integral of 60 / bpm.
+        glide = 60 * 2 / (60 - 120) * math.log(60 / 120)
+        self.assertAlmostEqual(tempo.seconds(F(4)), 1.0 + glide)
+        self.assertAlmostEqual(tempo.seconds(F(5)), 1.0 + glide + 0.5)
+        self.assertLess(tempo.seconds(F(3)) - 1.0, glide / 2)  # first half of a slowdown is quicker
 
-    def test_variable_measure_lengths_are_accepted(self):
-        score = parse_score("speed=120\na.\ns---\nd-\n")
-        self.assertEqual(score.total_beats, Fraction(9, 2))
-        self.assertEqual([event.start for event in score.events], [0, Fraction(1, 2), Fraction(7, 2)])
+    def test_glide_with_explicit_start_runs_to_the_end(self):
+        score = parse_score("speed=100\na-\nspeed=80>40\na-a-")
+        self.assertAlmostEqual(score.duration_seconds, 0.6 + 60 * 2 / -40 * math.log(40 / 80))
 
-    def test_total_playback_length_is_limited_to_24_hours(self):
-        self.assertEqual(parse_score("speed=60\na{86400}\n").duration_seconds, 86400)
-        self.assertEqual(parse_score("speed=1\na{1440}\n").duration_seconds, 86400)
-        for measure in ("a{86401}", "a{86400}a{1/3}", "a{" + "9" * 1000 + "/3}"):
-            with self.subTest(measure=measure[:30]):
-                with self.assertRaisesRegex(ScoreError, "第 2 行：.*24 小时"):
-                    parse_score(f"speed=60\n{measure}\n")
+    def test_speed_factor_scales_everything(self):
+        score = parse_score("speed=120\na-\nspeed=>60\na-a-")
+        self.assertAlmostEqual(score.tempo_map(2.0).seconds(score.total_beats), score.duration_seconds / 2)
 
-    def test_fraction_beyond_python_integer_limit_has_helpful_error(self):
+    def test_later_mark_at_same_place_wins(self):
+        self.assertEqual(parse_score("speed=60\nspeed=90\na-").bpm, 90)
+
+
+class Errors(unittest.TestCase):
+    def check(self, text, fragment):
         with self.assertRaises(ScoreError) as caught:
-            parse_score("speed=60\na{" + "9" * 5000 + "/3}\n")
-        self.assertIn("第 2 行", str(caught.exception))
-        self.assertIn("过大", str(caught.exception))
+            parse_score(text)
+        self.assertIn(fragment, str(caught.exception))
 
-    def test_runtime_property_rejects_invalid_manually_constructed_scores(self):
-        invalid = (
-            Score(float("nan"), (), Fraction(1), 1, 1),
-            Score(float("inf"), (), Fraction(1), 1, 1),
-            Score(1e-300, (), Fraction(1), 1, 1),
-            Score(120, (), Fraction(10 ** 1000), 1, 1),
-            Score(120, (), Fraction(-1), 1, 1),
-        )
-        for score in invalid:
-            with self.subTest(bpm=score.bpm):
-                with self.assertRaises(ScoreError):
-                    _ = score.duration_seconds
+    def test_messages_name_the_problem(self):
+        self.check("a-", "speed=")
+        self.check("speed=60\na", "缺少时值")
+        self.check("speed=60\naa-", "重复")
+        self.check("speed=60\nk-", "无法识别")
+        self.check("speed=60\na-|a--", "长度不一致")
+        self.check("speed=60\na-|a-\na-", "应有 2 个声部")
+        self.check("speed=60\n--", "没有可延长")
+        self.check("speed=60\n(a.s.", "右括号")
+        self.check("speed=60\n(a.s.)", "括号组后面")
+        self.check("speed=60\na-)", "多余")
+        self.check("speed=60\n^a-", "琶音")
+        self.check("speed=60\ns'0-", "倚音")
+        self.check("speed=60\na{0}", "大于 0")
+        self.check("speed=60\na{1.5}", "分数")
+        self.check("speed=0\na-", "1 到 1000")
+        self.check("speed=>60\na-", "前面需要")
+        self.check("speed=60\nvolume=3\na-", "未知的指令")
+        self.check("speed=60\n", "没有小节")
 
-    def test_mid_score_tempo_change(self):
-        score = parse_score("speed=60\na-s-|z--\nspeed=120\nd-f-|x--\n")
-        self.assertEqual(score.bpm, 60)
-        self.assertEqual(score.measures, 2)
-        self.assertEqual(score.tempo_changes, ((Fraction(2), 120.0),))
-        # 2 beats at 60 BPM + 2 beats at 120 BPM.
-        self.assertEqual(score.duration_seconds, 3.0)
+    def test_errors_show_line_and_part(self):
+        self.check("speed=60\n\n# note\na-|z-x\n", "第 4 行第 2 声部")
 
-    def test_tempo_change_before_first_measure_replaces_header(self):
-        score = parse_score("speed=60\nspeed=90\na-\n")
-        self.assertEqual(score.bpm, 90)
-        self.assertEqual(score.tempo_changes, ())
 
-    def test_invalid_mid_score_tempo_reports_line(self):
-        with self.assertRaisesRegex(ScoreError, "第 3 行"):
-            parse_score("speed=60\na-\nspeed=0\ns-\n")
+class Files(unittest.TestCase):
+    def test_every_bundled_score_loads(self):
+        files = sorted(MUSIC.glob("*.txt"))
+        self.assertTrue(files)
+        for path in files:
+            with self.subTest(path.name):
+                self.assertGreater(load_score(path).notes, 0)
 
-    def test_file_size_and_encoding_errors_are_helpful(self):
-        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as directory:
-            path = Path(directory) / "score.txt"
-            path.write_bytes(b"#" * (MAX_FILE_BYTES + 1))
-            with self.assertRaisesRegex(ScoreError, "2 MiB"):
-                load_score(path)
-            path.write_bytes(b"speed=60\na-\n\xff")
-            with self.assertRaisesRegex(ScoreError, "UTF-8"):
-                load_score(path)
+    def test_comments_whitespace_and_bom(self):
+        score = parse_score("﻿# title\nspeed = 60\n a - s . | z - x . # comment\n")
+        self.assertEqual(score.parts, 2)
+        self.assertEqual(score.total_beats, F(3, 2))
 
 
 if __name__ == "__main__":

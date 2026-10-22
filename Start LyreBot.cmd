@@ -5,7 +5,7 @@ where python >nul 2>nul
 if not errorlevel 1 goto python
 where py >nul 2>nul
 if not errorlevel 1 goto py
-echo Python 3.10 or newer is needed to run LyreBot.
+echo Python 3.11 or newer is needed to run LyreBot.
 echo See README.md in this folder for help.
 pause
 exit /b 1

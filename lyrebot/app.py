@@ -1,4 +1,4 @@
-"""桌面界面：从 music 文件夹选曲，倒计时后把曲谱按键发送到前台窗口。"""
+"""A small window: pick a song, switch to the game, it plays."""
 
 from __future__ import annotations
 
@@ -13,20 +13,20 @@ import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from .playback import compile_timeline, play_timeline
-from .score import Score, load_score
-from .windows_input import WindowsInput, get_foreground_window
-
+from .keyboard import Keyboard, foreground_title_and_pid
+from .player import play
+from .score import Score, ScoreError, load_score
+from .timeline import compile_timeline
 
 PROJECT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = PROJECT / "music"
-APP_TITLE = "LyreBot 自动演奏"
-BACKGROUND = "#f4f6fb"
+COUNTDOWN = 2.0
+FONT = ("Microsoft YaHei UI", 10)
 
 
-def _clock_label(seconds: float) -> str:
-    minutes, seconds = divmod(max(0, int(seconds)), 60)
-    return f"{minutes:02d}:{seconds:02d}"
+def clock(seconds: float) -> str:
+    minutes, seconds = divmod(max(0, round(seconds)), 60)
+    return f"{minutes}:{seconds:02d}"
 
 
 def is_admin() -> bool:
@@ -37,378 +37,230 @@ def is_admin() -> bool:
 
 
 def relaunch_as_admin() -> bool:
-    """Ask Windows (UAC) to start a new elevated LyreBot. True if it started."""
     try:
-        result = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", sys.executable, "-m lyrebot", str(PROJECT), 1)
+        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, "-m lyrebot", str(PROJECT), 1)
     except (AttributeError, OSError):
         return False
     return int(result) > 32
 
 
-class _DisplayBackend:
-    """Forward real input and report the held keys to the interface."""
-
-    def __init__(self, updates: queue.Queue, real: WindowsInput):
-        self.updates = updates
-        self.real = real
-        self.held: set[str] = set()
-
-    def foreground_window(self) -> int:
-        return self.real.foreground_window()
-
-    def stop_requested(self) -> bool:
-        return self.real.stop_requested()
-
-    def held_modifiers(self) -> tuple[str, ...]:
-        return self.real.held_modifiers()
-
-    def send_keys(self, keys: tuple[str, ...], down: bool) -> None:
-        self.real.send_keys(keys, down)
-        if down:
-            self.held.update(keys)
-        else:
-            self.held.difference_update(keys)
-        self.updates.put(("keys", tuple(self.held)))
-
-    def release_all(self) -> None:
-        try:
-            self.real.release_all()
-        finally:
-            self.held.clear()
-            self.updates.put(("keys", ()))
-
-
-class LyreBotApp:
+class App:
     def __init__(self, root: tk.Tk, music_dir: Path = MUSIC_DIR):
         self.root = root
-        self.music_dir = Path(music_dir)
-        self.root.title(APP_TITLE)
-        scale = max(1.0, self.root.winfo_fpixels("1i") / 96)
-        self.wrap = int(600 * scale)
-        self.root.geometry(f"{int(900 * scale)}x{int(640 * scale)}")
-        self.root.minsize(int(800 * scale), int(580 * scale))
-        self.root.configure(background=BACKGROUND)
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.root.bind("<F8>", lambda _event: self.stop())
+        self.music_dir = music_dir
         self.songs: list[Path] = []
-        self.score: Score | None = None
-        self.score_path: Path | None = None
+        self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
         self.worker: threading.Thread | None = None
         self.cancel = threading.Event()
         self.updates: queue.Queue = queue.Queue()
-        self.closing = False
         self.duration = 0.0
-        self.song_title = tk.StringVar(value="未选择曲目")
-        self.summary = tk.StringVar(value="在左侧列表中选择一首曲子。")
+        self.closing = False
+
+        root.title("LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）")
+        scale = root.winfo_fpixels("1i") / 96
+        root.geometry(f"{int(300 * scale)}x{int(400 * scale)}")
+        root.minsize(int(260 * scale), int(260 * scale))
+        root.protocol("WM_DELETE_WINDOW", self.close)
+        root.bind("<F8>", lambda _: self.stop())
+
+        frame = ttk.Frame(root, padding=8)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+
+        self.listbox = tk.Listbox(frame, font=(FONT[0], 11), activestyle="none", exportselection=False,
+                                  borderwidth=1, highlightthickness=0)
+        self.listbox.grid(row=0, column=0, sticky="nsew")
+        bar = ttk.Scrollbar(frame, command=self.listbox.yview)
+        bar.grid(row=0, column=1, sticky="ns")
+        self.listbox.configure(yscrollcommand=bar.set)
+        self.listbox.bind("<<ListboxSelect>>", lambda _: self.show_selected())
+        self.listbox.bind("<Double-Button-1>", lambda _: self.toggle())
+        self.listbox.bind("<Return>", lambda _: self.toggle())
+        menu = tk.Menu(root, tearoff=False)
+        menu.add_command(label="打开曲谱文件夹", command=self.open_folder)
+        self.listbox.bind("<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root))
+
+        row = ttk.Frame(frame)
+        row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ttk.Label(row, text="速度", font=FONT).pack(side="left")
         self.speed = tk.StringVar(value="100")
-        self.tap_ms = tk.StringVar(value="35")
-        self.countdown = tk.StringVar(value="3")
-        self.status = tk.StringVar(value="就绪。")
-        self.elapsed = tk.StringVar(value="00:00 / 00:00")
-        self.controls: list[tk.Widget] = []
-        self.key_labels: dict[str, tk.Label] = {}
-        self._build()
-        self.refresh_songs()
-        self.root.after(25, self._poll)
+        self.speed_box = ttk.Spinbox(row, from_=25, to=300, increment=5, width=4, textvariable=self.speed, font=FONT)
+        self.speed_box.pack(side="left", padx=(4, 2))
+        ttk.Label(row, text="%", font=FONT).pack(side="left")
+        self.button = ttk.Button(row, text="演奏", width=8, command=self.toggle)
+        self.button.pack(side="right")
 
-    # ---------- 界面 ----------
-    def _build(self) -> None:
-        style = ttk.Style(self.root)
-        if "clam" in style.theme_names():
-            style.theme_use("clam")
-        font = "Microsoft YaHei UI"
-        style.configure("TFrame", background=BACKGROUND)
-        style.configure("TLabel", background=BACKGROUND, font=(font, 10))
-        style.configure("TButton", font=(font, 10), padding=(12, 6))
-        style.configure("Title.TLabel", font=(font, 20, "bold"), foreground="#183b63")
-        style.configure("Song.TLabel", font=(font, 14, "bold"), foreground="#183b63")
-        style.configure("Sub.TLabel", foreground="#54657a")
-        style.configure("Warn.TLabel", foreground="#b45309", font=(font, 10, "bold"))
+        self.progress = ttk.Progressbar(frame, maximum=1.0)
+        self.progress.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.status = tk.StringVar()
+        ttk.Label(frame, textvariable=self.status, font=FONT, foreground="#555").grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
-        body = ttk.Frame(self.root, padding=16)
-        body.pack(fill="both", expand=True)
-        body.columnconfigure(1, weight=1)
-        body.rowconfigure(2, weight=1)
+        self.refresh()
+        if self.songs:
+            self.listbox.selection_set(0)
+            self.show_selected()
+        root.after(30, self.poll)
+        root.after(2000, self.watch)
 
-        ttk.Label(body, text=APP_TITLE, style="Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
-        if not is_admin():
-            banner = ttk.Frame(body)
-            banner.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 10))
-            ttk.Label(banner, text="当前未以管理员身份运行：原神等游戏会忽略按键。",
-                      style="Warn.TLabel").pack(side="left")
-            self._button(banner, "以管理员身份重新启动", self.restart_as_admin).pack(side="left", padx=10)
-        else:
-            ttk.Label(body, text="已以管理员身份运行。", style="Sub.TLabel").grid(
-                row=1, column=0, columnspan=2, sticky="w", pady=(4, 10))
+    def watch(self) -> None:
+        """Pick up scores added, removed or edited while the window is open."""
+        self.refresh()
+        self.root.after(2000, self.watch)
 
-        # 左侧：曲目列表
-        left = ttk.Frame(body)
-        left.grid(row=2, column=0, sticky="ns", padx=(0, 16))
-        left.rowconfigure(1, weight=1)
-        ttk.Label(left, text="曲目（music 文件夹，双击开始演奏）").grid(row=0, column=0, columnspan=2, sticky="w")
-        self.song_list = tk.Listbox(left, width=26, font=("Microsoft YaHei UI", 11), activestyle="none",
-                                    exportselection=False, selectbackground="#2766bc")
-        self.song_list.grid(row=1, column=0, sticky="ns", pady=(4, 6))
-        scrollbar = ttk.Scrollbar(left, orient="vertical", command=self.song_list.yview)
-        scrollbar.grid(row=1, column=1, sticky="ns", pady=(4, 6))
-        self.song_list.configure(yscrollcommand=scrollbar.set)
-        self.song_list.bind("<<ListboxSelect>>", lambda _event: self.select_song())
-        self.song_list.bind("<Double-Button-1>", lambda _event: self.start())
-        self.song_list.bind("<Return>", lambda _event: self.start())
-        self.controls.append(self.song_list)
-        buttons = ttk.Frame(left)
-        buttons.grid(row=2, column=0, columnspan=2, sticky="w")
-        self._button(buttons, "刷新列表", self.refresh_songs).pack(side="left")
-        self._button(buttons, "打开文件夹", self.open_music_dir).pack(side="left", padx=6)
-
-        # 右侧：信息、设置、键盘、控制
-        right = ttk.Frame(body)
-        right.grid(row=2, column=1, sticky="nsew")
-        right.columnconfigure(0, weight=1)
-        ttk.Label(right, textvariable=self.song_title, style="Song.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(right, textvariable=self.summary, style="Sub.TLabel", wraplength=self.wrap).grid(
-            row=1, column=0, sticky="w", pady=(2, 12))
-
-        settings = ttk.Frame(right)
-        settings.grid(row=2, column=0, sticky="w")
-        for column, (label, value, low, high, step) in enumerate((
-            ("速度（%）", self.speed, 25, 300, 5),
-            ("按键时长（毫秒）", self.tap_ms, 1, 500, 5),
-            ("倒计时（秒）", self.countdown, 1, 30, 1),
-        )):
-            cell = ttk.Frame(settings)
-            cell.grid(row=0, column=column, padx=(0, 22), sticky="w")
-            ttk.Label(cell, text=label).pack(anchor="w")
-            field = ttk.Spinbox(cell, from_=low, to=high, increment=step, textvariable=value, width=10)
-            field.pack(anchor="w", pady=(3, 0))
-            self.controls.append(field)
-
-        keyboard = tk.Frame(right, background="#e5ebf4", padx=8, pady=8)
-        keyboard.grid(row=3, column=0, sticky="ew", pady=14)
-        for row, keys in enumerate(("qwertyu", "asdfghj", "zxcvbnm")):
-            for column, key in enumerate(keys):
-                keyboard.columnconfigure(column, weight=1)
-                label = tk.Label(keyboard, text=key.upper(), font=("Segoe UI", 12, "bold"),
-                                 background="white", foreground="#183b63", pady=6)
-                label.grid(row=row, column=column, padx=3, pady=3, sticky="ew")
-                self.key_labels[key] = label
-
-        actions = ttk.Frame(right)
-        actions.grid(row=4, column=0, sticky="w")
-        self._button(actions, "开始演奏", self.start).pack(side="left")
-        self.stop_button = ttk.Button(actions, text="停止（F8）", command=self.stop, state="disabled")
-        self.stop_button.pack(side="left", padx=8)
-        self.progress = ttk.Progressbar(right, maximum=1)
-        self.progress.grid(row=5, column=0, sticky="ew", pady=(12, 2))
-        ttk.Label(right, textvariable=self.elapsed, style="Sub.TLabel").grid(row=6, column=0, sticky="e")
-        ttk.Label(right, textvariable=self.status, wraplength=self.wrap).grid(row=7, column=0, sticky="w", pady=4)
-        ttk.Label(right, style="Sub.TLabel", wraplength=self.wrap, justify="left", text=(
-            "用法：选好曲子后点「开始演奏」，在倒计时内切换到游戏并打开琴。"
-            "倒计时结束时位于前台的窗口就是演奏目标。\n"
-            "停止方式：按住 F8、切换到其他窗口、按住 Ctrl/Shift/Alt/Win，或把鼠标移到主屏幕左上角。\n"
-            "如果游戏里没有声音：确认已以管理员身份运行，并把输入法切到英文模式（中文输入法会拦截字母键）。"
-        )).grid(row=8, column=0, sticky="w", pady=(8, 0))
-
-    def _button(self, parent, text, command):
-        button = ttk.Button(parent, text=text, command=command)
-        self.controls.append(button)
-        return button
-
-    # ---------- 曲目 ----------
-    def refresh_songs(self) -> None:
-        current = self.score_path
-        self.songs = sorted(self.music_dir.glob("*.txt"), key=lambda path: path.stem) \
-            if self.music_dir.is_dir() else []
-        self.song_list.delete(0, "end")
-        for path in self.songs:
-            self.song_list.insert("end", path.stem)
-        if not self.songs:
-            self.status.set(f"没有找到曲谱：请把 .txt 曲谱放进 {self.music_dir}")
-            return
-        if current in self.songs:
-            index = self.songs.index(current)
-            self.song_list.selection_set(index)
-            self.song_list.see(index)
-            self.load(current)
-
-    def open_music_dir(self) -> None:
+    # ---- songs ----
+    def read(self, path: Path) -> Score | ScoreError:
         try:
-            self.music_dir.mkdir(exist_ok=True)
-            os.startfile(self.music_dir)  # type: ignore[attr-defined]
-        except (AttributeError, OSError) as error:
-            messagebox.showerror("无法打开文件夹", str(error), parent=self.root)
-
-    def select_song(self) -> None:
-        selection = self.song_list.curselection()
-        if selection and not self.worker:
-            self.load(self.songs[selection[0]])
-
-    def load(self, path: Path) -> bool:
-        self.score_path = path
-        self.song_title.set(path.stem)
-        self.progress["value"] = 0
+            stamp = path.stat().st_mtime
+        except OSError as error:
+            return ScoreError(str(error))
+        cached = self.cache.get(path)
+        if cached and cached[0] == stamp:
+            return cached[1]
         try:
-            score = load_score(path)
-        except (OSError, ValueError, UnicodeError) as error:
-            self.score = None
-            self.summary.set(f"曲谱有误，无法演奏：{error}")
-            self.status.set("请修改该曲谱文件后点「刷新列表」。")
-            self.elapsed.set("00:00 / 00:00")
-            return False
-        self.score = score
-        notes = sum(bool(event.keys) for event in score.events)
-        details = [f"速度 {score.bpm:g} BPM", f"{score.measures} 小节", f"{score.parts} 个声部",
-                   f"{notes} 个音符/和弦", f"时长 {_clock_label(score.duration_seconds)}"]
-        if score.tempo_changes:
-            details.insert(1, f"曲中变速 {len(score.tempo_changes)} 处")
-        self.summary.set(" · ".join(details))
-        self.status.set("就绪。点「开始演奏」或双击曲目。")
-        self.duration = score.duration_seconds
-        self.elapsed.set(f"00:00 / {_clock_label(self.duration)}")
-        return True
+            result: Score | ScoreError = load_score(path)
+        except (ScoreError, OSError) as error:
+            result = error if isinstance(error, ScoreError) else ScoreError(str(error))
+        self.cache[path] = (stamp, result)
+        return result
 
-    def restart_as_admin(self) -> None:
+    def refresh(self) -> None:
         if self.worker:
             return
-        if relaunch_as_admin():
-            self.root.destroy()
-        else:
-            messagebox.showerror("无法以管理员身份启动",
-                                 "请右键「Start LyreBot.cmd」，选择「以管理员身份运行」。", parent=self.root)
+        chosen = self.selected()
+        songs = sorted(self.music_dir.glob("*.txt"), key=lambda p: p.stem) if self.music_dir.is_dir() else []
+        labels = [("⚠ " if isinstance(self.read(p), ScoreError) else "") + p.stem for p in songs]
+        if songs != self.songs or list(self.listbox.get(0, "end")) != labels:
+            self.songs = songs
+            self.listbox.delete(0, "end")
+            for label in labels:
+                self.listbox.insert("end", label)
+            if chosen in songs:
+                self.listbox.selection_set(songs.index(chosen))
+                self.listbox.see(songs.index(chosen))
+            self.show_selected()
+        if not songs:
+            self.status.set("music 文件夹里还没有 .txt 曲谱（右键列表可打开文件夹）")
 
-    # ---------- 演奏 ----------
-    def _read_settings(self) -> tuple[float, float, float]:
+    def selected(self) -> Path | None:
+        chosen = self.listbox.curselection()
+        return self.songs[chosen[0]] if chosen and chosen[0] < len(self.songs) else None
+
+    def show_selected(self) -> None:
+        if self.worker:
+            return
+        path = self.selected()
+        if path is None:
+            return
+        score = self.read(path)
+        self.progress["value"] = 0
+        if isinstance(score, ScoreError):
+            self.status.set(f"曲谱有误：{score}")
+            return
+        tempo = f"{score.bpm:g} BPM" + (f"（变速 {score.tempo_changes} 处）" if score.tempo_changes else "")
+        self.status.set(f"{tempo} · {clock(score.duration_seconds)}")
+
+    def open_folder(self) -> None:
+        self.music_dir.mkdir(exist_ok=True)
+        os.startfile(self.music_dir)  # type: ignore[attr-defined]
+
+    # ---- playing ----
+    def toggle(self) -> None:
+        if self.worker:
+            self.stop()
+            return
+        path = self.selected()
+        if path is None:
+            return
+        self.cache.pop(path, None)  # always play the file as it is now
+        score = self.read(path)
+        if isinstance(score, ScoreError):
+            messagebox.showerror("曲谱有误", str(score), parent=self.root)
+            self.refresh()
+            return
         try:
-            speed = float(self.speed.get())
-            tap_ms = float(self.tap_ms.get())
-            delay = float(self.countdown.get())
+            speed = float(self.speed.get()) / 100
+            if not 0.25 <= speed <= 3:
+                raise ValueError
         except ValueError:
-            raise ValueError("速度、按键时长和倒计时必须是数字。") from None
-        if not math.isfinite(speed) or not 25 <= speed <= 300:
-            raise ValueError("速度必须在 25% 到 300% 之间。")
-        if not math.isfinite(tap_ms) or not 1 <= tap_ms <= 500:
-            raise ValueError("按键时长必须在 1 到 500 毫秒之间。")
-        if not math.isfinite(delay) or not 1 <= delay <= 30:
-            raise ValueError("倒计时必须在 1 到 30 秒之间。")
-        return speed, tap_ms, delay
-
-    def start(self) -> None:
-        if self.worker:
+            messagebox.showerror("速度无效", "速度请填 25 到 300 之间的数字。", parent=self.root)
             return
-        self.select_song()
-        if not self.score:
-            messagebox.showinfo("请选择曲目", "请先在左侧选择一首可以演奏的曲子。", parent=self.root)
-            return
-        try:
-            speed, tap_ms, delay = self._read_settings()
-            timeline = compile_timeline(self.score, bpm=self.score.bpm * speed / 100, tap_ms=tap_ms)
-            backend = WindowsInput()
-        except (ValueError, OSError, RuntimeError) as error:
-            messagebox.showerror("无法开始演奏", str(error), parent=self.root)
-            return
+        timeline = compile_timeline(score, speed)
+        self.duration = timeline.duration
         self.cancel = threading.Event()
-        self.duration = timeline.duration_seconds
-        self.progress["value"] = 0
-        self.elapsed.set(f"00:00 / {_clock_label(self.duration)}")
-        self._set_running(True)
-        display = _DisplayBackend(self.updates, backend)
-
-        def run() -> None:
-            last_update = -1.0
-
-            def progress(elapsed: float) -> None:
-                nonlocal last_update
-                if elapsed - last_update >= 0.03 or elapsed >= self.duration:
-                    self.updates.put(("progress", elapsed))
-                    last_update = elapsed
-
-            try:
-                deadline = time.perf_counter() + delay
-                previous_seconds = None
-                while True:
-                    remaining = deadline - time.perf_counter()
-                    if self.cancel.is_set() or display.stop_requested():
-                        self.updates.put(("status", "已在倒计时中停止。"))
-                        return
-                    if remaining <= 0:
-                        break
-                    seconds = math.ceil(remaining)
-                    if seconds != previous_seconds:
-                        self.updates.put(("status", f"{seconds} 秒后开始……请切换到游戏窗口。"))
-                        previous_seconds = seconds
-                    self.cancel.wait(min(0.01, remaining))
-                target = get_foreground_window()
-                if not target.hwnd or target.process_id == os.getpid():
-                    self.updates.put(("status", "倒计时结束时前台仍是 LyreBot，未发送按键。请在倒计时内切换到游戏窗口。"))
-                    return
-                name = target.title or "无标题窗口"
-                self.updates.put(("status", f"正在向「{name}」演奏……按住 F8 停止。"))
-                result = play_timeline(timeline, display, target.hwnd, self.cancel, on_progress=progress)
-                self.updates.put(("status", "演奏完成。" if result.reason == "completed" else "演奏已停止。"))
-            except Exception as error:
-                self.updates.put(("error", str(error)))
-            finally:
-                try:
-                    display.release_all()
-                except Exception as error:
-                    self.updates.put(("error", f"松开按键失败：{error}。请手动松开相关按键。"))
-                self.updates.put(("done", None))
-
-        self.worker = threading.Thread(target=run, name="lyrebot-playback", daemon=True)
+        self.button.configure(text="停止")
+        self.speed_box.configure(state="disabled")
+        self.listbox.configure(state="disabled")
+        self.worker = threading.Thread(target=self.run, args=(timeline,), daemon=True)
         self.worker.start()
 
-    def _set_running(self, running: bool) -> None:
-        for control in self.controls:
-            control.configure(state="disabled" if running else "normal")
-        self.stop_button.configure(state="normal" if running else "disabled")
+    def run(self, timeline) -> None:
+        post = self.updates.put
+        try:
+            keyboard = Keyboard()
+            end = time.perf_counter() + COUNTDOWN
+            while (left := end - time.perf_counter()) > 0:
+                if self.cancel.is_set() or keyboard.stop_pressed():
+                    post(("status", "已取消"))
+                    return
+                post(("status", f"{math.ceil(left)} 秒后开始，请切换到游戏窗口"))
+                self.cancel.wait(min(0.05, left))
+            target = keyboard.foreground()
+            title, pid = foreground_title_and_pid(target)
+            if not target or pid == os.getpid():
+                post(("status", "倒计时结束时前台还是 LyreBot，没有演奏"))
+                return
+            post(("status", "正在演奏 · 按 F8 或切换窗口停止"))
+            reason = play(timeline, keyboard, target, self.cancel, lambda t: post(("progress", t)))
+            post(("status", {"done": "演奏完成", "stopped": "已停止", "focus": "切换了窗口，已停止"}[reason]))
+        except Exception as error:  # report anything to the user rather than dying silently
+            post(("error", str(error)))
+        finally:
+            post(("done", None))
 
     def stop(self) -> None:
-        if self.worker:
-            self.cancel.set()
-            self.status.set("正在停止并松开按键……")
+        self.cancel.set()
 
-    def _poll(self) -> None:
-        for _ in range(1500):
+    def poll(self) -> None:
+        while True:
             try:
                 kind, value = self.updates.get_nowait()
             except queue.Empty:
                 break
-            if kind == "keys":
-                for key, label in self.key_labels.items():
-                    label.configure(background="#2766bc" if key in value else "white",
-                                    foreground="white" if key in value else "#183b63")
-            elif kind == "progress":
-                self.progress["value"] = min(1, value / self.duration) if self.duration else 0
-                self.elapsed.set(f"{_clock_label(value)} / {_clock_label(self.duration)}")
-            elif kind == "status":
+            if kind == "status":
                 self.status.set(value)
+            elif kind == "progress":
+                self.progress["value"] = value / self.duration if self.duration else 0
+                self.status.set(f"{clock(value)} / {clock(self.duration)} · 按 F8 或切换窗口停止")
             elif kind == "error":
-                self.status.set(f"已停止：{value}")
+                self.status.set("出错，已停止")
                 if not self.closing:
-                    messagebox.showerror("演奏已停止", value, parent=self.root)
+                    messagebox.showerror("演奏出错", value, parent=self.root)
             elif kind == "done":
                 self.worker = None
-                self._set_running(False)
-        if self.closing and self.worker is None:
+                self.button.configure(text="演奏")
+                self.speed_box.configure(state="normal")
+                self.listbox.configure(state="normal")
+        if self.closing and not self.worker:
             self.root.destroy()
             return
-        self.root.after(25, self._poll)
+        self.root.after(30, self.poll)
 
     def close(self) -> None:
         self.closing = True
-        if self.worker:
-            self.stop()
-        else:
+        self.stop()
+        if not self.worker:
             self.root.destroy()
 
 
 def main() -> None:
+    if sys.platform == "win32" and not is_admin() and relaunch_as_admin():
+        return  # the elevated copy takes over
     try:
-        # Sharp text on high-DPI screens.
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except (AttributeError, OSError):
         pass
     root = tk.Tk()
-    LyreBotApp(root)
+    App(root)
     root.mainloop()

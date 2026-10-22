@@ -1,247 +1,172 @@
-from fractions import Fraction as F
-from types import SimpleNamespace as NS
+import threading
 import unittest
 
-from lyrebot.playback import InputEvent, Timeline, PlaybackError, compile_timeline, play_timeline
+from lyrebot.keyboard import Keyboard, KeyboardError, SCAN_CODES
+from lyrebot.player import play
+from lyrebot.score import parse_score
+from lyrebot.timeline import KeyEvent, Timeline, compile_timeline
 
 
-def note(start, duration, keys, part=1):
-    return NS(start=F(start), duration=F(duration), keys=tuple(keys), part=part, line=1)
+def presses(text, speed=1.0):
+    return [(round(e.at, 6), e.keys) for e in compile_timeline(parse_score(text), speed).events if e.down]
 
 
-def score(events, beats=4, bpm=60):
-    return NS(events=tuple(events), total_beats=F(beats), bpm=bpm)
+def releases(text):
+    return [(round(e.at, 6), e.keys) for e in compile_timeline(parse_score(text)).events if not e.down]
 
 
-class FakeClock:
-    now = 0.0
+class Taps(unittest.TestCase):
+    def test_short_taps_on_the_beat(self):
+        self.assertEqual(presses("speed=120\na-s.d."), [(0, ("a",)), (0.5, ("s",)), (0.75, ("d",))])
+        self.assertEqual(releases("speed=120\na-s.d."), [(0.035, ("a",)), (0.535, ("s",)), (0.785, ("d",))])
+
+    def test_fast_repeats_release_halfway(self):
+        self.assertEqual(releases("speed=600\na*a*a*"), [(0.00625, ("a",)), (0.01875, ("a",)), (0.0375, ("a",))])
+
+    def test_same_key_in_two_parts_is_one_press(self):
+        self.assertEqual(presses("speed=60\na-|ad-"), [(0, ("a", "d"))])
+
+    def test_continuation_does_not_press_again(self):
+        self.assertEqual(presses("speed=60\na-|z-\n-|x-"), [(0, ("a", "z")), (1, ("x",))])
+
+    def test_speed_factor(self):
+        self.assertEqual(presses("speed=60\na-s-", speed=2), [(0, ("a",)), (0.5, ("s",))])
+
+    def test_duration_includes_final_rest(self):
+        self.assertAlmostEqual(compile_timeline(parse_score("speed=60\na-0--")).duration, 3)
+
+
+class OrnamentTiming(unittest.TestCase):
+    def test_roll_and_grace_use_milliseconds(self):
+        self.assertEqual(presses("speed=60\n^adg-"), [(0, ("a",)), (0.03, ("d",)), (0.06, ("g",))])
+        self.assertEqual(presses("speed=30\n^adg-"), [(0, ("a",)), (0.03, ("d",)), (0.06, ("g",))])
+        self.assertEqual(presses("speed=60\ns'a-"), [(0, ("s",)), (0.06, ("a",))])
+
+    def test_ornaments_are_squeezed_into_half_a_short_note(self):
+        # A 1/8 beat at 120 BPM lasts 62.5 ms, so the 60 ms roll is squeezed to 31.25 ms.
+        self.assertEqual(presses("speed=120\n^adg*0-.~*"), [(0, ("a",)), (0.015625, ("d",)), (0.03125, ("g",))])
+
+    def test_triplet_timing(self):
+        self.assertEqual(presses("speed=60\n(a.s.d.)-"), [(0, ("a",)), (0.333333, ("s",)), (0.666667, ("d",))])
+
+
+class FakeKeyboard:
+    def __init__(self, clock, stop_at=None, switch_at=None):
+        self.clock, self.stop_at, self.switch_at = clock, stop_at, switch_at
+        self.sent, self.released = [], 0
+
+    def foreground(self):
+        return 2 if self.switch_at is not None and self.clock.now >= self.switch_at else 1
+
+    def stop_pressed(self):
+        return self.stop_at is not None and self.clock.now >= self.stop_at
+
+    def send(self, keys, down):
+        self.sent.append((round(self.clock.now, 3), keys, down))
+
+    def release_all(self):
+        self.released += 1
+
+
+class Clock:
+    def __init__(self):
+        self.now = 0.0
 
     def __call__(self):
         return self.now
 
-
-class FakeStopEvent:
-    def __init__(self, clock, cancel_at=None):
-        self.clock = clock
-        self.cancel_at = cancel_at
-        self.waits = []
-
-    def is_set(self):
-        return self.cancel_at is not None and self.clock.now >= self.cancel_at
-
-    def wait(self, seconds):
-        self.waits.append(seconds)
-        self.clock.now += seconds
-        return self.is_set()
+    def sleep(self, seconds):
+        self.now += max(seconds, 0.0005)
 
 
-class FakeBackend:
-    def __init__(self, clock):
-        self.clock = clock
-        self.calls = []
-        self.owned = set()
-        self.release_count = 0
-        self.focus_lost_at = None
-        self.modifiers_at = None
-        self.stop_at = None
-        self.send_failure = False
-        self.send_delay = 0
-        self.cleanup_failure = False
-
-    def foreground_window(self):
-        return 0 if self.focus_lost_at is not None and self.clock.now >= self.focus_lost_at else 123
-
-    def stop_requested(self):
-        return self.stop_at is not None and self.clock.now >= self.stop_at
-
-    def held_modifiers(self):
-        return ("Ctrl",) if self.modifiers_at is not None and self.clock.now >= self.modifiers_at else ()
-
-    def send_keys(self, keys, down):
-        self.calls.append((self.clock.now, keys, down))
-        if down:
-            self.owned.update(keys)
-        else:
-            self.owned.difference_update(keys)
-        if self.send_failure:
-            raise OSError("injected output failure")
-        self.clock.now += self.send_delay
-
-    def release_all(self):
-        self.release_count += 1
-        if self.cleanup_failure:
-            raise OSError("injected cleanup failure")
-        self.owned.clear()
+TIMELINE = Timeline((KeyEvent(0.0, ("a",), True), KeyEvent(0.035, ("a",), False),
+                     KeyEvent(1.0, ("s",), True), KeyEvent(1.035, ("s",), False)), 2.0)
 
 
-class TimelineTests(unittest.TestCase):
-    def test_note_lengths_control_rhythm_but_taps_are_short(self):
-        timeline = compile_timeline(score([note(0, 1, "a"), note(2, 2, "s")], bpm=120))
-        self.assertEqual(timeline.events, (
-            InputEvent(0.0, ("a",), True), InputEvent(0.035, ("a",), False),
-            InputEvent(1.0, ("s",), True), InputEvent(1.035, ("s",), False),
-        ))
-        self.assertEqual(timeline.duration_seconds, 2.0)
+class Player(unittest.TestCase):
+    def run_with(self, timeline=TIMELINE, **options):
+        clock = Clock()
+        keyboard = FakeKeyboard(clock, **options)
+        reason = play(timeline, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep)
+        return reason, keyboard, clock
 
-    def test_chords_and_two_parts_merge_onsets(self):
-        timeline = compile_timeline(score([note(0, 1, "sa"), note(0, 2, "ad", part=2)]))
-        self.assertEqual(timeline.events, (InputEvent(0.0, ("a", "s", "d"), True),
-                                         InputEvent(0.035, ("a", "s", "d"), False)))
+    def test_plays_on_time_and_waits_for_the_end(self):
+        reason, keyboard, clock = self.run_with()
+        self.assertEqual(reason, "done")
+        self.assertEqual([at for at, _, _ in keyboard.sent], [0.0, 0.035, 1.0, 1.035])
+        self.assertGreaterEqual(clock.now, 2.0)
+        self.assertEqual(keyboard.released, 1)
 
-    def test_fast_repetition_releases_before_next_attack(self):
-        timeline = compile_timeline(score([note(0, F(1, 100), "a"),
-                                          note(F(1, 100), F(1, 100), "a")]))
-        self.assertEqual(timeline.events[1].at, 0.005)
-        self.assertLess(timeline.events[1].at, timeline.events[2].at)
-        self.assertEqual(timeline.events[2].at, 0.01)
-        self.assertEqual(timeline.events[3].at, 0.02)
+    def test_f8_stops(self):
+        reason, keyboard, _ = self.run_with(stop_at=0.5)
+        self.assertEqual(reason, "stopped")
+        self.assertEqual(len(keyboard.sent), 2)
+        self.assertEqual(keyboard.released, 1)
 
-    def test_releases_sort_before_presses_at_equal_time(self):
-        timeline = compile_timeline(score([note(0, 1, "a"), note(F(7, 200), 1, "s")]))
-        at_boundary = [event for event in timeline.events if event.at == 0.035]
-        self.assertEqual([event.down for event in at_boundary], [False, True])
+    def test_window_switch_stops(self):
+        reason, keyboard, _ = self.run_with(switch_at=0.5)
+        self.assertEqual(reason, "focus")
+        self.assertEqual(keyboard.released, 1)
 
-    def test_short_note_never_held_beyond_duration(self):
-        timeline = compile_timeline(score([note(0, F(1, 100), "q")]))
-        self.assertEqual(timeline.events[1].at, 0.01)
+    def test_a_stall_delays_the_rest_instead_of_rushing(self):
+        clock = Clock()
+        keyboard = FakeKeyboard(clock)
+        original = keyboard.send
 
-    def test_tempo_override_scales_entire_score(self):
-        timeline = compile_timeline(score([note(1, 1, "q")]), bpm=120)
-        self.assertEqual(timeline.events[0].at, 0.5)
-        self.assertEqual(timeline.duration_seconds, 2.0)
+        def stalling_send(keys, down):
+            original(keys, down)
+            if keys == ("a",) and not down:
+                clock.now += 1.5  # the computer freezes past the next note
+        keyboard.send = stalling_send
+        play(TIMELINE, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep)
+        times = [at for at, _, _ in keyboard.sent]
+        self.assertAlmostEqual(times[3] - times[2], 0.035, places=2)  # the s tap keeps its shape
 
-    def test_tempo_changes_and_override_scale_together(self):
-        changing = NS(events=(note(0, 1, "a"), note(2, 1, "s"), note(3, 1, "d")),
-                      total_beats=F(4), bpm=60, tempo_changes=((F(2), 120.0),))
-        timeline = compile_timeline(changing)
-        self.assertEqual([event.at for event in timeline.events if event.down], [0.0, 2.0, 2.5])
-        self.assertEqual(timeline.duration_seconds, 3.0)
-        doubled = compile_timeline(changing, bpm=120)
-        self.assertEqual([event.at for event in doubled.events if event.down], [0.0, 1.0, 1.25])
-        self.assertEqual(doubled.duration_seconds, 1.5)
-
-    def test_invalid_tempo_tap_and_keys_rejected(self):
-        for tempo in (0, -1, 1001, 10 ** 1000, float("nan"), float("inf")):
-            with self.subTest(tempo=tempo), self.assertRaises(ValueError):
-                compile_timeline(score([]), bpm=tempo)
-        for tap in (0, -1, float("nan"), float("inf")):
-            with self.subTest(tap=tap), self.assertRaises(ValueError):
-                compile_timeline(score([]), tap_ms=tap)
-        with self.assertRaises(ValueError):
-            compile_timeline(score([note(0, 1, "i")]))
-
-    def test_duration_limit_includes_tempo_override(self):
-        with self.assertRaisesRegex(ValueError, "24 小时"):
-            compile_timeline(score([], beats=2000), bpm=1)
-        with self.assertRaises(ValueError):
-            compile_timeline(score([], beats=10 ** 1000))
-
-    def test_tiny_release_and_collapsed_onset_are_rejected(self):
-        tiny = F(1, 10 ** 40)
-        with self.assertRaisesRegex(ValueError, "过小，无法表示"):
-            compile_timeline(score([note(1, tiny, "a")]))
-        with self.assertRaisesRegex(ValueError, "起音过于接近"):
-            compile_timeline(score([note(1, 1, "a"), note(1 + tiny, 1, "s")]))
+    def test_release_happens_even_after_an_error(self):
+        clock = Clock()
+        keyboard = FakeKeyboard(clock)
+        keyboard.send = lambda keys, down: (_ for _ in ()).throw(KeyboardError("no"))
+        with self.assertRaises(KeyboardError):
+            play(TIMELINE, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep)
+        self.assertEqual(keyboard.released, 1)
 
 
-class PlaybackTests(unittest.TestCase):
-    def setup_playback(self):
-        clock = FakeClock()
-        backend = FakeBackend(clock)
-        stop = FakeStopEvent(clock)
-        timeline = compile_timeline(score([note(0, 1, "a"), note(2, 1, "s")]))
-        return clock, backend, stop, timeline
+class FakeUser32:
+    def __init__(self, accept=True):
+        self.accept, self.batches = accept, []
 
-    def test_success_uses_fixed_deadlines_and_always_cleans_up(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.send_delay = 0.002
-        result = play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(result.reason, "completed")
-        self.assertAlmostEqual(backend.calls[2][0], 2.0)
-        self.assertAlmostEqual(result.elapsed_seconds, 4.0)
-        self.assertEqual(backend.release_count, 1)
-        self.assertFalse(backend.owned)
-        self.assertLessEqual(max(stop.waits), 0.01)
+    def send_input(self, inputs):
+        self.batches.append([(item.ki.wScan, item.ki.dwFlags) for item in inputs])
+        return len(inputs) if self.accept else 0
 
-    def test_cancel_during_rest_is_prompt(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        stop.cancel_at = 0.2
-        result = play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(result.reason, "stopped")
-        self.assertLessEqual(result.elapsed_seconds, 0.211)
-        self.assertEqual(len(backend.calls), 2)
-        self.assertEqual(backend.release_count, 1)
+    def foreground(self):
+        return 7
 
-    def test_backend_emergency_stop(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.stop_at = 0.01
-        result = play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(result.reason, "stopped")
-        self.assertFalse(backend.owned)
+    def key_held(self, key):
+        return key == 0x77
 
-    def test_focus_loss_during_rest_stops_before_next_note(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.focus_lost_at = 0.2
-        with self.assertRaisesRegex(PlaybackError, "失去焦点"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(len(backend.calls), 2)
-        self.assertLessEqual(clock.now, 0.211)
-        self.assertEqual(backend.release_count, 1)
 
-    def test_modifier_during_rest_stops_before_next_note(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.modifiers_at = 0.2
-        with self.assertRaisesRegex(PlaybackError, "Ctrl"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(len(backend.calls), 2)
+class KeyboardOutput(unittest.TestCase):
+    def test_scan_codes_and_release_tracking(self):
+        api = FakeUser32()
+        keyboard = Keyboard(api)
+        keyboard.send(("a", "q"), True)
+        keyboard.send(("a",), False)
+        keyboard.send(("z",), False)  # never pressed, so not sent
+        keyboard.release_all()
+        self.assertEqual(api.batches, [[(0x1E, 0x8), (0x10, 0x8)], [(0x1E, 0xA)], [(0x10, 0xA)]])
+        self.assertEqual(keyboard.held, set())
+        self.assertTrue(keyboard.stop_pressed())
 
-    def test_invalid_initial_target_never_sends(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        with self.assertRaises(PlaybackError):
-            play_timeline(timeline, backend, 0, stop, _clock=clock)
-        self.assertEqual(backend.calls, [])
-        self.assertEqual(backend.release_count, 1)
+    def test_rejected_input_is_reported(self):
+        keyboard = Keyboard(FakeUser32(accept=False))
+        with self.assertRaises(KeyboardError):
+            keyboard.send(("a",), True)
+        keyboard.release_all()
+        self.assertEqual(keyboard.held, set())
 
-    def test_keydown_failure_still_releases_owned_keys(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.send_failure = True
-        with self.assertRaisesRegex(PlaybackError, "injected output failure"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(backend.release_count, 1)
-        self.assertFalse(backend.owned)
-
-    def test_excessive_lateness_does_not_dump_backlog(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.send_delay = 0.2
-        with self.assertRaisesRegex(PlaybackError, "150 ms"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(len(backend.calls), 1)
-        self.assertFalse(backend.owned)
-
-    def test_short_stall_cannot_dump_dense_note_backlog(self):
-        clock, backend, stop, _ = self.setup_playback()
-        timeline = compile_timeline(score([note(F(i, 20), F(1, 20), key)
-                                           for i, key in enumerate("asdf")]))
-        backend.send_delay = 0.12
-        with self.assertRaisesRegex(PlaybackError, "积压"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-        self.assertEqual(len(backend.calls), 1)
-        self.assertFalse(backend.owned)
-
-    def test_cleanup_failure_is_reported(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        backend.cleanup_failure = True
-        stop.cancel_at = 0
-        with self.assertRaisesRegex(PlaybackError, "松开按键失败"):
-            play_timeline(timeline, backend, 123, stop, _clock=clock)
-
-    def test_progress_callback_reports_elapsed_seconds(self):
-        clock, backend, stop, timeline = self.setup_playback()
-        values = []
-        play_timeline(timeline, backend, 123, stop, _clock=clock, on_progress=values.append)
-        self.assertEqual(values[0], 0)
-        self.assertEqual(values[-1], timeline.duration_seconds)
-        self.assertTrue(all(left <= right for left, right in zip(values, values[1:])))
+    def test_all_21_keys_have_distinct_scan_codes(self):
+        self.assertEqual(len(set(SCAN_CODES.values())), 21)
 
 
 if __name__ == "__main__":
