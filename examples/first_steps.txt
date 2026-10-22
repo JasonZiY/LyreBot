@@ -1,0 +1,6 @@
+speed=120
+# Four beats per line. The two parts play together.
+a-s-d-f-|z---0-
+g-h-j-q-|x---0-
+q.w.e.r.t-y-|c---0-
+adg--0--|z---0-

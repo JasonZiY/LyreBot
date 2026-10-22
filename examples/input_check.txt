@@ -1,0 +1,6 @@
+speed=60
+# Single notes two seconds apart, without chords or simultaneous parts.
+# Compare Key tap 35 ms with 150 ms using this same file.
+a-0-
+s-0-
+d-0-

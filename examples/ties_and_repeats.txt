@@ -1,0 +1,5 @@
+speed=120
+# The first a continues across the line break; no new tap at line 2's start.
+a----|z---0-
+--a-a-|x---0-
+0----|0----
