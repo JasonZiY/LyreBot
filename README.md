@@ -146,3 +146,11 @@ lyrebot/app.py       界面
 ```text
 python -m unittest discover tests
 ```
+
+## 琴谱来源
+
+`music` 文件夹里的曲谱转写自 <https://space.bilibili.com/76052941> 发布的诗琴简谱，编曲归原作者所有。
+
+## 许可证
+
+代码采用 [MIT 许可证](LICENSE)。`music` 里的曲谱不在此列。
