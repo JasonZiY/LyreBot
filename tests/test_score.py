@@ -127,6 +127,30 @@ class Errors(unittest.TestCase):
         self.check("speed=60\n\n# note\na-|z-x\n", "第 4 行第 2 声部")
 
 
+class Ties(unittest.TestCase):
+    def test_plus_extends_previous_note_mid_line(self):
+        self.assertEqual(notes("speed=60\n(a.s.d.)-+-f-"),
+                         [(0, F(1, 3), ("a",)), (F(1, 3), F(1, 3), ("s",)), (F(2, 3), F(4, 3), ("d",)), (2, 1, ("f",))])
+
+    def test_plus_at_line_start_continues_previous_line(self):
+        self.assertEqual(notes("speed=60\na-\n+-s-"), [(0, 2, ("a",)), (2, 1, ("s",))])
+
+    def test_plus_errors(self):
+        for text in ("speed=60\n+a-", "speed=60\na-+", "speed=60\n(+-a-)-"):
+            with self.subTest(text), self.assertRaises(ScoreError):
+                parse_score(text)
+
+
+class HeldRoll(unittest.TestCase):
+    def test_held_key_sounds_with_first_rolled_note(self):
+        event = parse_score("speed=60\ne^bfj-").events[0]
+        self.assertEqual(event.strikes, (Strike(("e",), 0), Strike(("b",), 0), Strike(("f",), 30), Strike(("j",), 60)))
+
+    def test_held_key_cannot_repeat_inside_roll(self):
+        with self.assertRaises(ScoreError):
+            parse_score("speed=60\nb^bfj-")
+
+
 class Files(unittest.TestCase):
     def test_every_bundled_score_loads(self):
         files = sorted(MUSIC.glob("*.txt"))

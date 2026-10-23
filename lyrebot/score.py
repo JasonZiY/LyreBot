@@ -179,16 +179,21 @@ class _Part:
             raise self.error("和弦里有重复的键")
         return keys
 
+    def rolled(self) -> tuple[str, ...]:
+        """Read the chord after ``^``."""
+        self.pos += 1
+        keys = self.keys()
+        if len(keys) < 2:
+            raise self.error("^ 琶音后面应是至少两个音的和弦")
+        return keys
+
     def event(self) -> tuple[Fraction, tuple[Strike, ...]]:
         graces: list[tuple[str, ...]] = []
+        held: tuple[str, ...] = ()  # keys struck plainly at the start of a roll
         roll = False
         while True:
             if self.peek() == "^":
-                self.pos += 1
-                roll = True
-                keys = self.keys()
-                if len(keys) < 2:
-                    raise self.error("^ 琶音后面应是至少两个音的和弦")
+                roll, keys = True, self.rolled()
                 break
             if self.peek() == "0":
                 if graces:
@@ -199,6 +204,11 @@ class _Part:
             keys = self.keys()
             if not keys:
                 raise self.error(f"无法识别的字符 {self.peek()!r}")
+            if self.peek() == "^":  # e^bfj: e sounds with the first note of the roll
+                held, keys, roll = keys, self.rolled(), True
+                if set(held) & set(keys):
+                    raise self.error("同一个键不能既在琶音里又在琶音外")
+                break
             if self.peek() != "'":
                 break
             self.pos += 1
@@ -208,11 +218,21 @@ class _Part:
             raise self.error("缺少时值；每个音符、和弦和休止符后面都要写时值")
         strikes = [Strike(grace, index * self.grace_ms) for index, grace in enumerate(graces)]
         main = len(graces) * self.grace_ms
+        if held:
+            strikes.append(Strike(held, main))
         if roll:
             strikes += [Strike((key,), main + index * self.roll_ms) for index, key in enumerate(keys)]
         elif keys:
             strikes.append(Strike(keys, main))
         return duration, tuple(strikes)
+
+    def tie(self) -> Fraction:
+        """Read ``+<duration>``: extend the previous note without a new press."""
+        self.pos += 1
+        extra = self.duration()
+        if extra is None:
+            raise self.error("+ 后面要写延长的时值，例如 +-")
+        return extra
 
     def items(self, closing: str) -> tuple[list[tuple[Fraction, Fraction, tuple[Strike, ...]]], Fraction]:
         """Events relative to the start, and their written total length."""
@@ -235,6 +255,13 @@ class _Part:
                 offset += total
             elif self.peek() == ")":
                 raise self.error("多余的右括号 )")
+            elif self.peek() == "+":
+                extra = self.tie()
+                if not found:
+                    raise self.error("+ 前面没有可延长的音")
+                at, length, strikes = found[-1]
+                found[-1] = (at, length + extra, strikes)
+                offset += extra
             else:
                 length, strikes = self.event()
                 found.append((offset, length, strikes))
@@ -316,7 +343,7 @@ def parse_score(text: str) -> Score:
                 raise ScoreError(f"{_where(number, part)}：声部是空的；不出声请写休止符，如 0-")
             reader = _Part(part_text, number, part, roll_ms, grace_ms)
             length = Fraction(0)
-            lead = reader.duration()
+            lead = reader.tie() if reader.peek() == "+" else reader.duration()
             if lead is not None:
                 index = last_in_part[part]
                 if index is None:
