@@ -16,6 +16,7 @@ from tkinter import messagebox, ttk
 from typing import Callable
 
 from . import icons
+from .collate import pinyin_key
 from .keyboard import Keyboard, foreground_title_and_pid
 from .player import play
 from .score import Score, ScoreError, load_score
@@ -322,7 +323,7 @@ class App:
         if self.worker:
             return
         chosen = self.selected()
-        songs = sorted(self.music_dir.glob("*.txt"), key=lambda p: p.stem) if self.music_dir.is_dir() else []
+        songs = sorted(self.music_dir.glob("*.txt"), key=lambda p: pinyin_key(p.stem)) if self.music_dir.is_dir() else []
         bad = [isinstance(self.read(p), ScoreError) for p in songs]
         rows = [("  " + ("⚠ " if wrong else "") + p.stem, wrong) for p, wrong in zip(songs, bad)]
         current = [(self.tree.item(iid, "text"), "bad" in self.tree.item(iid, "tags"))
