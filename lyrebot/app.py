@@ -20,6 +20,7 @@ from .timeline import compile_timeline
 
 PROJECT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = PROJECT / "music"
+ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0
 FONT = ("Microsoft YaHei UI", 10)
 
@@ -261,7 +262,15 @@ def main() -> None:
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except (AttributeError, OSError):
         pass
+    try:  # own taskbar entry, so Windows doesn't borrow another pythonw app's icon
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("LyreBot")
+    except (AttributeError, OSError):
+        pass
     root = tk.Tk()
+    try:
+        root.iconbitmap(default=str(ICON))
+    except tk.TclError:
+        pass
     try:
         App(root)
     except Exception:
