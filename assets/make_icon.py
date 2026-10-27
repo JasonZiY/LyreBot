@@ -29,4 +29,8 @@ for x in (434,486,538,590):
     d.rounded_rectangle(k(x-11,330,x+11,790),radius=11*SS,fill=W)
 im=im.resize((1024,1024),Image.LANCZOS)
 im.save("assets/lyrebot.png")
-im.resize((256,256),Image.LANCZOS).save("assets/lyrebot.ico",sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+# One frame per size Windows asks for at 100%-200% scaling, each scaled straight
+# from the big image, so Windows never has to stretch a frame (that blurs it).
+SIZES=[16,20,24,30,32,36,40,48,60,64,72,80,96,128,256]
+frames=[im.resize((n,n),Image.LANCZOS) for n in SIZES]
+frames[-1].save("assets/lyrebot.ico",sizes=[(n,n) for n in SIZES],append_images=frames[:-1])
