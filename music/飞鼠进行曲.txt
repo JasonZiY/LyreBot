@@ -1,3 +1,4 @@
+# 希穆兰卡地区 赐福森林BGM（飞鼠进行曲），按原简谱重新记谱，12/8 拍
 speed=174
 q-t.t-.w-t.t-.|adg-.dg-.msg-.sg-.
 e-.r-r.t-.-.|nad-.ad-.bad-.ba-.
@@ -31,7 +32,7 @@ h-.q-q.w-.-.|xn-.n-x.bs-.b-.
 q-t.t-.w-t.t-.|zbd-.bd-.msg-.sg-.
 y-.u-y.t-.-.|nad-.ad-.bad-.ba-.
 y-.u-y.t-u.t-q.|vna-.na-.cba-.ba-.
-e-.w-q.q-.q-.|xn-.bs-.zbd-.zb-.
+e-.w-q.q-.q-.|xn-.bs-.zbd-.z-.
 q-t.t-.w-t.t-.|zbd-.bd-.msg-.sg-.
 e-.r-r.t-.-.|nad-.ad-.bad-.ba-.
 y-r.r-.t-q.q-.|vna-.na-.cba-.ba-.
@@ -43,3 +44,4 @@ q-.j-q.g-q.w-q.|vna-.na-.cba-.ba-.
 t------|xn-.xs-.xn-.xv-.
 w------|bs-.bg-.bs-.xb-.
 q-.q.q.q.q-.-.|zbd-.zb.zb.zb.zb-.-.
+0-0-0-0-0-0-|0-0-0-0-0-0-

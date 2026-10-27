@@ -1,3 +1,4 @@
+# 烟谜主夜晚BGM（夜诞的花冠），按原简谱重新记谱，6/8 拍
 speed=77
 0-0-0.~h*e*|0-0-0-
 wy~e~h~t~w~h~e~w~h~q~j~g~|n---
@@ -11,7 +12,7 @@ y~e~h~t~w~h~e~w~h~q~w~t~|c-.b-.
 y~e~h~t~w~h~e~w~h~q~w~t~|cn---
 y~e~h~t~w~h~e~w~h~q~j~g~|0-0-0-
 y~e~h~t~w~h~e~w~h~q~w~t~|0-.j-0~q*j*
-y~e~h~t~w~h~cny-h.|dgh---
+y~e~h~t~w~h~cny-h.|^dgh---
 e-w~e~w-j.|zv.~z.~bs.x.b.
 q.~j.~h-h.|n.~cn.~a.n.c.
 e-w~e~t-j.|zv.~z.~bs.x.b.
@@ -20,12 +21,12 @@ e-w~e~w-u.|zv.~z.~bs.x.b.
 q.~ju.~hy-t.|n.~cn.~a.n.c.
 e-.w-t.|v.z~v~n~a~b.x.s.
 e-e~r*e*w-n.|v.z~v~n~a~b.x-
-d-s~d~s-m.|zv.~z.~bs.x.b.
+d-s~d~s-m.|zv.~z.~b.x.b.
 a.~m.~n-n.|n.c~b.~c.z.c.
-d-s~d~g-m.|zv.~z.~bs.x.b.
+d-s~d~g-m.|zv.~z.~b.x.b.
 a.~s.~d-n.|n.c~b.~c.z.c.
-d-s~d~s-j.|zv.~z.~bs.x.b.
-q.~w.~e-w.|cn.a~cn.~a.n.c.
+d-s~d~s-j.|zv.~z.~b.x.g.
+q.~w.~e-w.|cn.a~dh.~a.n.c.
 h-.g-w.|v.z~v~n~a~b.x.s.
 h-j~h~g-j.|v.z~v~n~a~b.x.g.
 y~e~h~t~w~h~e~w~h~q~w~t~|nh.~m~n~b~n-.
@@ -52,6 +53,7 @@ fh-j~h~sg-j.|v~z~n~a~d~a~b~x~m~s~g~s~
 hy~e~h~t~w~h~e~w~h~q~w~t~|cn---
 y~e~h~t~w~h~e~w~h~q~j~g~|0-0-0-
 y~e~h~t~w~h~e~w~h~q~w~t~|c---
+speed=65
 y~e~h~t~w~h~e~w~h~q~j~g~|0-0-0-
-0-0-0-|0-.n*a*d*h*-
+0-0-0-|0-.^nadh-.
 0-0-0-|0-0-0-

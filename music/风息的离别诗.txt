@@ -1,3 +1,4 @@
+# 原神《无所有廊》剧情BGM（风息的离别诗），按原简谱重新记谱，3/4 拍
 speed=110
 e---|n.c.d.s.h.d.
 0-0-0-|g.s.d.n.c.s.
@@ -14,7 +15,7 @@ e---|n.c.d.s.g.d.
 w---|b.x.s.a.g.s.
 0-0-0.q.|d.a.s.n.b.s.
 w---|b.x.s.a.g.a.
-0-0-0.s~g~|s---
+0-0-0.(s~d~g~).|s---
 h--j-|n.c.n.m.a.d.
 q---|a.d.a.m.n.c.
 j-.~j*h*g-|b.x.n.m.a.d.
@@ -22,7 +23,7 @@ h--d-|na.d.a.m.n.c.
 f-.g.h-|v.z.b.n.a.d.
 d-s.~d*s*a-|b.x.b.n.b.x.
 s-.g..s.|c.b.m.b.c.m.
-d--0.s~g~|a.m.n.c.z.m.
+d--0.(s~d~g~).|a.m.n.c.z.m.
 h--h.~w~|n.c.n.m.a.s.
 e--e.y.|vd.a.m.n.c.z.
 t-w.~e*w*q.w.|b.x.n.m.a.g.
@@ -38,7 +39,7 @@ e---|n.c.d.s.g.d.
 w---|b.x.s.a.g.s.
 0-0-0.q.|d.a.s.n.b.s.
 w---|b.x.s.a.g.a.
-0-0-0.s~g~|s---
+0-0-0.(s~d~g~).|s---
 h--j-|n.c.n.m.a.d.
 q--0.~h~|a.d.a.m.n.c.
 j-h.~j*h*g-|b.x.n.m.a.d.
@@ -46,7 +47,7 @@ h--d-|na.d.a.m.n.c.
 f-.g.h-|v.z.b.n.a.d.
 d-s.~d*s*a-|b.x.b.n.b.x.
 s-.g..s.|c.b.m.b.c.m.
-d--0.s~g~|a.m.n.c.z.m.
+d--0.(s~d~g~).|a.m.n.c.z.m.
 h--h.~w~|n.c.n.m.a.s.
 e--e.y.|vd.a.m.n.c.z.
 t-w.~e*w*q.w.|b.x.n.m.a.g.
@@ -86,7 +87,7 @@ d-n.m.a.m.|b.s.e.w.t.e.
 s-m.a.s.a.|n.d.w.q.t.w.
 0.n.ms.a.s.a.|e.q.w.h.g.w.
 s.m.a.s.d.s.|cg.s.w.q.t.w.
-a.m.a.s.d.s~g~|e.q.w.g.h.w.
+a.m.a.s.d.(s~d~g~).|e.q.w.g.h.w.
 he--h.e.|v.z.v.n.a.d.
 e--h.e.|v.z.v.n.a.d.
 w-q-j-|c.b.m.b.m.s.

@@ -1,3 +1,4 @@
+# 纳塔夜晚BGM2（静夜的轻语），按原简谱重新记谱
 speed=92
 d-.d.d.s.s.a.|0-0-0-0-
 a--d-g-|0-0-0-0-
@@ -7,10 +8,10 @@ q-.q.q.j.j.q.|nd----
 h--h-q-|va----
 g--d-g-|bsd----
 g----|xba--m--
-0-.d.d.s.s.a.|z.b.a.b.a.c.b.c.
+0-.d.d.s.s.a.|z.b.a.b.z.c.b.c.
 a--d-g-|z.b.a--a.b.
 h-.~j*h*g-.q.|v.z.f-b.x.s-
-d--d-g-|z.b.a.b.z.a.bm-
+(d.s.d.)-+-d-g-|z.b.a.b.z.a.bm-
 q-.q.q.j.j.q.|n.c.a.d.h-d-
 h--h.q-.|zv-v.z.a.v-.
 g--d.g-.|b.z.a.z.a.b.c.z.
@@ -31,7 +32,5 @@ q-.q.q.j.j.q.|n.a.d---
 h--h-q-|vad----
 g----|bs----
 0-0-0-0-|xbm----
-0-0-0-0-|zbad----
-0-0-0-0-|0-0-0-0-
-0-0-0-0-|0-0-0-0-
+0-0-0-0-|^zbad----
 0-0-0-0-|0-0-0-0-

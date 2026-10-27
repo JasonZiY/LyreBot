@@ -1,3 +1,4 @@
+# 《夜阑安暇时》挪德卡莱OST，按原简谱重新记谱
 speed=112
 a--g--|v----
 s--a--|0-0-0-z-
@@ -15,11 +16,11 @@ ag--g--|v----
 s--a--|0-0-b-z-
 j--gq--|nad----
 ash--ge--|b---x-
-0-0-gj--|vagq-b-b.b-b.
+0-0-gj--|^vagq-b-b.b-b.
 sq--qe--|0.b-b.ag-b-
 aj--gq--|c-b-b.b-b.
 sw--qe--|0.b-b.a-b-
-qet--gj--|v-b-b.b-b.
+^qet--gj--|v-b-b.b-b.
 q--gq--|0.b-b.s-b-
 dgj.c.b.m.a.s.g.j.|n---m-
 hq--jw--|b.a.d.a.g-b-
@@ -42,11 +43,11 @@ tu--t-.j.|b.s.g.s.a.b.g.a.
 gq--t--|v.a.g.s.a.b.s.b.
 w-.e~w~q-.j.|v.a.g.s.a.b.s.b.
 q--t*y*.~.t.|c.a.g.d.a.b.c.b.
-q*w*.~0.e~w~q-.j.|c.a.g.d.a.b.c.b.
+q*w*.~0.e~w~q-.j.|c.a.g.d.a.b.d.b.
 gq--t-.y.|v.a.g.s.a.b.s.b.
 w-.e~w~e-qt-|v.a.g.s.a.b.s.b.
 eu--q--|n.h.g.h.a.h.g.h.
-tu-w-e-t-|b.g.s.g.a.g.s.g.
+(tu-t-w-)--e-t-|b.g.s.g.a.g.s.g.
 a--g--|v----
 s--a--|0-0-0-z-
 a--g--|cb----
@@ -56,6 +57,4 @@ s--d--|0-0-a-z-
 j--q--|nad----
 h--g--|bas----
 asg----|v----
-0-0-0-0-|0-0-0-0-
-0-0-0-0-|0-0-0-0-
 0-0-0-0-|0-0-0-0-

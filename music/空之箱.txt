@@ -1,3 +1,4 @@
+# 《空の箱》GIRLS BAND CRY（空之箱），按原简谱重新记谱
 speed=148
 0-0.g~g~w.~q~.w.|0-0-0-0-
 .w..g~g~w.~q~.w.|va.a.a.a.a.a.a.a.
@@ -11,7 +12,7 @@ j-.h.q--|zcn.~n~.ad..n.c.z.
 g-q.j.-q.j.|v.~z~.af..z.v.z.
 -g.d..h..s.|b.~x~.a..x.b.x.
 0.s~s~s.s.s.d.g.d.|n.~c~.a..n.a.n.
--.s.0.s.s.d.|c.~b~.m..c.b.c.
+-.s.0.s..d.|c.~b~.m..c.b.c.
 g-q.j.-q.j.|v.~z~.af..z.v.z.
 -g.d..g.j.h~j~|b.~x~.a..x.b.x.
 -q~j~h.-0.g.|n.~c~.a..n.a.n.
@@ -30,14 +31,14 @@ j-h-g-d.j.|v.z.a.z.v.z.a.z.
 h.~g~.d.d-0.d.|n.c.a.c.n.c.a.c.
 j-h-g-d.j.|x.n.s.n.x.n.s.n.
 .h..g..d.d.j.|c.m.d.m.c.m..m.
-.q.j.q.j.q.w.j.|v.z.f.z.v.z.f.cm.
+.q.j.q.j.q.w.j.|v.a.f.a.v.a.f.cm.
 -0.g~g~w.~q~.w.|0.cm.cm--cm-
 .w..g~g~w.~q~.w.|zv.v.na.v.v.v.af.v.
 .w..g~g~w.~q~.e.|xb.b.ms.b.b.b.sg.b.
 .e..g~g~w.~q~.r.|cn.n.ad.n.n.n.ad.n.
 .e..g.q.w.e.j.|cb.c.ms.c.c.c.md.c.
 .h.-0.g-g.|zv.v.na.v.v.v.af.v.
-g.~s~.d.f.~j~.q.|xb.b.ms.b.b.b.sg.b.
+g.~s~.d.f.~j~.q.|xb.b.m.b.b.b.sg.b.
 j-.h.q--|cn.n.ad.n..n.ad.n.
 0-0.g~g~w.~q~.w.|cb.m~s~.m..c.b.c.
 .w..g~g~w.~q~.w.|zv.v.na.v.v.v.af.v.
@@ -46,16 +47,16 @@ j-.h.q--|cn.n.ad.n..n.ad.n.
 .e..g.q.w.e.j.|cb.c.ms.c.c.c.md.c.
 .h.-0.g.w.q~w~|zv.v.na.v.v.v.na.v.
 .q.-0.g.w.q~w~|xb.b.ms.b.b.b.ms.b.
-.q..g.d.d.q.j.|cn.n.ad.n.n.n.ad.n.
-.q.j.q.--|cn.a~c~.a..ad.n.c.
+.q..g.d.d.q.j.|cn.n.ad.n.n.n.a.n.
+.q.j.q.--|cn.a~d~.a..ad.n.c.
 hqe----|cn.~d~.s.~n.~s~d~s.
 adj----|cn.~d~.s.~j.~g~d~s.
 dhw----|cn.~d~.s.~n.~s~d~s.
 hqe--d.g.h.d.|na~s~a.s.a~s~n.a-n.
 g-q.j.-q.j.|vad----
--g.d..h..s.|bs--0.s.b.s.
+-g.d..h..s.|bs--0.s.b.x.
 0.s~s~s.s.s.d.g.d.|n.~c~.a..n.a.n.
--.s.0.s.s.d.|c.~b~.m..c.b.c.
+-.s.0.s..d.|c.~b~.m..c.b.c.
 g-q.j.-q.j.|v.~z~.af..z.v.z.
 -g.d..g.j.h~j~|b.~x~.a..x.b.x.
 -q~j~h.-0.g.|n.~c~.a..n.a.n.
@@ -77,11 +78,11 @@ j-h-g-d.j.|x.n.s.n.x.n.s.n.
 .q.j.q.j.q.w-|v.z.a.z.v.z.a.z.
 j--d-g-|cm.~c~.m..c.m.c.
 h-.j.-w-|zv.v.na.v.v.v.na.v.
-q-.j.-g-|zv.v.n.xb..b.ms.b.
+q-.j.-g-|zv.v.na.xb..b.ms.b.
 e-.q.-g-|cn.n.ad.n.n.n.ad.n.
 s-.a.-a-|cn.n.ad.n.n.cb.b.c.
 qe-h.qe..h.qe.h~q~|zv.v.na.v.v.v.na.v.
-et-q.et..q.et.q~t~|zv.v.n.xb..b.ms.b.
+et-q.et..q.et.q~t~|zv.v.na.xb..b.ms.b.
 wy-w.y..w.y.w~y~|cn.n.ad.n.n.n.ad.n.
 u-e.u..e.u.e~u~|cm.c.md.c.c.c.md.c.
 je-0.g~g~w.~q~.w.|cm.c.md.c.cm.cm.cm.cm.
@@ -89,8 +90,8 @@ je-0.g~g~w.~q~.w.|cm.c.md.c.cm.cm.cm.cm.
 .w..g~g~w.~q~.e.|bsg----
 .e..g~g~w.~q~.r.|nadg----
 .e..g.q.w.e.j.|cbs.~m~.s..m.b.c.
-.h.-0.g-g.|zv.v.na.v.v.v.af.v.
-g.~s~.d.f.~j~.q.|xb.b.ms.b.b.b.sg.b.
+.h.-0.g-g.|zv.v.na.v.v.v.a.v.
+g.~s~.d.f.~j~.q.|xb.b.m.b.b.b.sg.b.
 j-.h.q--|cn.n.ad.n.n.n.ad.n.
 0-0.g~g~w.~q~.w.|cb.c.ms.c.c.c.md.c.
 .w..g~g~w.~q~.w.|zv.v.na.v.v.v.af.v.
@@ -99,7 +100,7 @@ j-.h.q--|cn.n.ad.n.n.n.ad.n.
 .e..g.q.w.e.j.|cb.c.ms.c.c.c.md.c.
 .h.-0.g.w.q~w~|zv.v.na.v.v.v.na.v.
 .q.-0.g.w.q~w~|xb.b.ms.b.b.b.ms.b.
-.q..g.d.d.q.j.|cn.n.ad.n.n.n.ad.n.
+.q..g.d.d.q.j.|cn.n.ad.n.n.n.a.n.
 .q.j.q.--|cn.n.ad.n.n.n.ad.n.
 adh----|zv.v.na.v.v.v.na.v.
 he----|xb.b.ms.b.b.b.ms.b.
@@ -107,7 +108,7 @@ he----|cn.n.ad.n.n.n.ad.n.
 0-0.q~w~--|cb.c.ms.c.c.c.md.c.
 adh----|zv.v.na.v.v.v.na.v.
 dg--0.d.w.q~w~|xb.b.ms.b.b.b.ms.b.
-.q..g.d.d.q.j.|cn.n.ad.n.n.n.ad.n.
+.q..g.d.d.q.j.|cn.n.ad.n.n.n.a.n.
 .q.j.q.--|cn.n.ad.n.n.cna.cna.cna.
 0-0-0-0-|----
 0-0-0-0-|0-0-0-0-

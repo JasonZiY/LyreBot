@@ -84,11 +84,21 @@ TIMELINE = Timeline((KeyEvent(0.0, ("a",), True), KeyEvent(0.035, ("a",), False)
 
 
 class Player(unittest.TestCase):
-    def run_with(self, timeline=TIMELINE, **options):
+    def run_with(self, timeline=TIMELINE, start=0.0, **options):
         clock = Clock()
         keyboard = FakeKeyboard(clock, **options)
-        reason = play(timeline, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep)
+        reason = play(timeline, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep, start=start)
         return reason, keyboard, clock
+
+    def test_start_skips_ahead(self):
+        reason, keyboard, clock = self.run_with(start=0.5)
+        self.assertEqual(reason, "done")
+        self.assertEqual([(at, keys) for at, keys, _ in keyboard.sent], [(0.5, ("s",)), (0.535, ("s",))])
+        self.assertAlmostEqual(clock.now, 1.5, places=2)
+
+    def test_start_mid_tap_drops_the_orphan_release(self):
+        _, keyboard, _ = self.run_with(start=0.02)
+        self.assertEqual([keys for _, keys, _ in keyboard.sent], [("s",), ("s",)])
 
     def test_plays_on_time_and_waits_for_the_end(self):
         reason, keyboard, clock = self.run_with()

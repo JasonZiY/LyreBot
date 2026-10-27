@@ -1,3 +1,4 @@
+# 纳塔野外夜晚BGM1（风清月白），按原简谱重新记谱
 speed=86
 w.g~q~~g~w.g~q~w~e~w.g.|a----
 w.g~q~~g~w.g~q~w~e~w.q.|ag----
@@ -7,11 +8,11 @@ w.g~q~~g~w.~q~w~e~w-|ca--d-g.f~d~
 w.g~q~~g~w.g~q~w~e~w-|vs--a.~g~.a.
 w.g~q~~g~w.g~q.g~w.g.|bf----
 t.g~q~~g~w.a~g.f~w.f.|bs----
-qwt--g.q.w.y.|0-0-b-cd-
+^qwt--g.q.w.y.|0-0-b-cd-
 t-.j~q~g--|zv.~va~.vs.~va.~vs.d.
-0-0-g.q.w.y.|xbg.~ba~.bs.vs~ba.~bs.x.
-t-.j~q~w--|cn.~na~.ns.~na.~ns.c.
-0-0-q-j-|cbg.~ca~.cs.vs~ca.~xb-
+0-0-g.q.w.y.|xbg.~ba~.bs.~ba.~bs.x.
+t-.j~q~w--|cn.~na~.ns.~na.~ns.d.
+0-0-q-j-|cbg.~ca~.cs.~ca.~xb-
 q-.j~h~j-e-|dh--sg--
 h--h-j-|af--af-sg-
 q-.j~q~e~g~q~w~t~e~g~b~|dh--sg--
@@ -24,6 +25,7 @@ qw.g~q~~g~w.g~q~w~e~w.g.|a----
 w.g~q~~g~w.g~q~w~e~w.q.|ag----
 w.g~q~~g~w.g~q~w~e~w.g.|va----
 t.g~q~~g~w.|v--
+speed=80
 a-g.q.|0-0-
 t--|0-0-
 0-0-|0-0-

@@ -7,6 +7,7 @@ import math
 import os
 from pathlib import Path
 import queue
+import random
 import sys
 import threading
 import time
@@ -45,6 +46,23 @@ def relaunch_as_admin() -> bool:
     return int(result) > 32
 
 
+SPEEDS = ("80%", "100%", "120%", "150%", "200%")
+SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
+PLAY, STOP, NEXT = "▶", "■", "⏭"
+GAP = 1.0  # seconds of silence between songs when playing on
+COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
+
+
+def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None:
+    if not songs:
+        return None
+    if mode == SHUFFLE:
+        others = [song for song in songs if song != current]
+        return random.choice(others or songs)
+    index = songs.index(current) if current in songs else -1
+    return songs[(index + 1) % len(songs)]
+
+
 class App:
     def __init__(self, root: tk.Tk, music_dir: Path = MUSIC_DIR):
         self.root = root
@@ -56,13 +74,15 @@ class App:
         self.updates: queue.Queue = queue.Queue()
         self.duration = 0.0
         self.closing = False
+        self.quiet_until = 0.0
 
         root.title("LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）")
         scale = root.winfo_fpixels("1i") / 96
-        root.geometry(f"{int(300 * scale)}x{int(400 * scale)}")
-        root.minsize(int(260 * scale), int(260 * scale))
+        root.geometry(f"{int(320 * scale)}x{int(420 * scale)}")
+        root.minsize(int(300 * scale), int(260 * scale))
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
+        ttk.Style(root).configure("Icon.TButton", font=("Segoe UI Symbol", 11))
 
         frame = ttk.Frame(root, padding=8)
         frame.pack(fill="both", expand=True)
@@ -76,8 +96,8 @@ class App:
         bar.grid(row=0, column=1, sticky="ns")
         self.listbox.configure(yscrollcommand=bar.set)
         self.listbox.bind("<<ListboxSelect>>", lambda _: self.show_selected())
-        self.listbox.bind("<Double-Button-1>", lambda _: self.toggle())
-        self.listbox.bind("<Return>", lambda _: self.toggle())
+        self.listbox.bind("<Double-Button-1>", lambda _: self.start())
+        self.listbox.bind("<Return>", lambda _: self.start())
         menu = tk.Menu(root, tearoff=False)
         menu.add_command(label="打开曲谱文件夹", command=self.open_folder)
         self.listbox.bind("<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root))
@@ -85,23 +105,32 @@ class App:
         row = ttk.Frame(frame)
         row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         ttk.Label(row, text="速度", font=FONT).pack(side="left")
-        self.speed = tk.StringVar(value="100")
-        self.speed_box = ttk.Spinbox(row, from_=25, to=300, increment=5, width=4, textvariable=self.speed, font=FONT)
-        self.speed_box.pack(side="left", padx=(4, 2))
-        ttk.Label(row, text="%", font=FONT).pack(side="left")
-        self.button = ttk.Button(row, text="演奏", width=8, command=self.toggle)
-        self.button.pack(side="right")
+        self.speed = tk.StringVar(value="100%")
+        self.speed_box = ttk.Combobox(row, values=SPEEDS, textvariable=self.speed, state="readonly",
+                                      width=5, font=FONT)
+        self.speed_box.pack(side="left", padx=(4, 8))
+        self.speed_box.bind("<<ComboboxSelected>>", lambda _: self.show_selected())
+        self.mode = tk.StringVar(value=SINGLE)
+        self.mode_box = ttk.Combobox(row, values=MODES, textvariable=self.mode, state="readonly",
+                                     width=8, font=FONT)
+        self.mode_box.pack(side="left")
+        # While a song plays these stay disabled: clicking LyreBot already stops the song
+        # (the game loses focus), and a live button would start it again on release.
+        self.next_button = ttk.Button(row, text=NEXT, width=3, style="Icon.TButton", command=self.play_next)
+        self.next_button.pack(side="right")
+        self.button = ttk.Button(row, text=PLAY, width=3, style="Icon.TButton", command=self.start)
+        self.button.pack(side="right", padx=(0, 4))
 
-        self.progress = ttk.Progressbar(frame, maximum=1.0)
+        self.progress = ttk.Progressbar(frame, maximum=1.0, cursor="hand2")
         self.progress.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        self.progress.bind("<Button-1>", self.seek)
         self.status = tk.StringVar()
         ttk.Label(frame, textvariable=self.status, font=FONT, foreground="#555").grid(
             row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         self.refresh()
         if self.songs:
-            self.listbox.selection_set(0)
-            self.show_selected()
+            self.select(self.songs[0])
         root.after(30, self.poll)
         root.after(2000, self.watch)
 
@@ -138,8 +167,7 @@ class App:
             for label in labels:
                 self.listbox.insert("end", label)
             if chosen in songs:
-                self.listbox.selection_set(songs.index(chosen))
-                self.listbox.see(songs.index(chosen))
+                self.select(chosen)
             self.show_selected()
         if not songs:
             self.status.set("music 文件夹里还没有 .txt 曲谱（右键列表可打开文件夹）")
@@ -147,6 +175,21 @@ class App:
     def selected(self) -> Path | None:
         chosen = self.listbox.curselection()
         return self.songs[chosen[0]] if chosen and chosen[0] < len(self.songs) else None
+
+    def select(self, path: Path) -> None:
+        if path not in self.songs:
+            return
+        index = self.songs.index(path)
+        state = self.listbox.cget("state")
+        self.listbox.configure(state="normal")
+        self.listbox.selection_clear(0, "end")
+        self.listbox.selection_set(index)
+        self.listbox.see(index)
+        self.listbox.configure(state=state)
+        self.show_selected()
+
+    def speed_factor(self) -> float:
+        return int(self.speed.get().rstrip("%")) / 100
 
     def show_selected(self) -> None:
         if self.worker:
@@ -160,43 +203,57 @@ class App:
             self.status.set(f"曲谱有误：{score}")
             return
         tempo = f"{score.bpm:g} BPM" + (f"（变速 {score.tempo_changes} 处）" if score.tempo_changes else "")
-        self.status.set(f"{tempo} · {clock(score.duration_seconds)}")
+        self.status.set(f"{tempo} · {clock(score.duration_seconds / self.speed_factor())}")
 
     def open_folder(self) -> None:
         self.music_dir.mkdir(exist_ok=True)
         os.startfile(self.music_dir)  # type: ignore[attr-defined]
 
     # ---- playing ----
-    def toggle(self) -> None:
-        if self.worker:
-            self.stop()
+    def start(self, path: Path | None = None, fraction: float = 0.0) -> None:
+        # The click that pulls focus back to LyreBot stops the song; it must not start one too.
+        if self.worker or time.monotonic() < self.quiet_until:
             return
-        path = self.selected()
+        path = path or self.selected()
         if path is None:
             return
         self.cache.pop(path, None)  # always play the file as it is now
         score = self.read(path)
         if isinstance(score, ScoreError):
-            messagebox.showerror("曲谱有误", str(score), parent=self.root)
+            messagebox.showerror("曲谱有误", f"{path.stem}：{score}", parent=self.root)
             self.refresh()
             return
-        try:
-            speed = float(self.speed.get()) / 100
-            if not 0.25 <= speed <= 3:
-                raise ValueError
-        except ValueError:
-            messagebox.showerror("速度无效", "速度请填 25 到 300 之间的数字。", parent=self.root)
-            return
+        speed = self.speed_factor()
         timeline = compile_timeline(score, speed)
+        self.select(path)
         self.duration = timeline.duration
+        self.progress["value"] = fraction
         self.cancel = threading.Event()
-        self.button.configure(text="停止")
-        self.speed_box.configure(state="disabled")
-        self.listbox.configure(state="disabled")
-        self.worker = threading.Thread(target=self.run, args=(timeline,), daemon=True)
+        self.set_playing(True)
+        args = (path, timeline, fraction * timeline.duration, speed, self.mode.get(), list(self.songs))
+        self.worker = threading.Thread(target=self.run, args=args, daemon=True)
         self.worker.start()
 
-    def run(self, timeline) -> None:
+    def play_next(self) -> None:
+        if self.worker:
+            return
+        self.start(next_song(self.songs, self.selected(), self.mode.get()))
+
+    def seek(self, event: tk.Event) -> None:
+        if self.worker:
+            return
+        width = self.progress.winfo_width()
+        self.start(fraction=min(max(event.x / width, 0.0), 0.999) if width > 0 else 0.0)
+
+    def set_playing(self, playing: bool) -> None:
+        state = "disabled" if playing else "normal"
+        self.button.configure(text=STOP if playing else PLAY, state=state)
+        self.next_button.configure(state=state)
+        self.speed_box.configure(state=state if playing else "readonly")
+        self.mode_box.configure(state=state if playing else "readonly")
+        self.listbox.configure(state=state)
+
+    def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path]) -> None:
         post = self.updates.put
         try:
             keyboard = Keyboard()
@@ -212,9 +269,26 @@ class App:
             if not target or pid == os.getpid():
                 post(("status", "倒计时结束时前台还是 LyreBot，没有演奏"))
                 return
-            post(("status", "正在演奏 · 按 F8 或切换窗口停止"))
-            reason = play(timeline, keyboard, target, self.cancel, lambda t: post(("progress", t)))
-            post(("status", {"done": "演奏完成", "stopped": "已停止", "focus": "切换了窗口，已停止"}[reason]))
+            while True:
+                post(("song", (path, timeline.duration)))
+                reason = play(timeline, keyboard, target, self.cancel,
+                              lambda t: post(("progress", t)), start=begin)
+                if reason != "done" or mode == SINGLE:
+                    post(("status", {"done": "演奏完成", "stopped": "已停止", "focus": "切换了窗口，已停止"}[reason]))
+                    return
+                for _ in songs:  # skip scores with mistakes, but give up after one lap
+                    path = next_song(songs, path, mode)
+                    try:
+                        timeline, begin = compile_timeline(load_score(path), speed), 0.0
+                        break
+                    except (ScoreError, OSError):
+                        continue
+                else:
+                    post(("status", "没有可以接着演奏的曲谱"))
+                    return
+                if self.cancel.wait(GAP):
+                    post(("status", "已停止"))
+                    return
         except Exception as error:  # report anything to the user rather than dying silently
             post(("error", str(error)))
         finally:
@@ -231,6 +305,9 @@ class App:
                 break
             if kind == "status":
                 self.status.set(value)
+            elif kind == "song":
+                path, self.duration = value
+                self.select(path)
             elif kind == "progress":
                 self.progress["value"] = value / self.duration if self.duration else 0
                 self.status.set(f"{clock(value)} / {clock(self.duration)} · 按 F8 或切换窗口停止")
@@ -240,9 +317,8 @@ class App:
                     messagebox.showerror("演奏出错", value, parent=self.root)
             elif kind == "done":
                 self.worker = None
-                self.button.configure(text="演奏")
-                self.speed_box.configure(state="normal")
-                self.listbox.configure(state="normal")
+                self.quiet_until = time.monotonic() + COOLDOWN
+                self.set_playing(False)
         if self.closing and not self.worker:
             self.root.destroy()
             return

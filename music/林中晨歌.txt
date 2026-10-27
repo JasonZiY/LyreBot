@@ -1,3 +1,4 @@
+# 希穆兰卡赐福森林主题BGM（林中晨歌），按原简谱重新记谱，6/8 拍
 speed=80
 d.f.g-d.f.|z.c.b.a.b.c.
 g-q-j.g.|b.x.m.s.m.b.
@@ -5,7 +6,7 @@ h-a-.h.|v.z.n.v.n-
 g---|z.b.d.ms.m.b.
 a.s.d-a.s.|n.c.n.z.c.n.
 d-h-g.d.|x.c.n.a.n.c.
-a-b-.d.|v.z-z.v.z.
+a-b-.d.|v.z-z.v.a.
 s---|b.x.m.s.m.b.
 d.f.g-d.f.|z.c.b.a.b.c.
 g-q-j.g.|b.x.m.s.m.b.
@@ -37,9 +38,9 @@ g.d.a.q-e.|c---
 r---|x.n.s.g.s.n.
 e-.w-.|b.m.s.g.s.m.
 q---|z.b.a.d.a.b.
+speed=75
 w---|v.z.n.a.n.v.
+speed=70
 e---|z.b.a.d.a.b.
-0-0-0-|z*d*g*q*--.
-0-0-0-|0-0-0-
-0-0-0-|0-0-0-
+0-0-0-|^zdgq---
 0-0-0-|0-0-0-

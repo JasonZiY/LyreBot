@@ -1,3 +1,4 @@
+# 原神纳塔5.0 圣山BGM（绵远的诀别），按原简谱重新记谱
 speed=75
 t-q.t-q.t.q.|adg----
 w.e.r.e.e.g-g.|asg----
@@ -6,7 +7,9 @@ w.e.r.e.e.w-e.|vna--bs--
 q.w.e.w..q.j.q.|adh--cmg--
 q.h-h.-0.g.|vna----
 q.w.e.w..q.q.t.|xna----
+speed=70
 he.w-jw.--|bs-.bsg.--
+speed=80
 t-q.t-q.t.q.|z.b.d.b.m.b.d.b.
 w.e.r.e.e.g-g.|n.c.a.g.b.x.m.a.
 t-q.t-q.t.q.|v.z.a.f.c.ba.m.a.
@@ -14,17 +17,19 @@ w.e.r.e.e.w-e.|x.n.s.d.b.x.s.m.
 q.w.e.w..q.j.q.|n.c.a.g.c.m.s.m.
 q.h-h.-0.g.|v.z.n.z.n.z.n.z.
 q.w.e.w..q.q.t.|x.n.s.d.c.m.s.m.
-e.w-w.--|v.z.n.z.b.x.m.d.
+e.w-w.--|v.z.n.a.b.x.m.d.
 q.j.g.a.m.a.g.j.|n.c.a.n.c.n.a.d.
 q.j.g.a-a.g.j.|v.z.a.z.v.z.n.a.
 q.j.g.j.g.a.g.j.|z.b.d.b.z.b.a.d.
 q.j.h.j.--|b.x.s.g.--
 q.j.g.a.m.a.g.j.|v.z.a.z.v.z.n.a.
-q.j.g.a-a.g.j.|b.x.m.b.s.b.m.b.
+q.j.g.a-a.g.j.|b.x.m.b.x.b.m.b.
 q.j.g.j.g.a.g.j.|n.c.a.n.c.n.a.d.
 q.j.g.w..q.j-|c.b.a.g.--
 0-0-|0-0-
+speed=70
 t-q.t.-q-|vad----
-hw--j.e.r.e.|bsf----
+speed=60
+hw--j-(e.r.e.)-|bsf----
 fe-g---|va----
 0-0-0-0-|0-0-0-0-

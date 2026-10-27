@@ -1,3 +1,4 @@
+# 至冬野外夜晚BGM（雪抚夜霜），按原简谱重新记谱
 speed=80
 0-0-d.f.g.e.|0-0-0-0-
 d-.f.f--|xvn----
@@ -6,7 +7,7 @@ s-.d.d-.g.|zb----
 a--d.f.g.e.|cn----
 d-.f.f--|xvn--0.x.v.n.
 h-.j.j-.g.|bmd.v.n.m.sg--
-w-.e.e--|zb.c.b.a.b.c.a.m~m~
+w-.e.e--|zb.c.b.a.g.d.a.m~m~
 0-0-e.r.t.y.|zn.x..v.bms--
 h-.j.j-.w.|vna.n-a.n.a-d.
 w--j.q.w.y.|bms.m-s.m.a-b.
@@ -27,15 +28,16 @@ f-g-e.r.t.y.|z.b.d.b.ba-zb-
 h-.j.j-.w.|vn-af-af-af.v.
 w--j.q.w.y.|bm-sg-sg-sg-
 hy-.gt.gt-.q.|cb-sg-s-sg.c.
-a*g*q*---.*|cn----
+^agq----|cn----
 0-h.j.q.t.|0-0-0-
 t-.r.h-.e.|vns----
 e-.w.f-.q.|bsf----
 q----|z.b.a.s.d.a.h.s.
-0-0-h.j.q.t.|z*b*a*d*---.
-0-.r.h-.e.|s*f*h*t*---.
-0-.w.f-.q.|s*g*j*e*---.
-q----|zbf.f.g.f.z*b*a*d*g*q*~-
-0-0-0-0-|0-0-0-0-
-0-0-0-0-|0-0-0-0-
+speed=75
+0-0-h.j.q.t.|^zbad----
+# 35、36 小节琶音线只覆盖低音三个音，最上面的高音与琶音的第一个音同时弹
+0-.r.h-.e.|t^sfh----
+0-.w.f-.q.|e^sgj----
+speed=65
+q----|zbf.f.g.f.(z.b.a.)-(d.g.q.)-
 0-0-0-0-|0-0-0-0-

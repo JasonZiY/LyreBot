@@ -27,14 +27,16 @@ def play(
     *,
     clock: Callable[[], float] = time.perf_counter,
     sleep: Callable[[float], None] = time.sleep,
+    start: float = 0.0,
 ) -> str:
     """Return "done", "stopped" (F8 or cancel) or "focus" (window switched).
 
     If the computer stalls, the rest of the song is delayed by the stall rather
     than sending the missed notes in a burst.  Keys are always released.
+    ``start`` skips the song up to that many seconds in.
     """
-    origin = clock()
-    next_report = 0.0
+    origin = clock() - start
+    next_report = start
 
     def interrupted() -> str | None:
         if cancel.is_set() or backend.stop_pressed():
@@ -59,15 +61,25 @@ def play(
             # Sleep coarsely, then spin the last couple of milliseconds.
             sleep(min(remaining - 0.0015, 0.005) if remaining > 0.002 else 0)
 
+    skipped: set[str] = set()  # keys pressed before ``start``; their releases are skipped too
     try:
         for event in timeline.events:
+            if event.at < start:
+                (skipped.update if event.down else skipped.difference_update)(event.keys)
+                continue
+            keys = event.keys
+            if not event.down and skipped:
+                keys = tuple(key for key in keys if key not in skipped)
+                skipped.difference_update(event.keys)
+                if not keys:
+                    continue
             reason = wait(event.at)
             if reason:
                 return reason
             late = clock() - (origin + event.at)
             if late > LATE_LIMIT:
                 origin += late
-            backend.send(event.keys, event.down)
+            backend.send(keys, event.down)
         reason = wait(timeline.duration)
         if on_progress:
             on_progress(timeline.duration)

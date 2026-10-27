@@ -1,3 +1,4 @@
+# 原神海灯节活动「奔霄颂玉轮」BGM（银花玉鉴逐人来），按原简谱重新记谱
 speed=147
 0-g-q-|0-0-0-
 w--0.~*e*|z---
@@ -38,7 +39,7 @@ q-e-e-|z.b.d.b.d-
 0-w-t-|d.b.s-g.q.
 0-e-e-|cs.n.d.n.c-
 0-w-r-|d.n.s-f-
-0-e-e-|c.n.d.n.c-
+0-e-e-|c.n.d.n.d-
 0-w-t-|d.n.dj-gq.w.
 0-e-e-|x.n.d.n.d-
 0-w-r-|d.n.s-f-
@@ -110,7 +111,7 @@ w---|g-d-s-
 e---|x-v.n.a.s.
 t---|d-a-g-
 gt---|b-x.b.s.d.
-aq---|g-b.x.d.g.
+aq---|g-b.s.d.g.
 sw---|b.x.s.d.g.s.
 sg-.af.0.af.|xb-.xb.0.xb.
 gq.gq.0.gq..gq.|bs.bs.0.bs..bs.
@@ -154,3 +155,4 @@ qr-qr-qr-|zb-zb-zb-
 qt-.qt..qt.|zb-.zb..zb.
 qt-qt-qt-|zb-zb-zb-
 a---|zb---
+0-0-0-|0-0-0-

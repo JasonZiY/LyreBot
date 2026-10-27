@@ -1,3 +1,4 @@
+# 望月者计划主题曲（望月者的心愿），按原简谱重新记谱
 speed=99
 dq--sj--|n--b--
 ah----|v----
@@ -27,7 +28,7 @@ r-.t.r-.e.|x-n-c-m-
 q--0-y-|cna-n-m-a-
 t-q-r.e.w-|bad--baf--
 q--j--|ag-z-sg-b-
-q----|z-b-a-g~b~a~g~
+q----|z-b-a-g.(b~a~g~).
 0-0-h-j-|q----
 q--0.q.j.h.|nad----
 j-.e.e--|bsg----
@@ -60,8 +61,8 @@ e-.w.h-.j.|v.z.n.a.d.a.n.v.
 w-.q.g-0.g.|c.b.a.d..d.a.b.
 g-.f.f-.q.|x.v.n.a.s.a.n.v.
 q---0.g.|x.v.n.a.s.a.n.v.
-g-.f.f-.w.|b.x.b.m.x.m.b.x.
-w----|b.x.m.s.g.s.sgjw-
+g-.f.f-.w.|b.x.b.m.s.m.b.x.
+w----|b.x.m.s.g.s.^sgjw-
 t----|bg----
 q----|ba----
 t----|ba----
@@ -71,7 +72,6 @@ q-.g.w--|z----
 0-0-0-g-|v----
 q-.g.w--|z----
 ----|v----
-a.g.q---|zb----
-0-0-0-0-|0-0-0-0-
-0-0-0-0-|0-0-0-0-
+speed=90
+(a.s.g.)-q---|zb----
 0-0-0-0-|0-0-0-0-
