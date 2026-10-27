@@ -262,5 +262,13 @@ def main() -> None:
     except (AttributeError, OSError):
         pass
     root = tk.Tk()
-    App(root)
+    try:
+        App(root)
+    except Exception:
+        if sys.stderr is not None:
+            raise
+        import traceback  # windowless start: show the error instead of vanishing
+        root.withdraw()
+        messagebox.showerror("LyreBot 启动失败", traceback.format_exc(limit=3))
+        return
     root.mainloop()
