@@ -13,7 +13,9 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
+from typing import Callable
 
+from . import icons
 from .keyboard import Keyboard, foreground_title_and_pid
 from .player import play
 from .score import Score, ScoreError, load_score
@@ -23,7 +25,26 @@ PROJECT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = PROJECT / "music"
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0
-FONT = ("Microsoft YaHei UI", 10)
+FAMILY = "Microsoft YaHei UI"
+
+# Claude's palette: warm paper, ink, and one orange accent.
+PAPER = "#FAF9F5"
+INK = "#3D3929"
+MUTED = "#8C8578"
+FAINT = "#C9C2B6"
+LINE = "#E8E2D7"
+TRACK = "#ECE6DC"
+ORANGE = "#D97757"
+ORANGE_DEEP = "#C15F3C"
+PEACH = "#F0D3C4"
+HIGHLIGHT = "#F5E4DA"
+HOVER = "#EFE9DF"
+WARN = "#B5502F"
+
+SPEEDS = ("80%", "100%", "120%", "150%", "200%")
+SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
+GAP = 1.0  # seconds of silence between songs when playing on
+COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 
 
 def clock(seconds: float) -> str:
@@ -46,13 +67,6 @@ def relaunch_as_admin() -> bool:
     return int(result) > 32
 
 
-SPEEDS = ("80%", "100%", "120%", "150%", "200%")
-SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
-PLAY, STOP, NEXT = "▶", "■", "⏭"
-GAP = 1.0  # seconds of silence between songs when playing on
-COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
-
-
 def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None:
     if not songs:
         return None
@@ -61,6 +75,79 @@ def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None
         return random.choice(others or songs)
     index = songs.index(current) if current in songs else -1
     return songs[(index + 1) % len(songs)]
+
+
+class IconButton(tk.Label):
+    """A flat image button: fires on release inside it, and does nothing while disabled."""
+
+    def __init__(self, parent: tk.Widget, images: dict[str, tk.PhotoImage], command: Callable[[], None]):
+        super().__init__(parent, image=images["normal"], bg=PAPER, borderwidth=0, cursor="hand2")
+        self.images, self.command = images, command
+        self.enabled, self.inside, self.pressed = True, False, False
+        self.bind("<Enter>", lambda _: self.hover(True))
+        self.bind("<Leave>", lambda _: self.hover(False))
+        self.bind("<ButtonPress-1>", self.press)
+        self.bind("<ButtonRelease-1>", self.release)
+
+    def set(self, images: dict[str, tk.PhotoImage] | None = None, enabled: bool | None = None) -> None:
+        if images is not None:
+            self.images = images
+        if enabled is not None:
+            self.enabled = enabled
+            self.pressed = False
+        self.configure(cursor="hand2" if self.enabled else "arrow")
+        self.redraw()
+
+    def redraw(self) -> None:
+        if not self.enabled:
+            self.configure(image=self.images["disabled"])
+        else:
+            self.configure(image=self.images["hover" if self.inside else "normal"])
+
+    def hover(self, inside: bool) -> None:
+        self.inside = inside
+        self.redraw()
+
+    def press(self, _: tk.Event) -> None:
+        self.pressed = self.enabled
+
+    def release(self, event: tk.Event) -> None:
+        fire = self.pressed and self.enabled and 0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height()
+        self.pressed = False
+        if fire:
+            self.command()
+
+
+class Choice(tk.Label):
+    """Flat text like "100% ▾" that opens a small menu of options."""
+
+    def __init__(self, parent: tk.Widget, variable: tk.StringVar, options: tuple[str, ...],
+                 on_change: Callable[[], None], font: tuple):
+        super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=8, pady=3)
+        self.variable, self.enabled = variable, True
+        self.menu = tk.Menu(self, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
+                            activeforeground=INK, borderwidth=0, font=font)
+        for option in options:
+            self.menu.add_radiobutton(label=option, value=option, variable=variable,
+                                      selectcolor=ORANGE, command=on_change)
+        variable.trace_add("write", lambda *_: self.redraw())
+        self.bind("<Enter>", lambda _: self.enabled and self.configure(bg=HOVER))
+        self.bind("<Leave>", lambda _: self.configure(bg=PAPER))
+        self.bind("<Button-1>", self.open)
+        self.redraw()
+
+    def redraw(self) -> None:
+        self.configure(text=f"{self.variable.get()}  ▾", fg=INK if self.enabled else FAINT,
+                       cursor="hand2" if self.enabled else "arrow")
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.configure(bg=PAPER)
+        self.redraw()
+
+    def open(self, _: tk.Event) -> None:
+        if self.enabled:
+            self.menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height())
 
 
 class App:
@@ -73,60 +160,89 @@ class App:
         self.cancel = threading.Event()
         self.updates: queue.Queue = queue.Queue()
         self.duration = 0.0
+        self.fraction = 0.0
         self.closing = False
         self.quiet_until = 0.0
+        self.base_title = "LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）"
 
-        root.title("LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）")
-        scale = root.winfo_fpixels("1i") / 96
-        root.geometry(f"{int(320 * scale)}x{int(420 * scale)}")
-        root.minsize(int(300 * scale), int(260 * scale))
+        scale = self.scale = root.winfo_fpixels("1i") / 96
+        px = lambda n: max(1, round(n * scale))  # noqa: E731
+        root.title(self.base_title)
+        root.geometry(f"{px(340)}x{px(500)}")
+        root.minsize(px(300), px(360))
+        root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
-        ttk.Style(root).configure("Icon.TButton", font=("Segoe UI Symbol", 11))
+        self.build_images(px(40), px(34))
 
-        frame = ttk.Frame(root, padding=8)
-        frame.pack(fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=1)
+        style = ttk.Style(root)
+        style.theme_use("clam")
+        style.configure("Songs.Treeview", background=PAPER, fieldbackground=PAPER, foreground=INK,
+                        font=(FAMILY, 11), rowheight=px(32), borderwidth=0, relief="flat", indent=0)
+        style.layout("Songs.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
+        style.map("Songs.Treeview", background=[("selected", HIGHLIGHT)], foreground=[("selected", INK)])
+        style.configure("Thin.Vertical.TScrollbar", background=LINE, troughcolor=PAPER, bordercolor=PAPER,
+                        lightcolor=LINE, darkcolor=LINE, gripcount=0, arrowsize=px(6))
+        style.map("Thin.Vertical.TScrollbar", background=[("active", FAINT)])
+        style.layout("Thin.Vertical.TScrollbar", [("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [
+            ("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})])
 
-        self.listbox = tk.Listbox(frame, font=(FONT[0], 11), activestyle="none", exportselection=False,
-                                  borderwidth=1, highlightthickness=0)
-        self.listbox.grid(row=0, column=0, sticky="nsew")
-        bar = ttk.Scrollbar(frame, command=self.listbox.yview)
-        bar.grid(row=0, column=1, sticky="ns")
-        self.listbox.configure(yscrollcommand=bar.set)
-        self.listbox.bind("<<ListboxSelect>>", lambda _: self.show_selected())
-        self.listbox.bind("<Double-Button-1>", lambda _: self.start())
-        self.listbox.bind("<Return>", lambda _: self.start())
-        menu = tk.Menu(root, tearoff=False)
+        # ---- song list ----
+        top = tk.Frame(root, bg=PAPER)
+        top.pack(fill="both", expand=True, padx=px(10), pady=(px(10), 0))
+        self.tree = ttk.Treeview(top, show="tree", selectmode="browse", style="Songs.Treeview")
+        self.tree.column("#0", stretch=True)
+        self.tree.tag_configure("bad", foreground=WARN)
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(top, command=self.tree.yview, style="Thin.Vertical.TScrollbar")
+        self.tree.configure(yscrollcommand=self.scrolled)
+        self.tree.bind("<<TreeviewSelect>>", lambda _: self.show_selected())
+        self.tree.bind("<Double-Button-1>", lambda _: self.locked() or self.start())
+        self.tree.bind("<Return>", lambda _: self.locked() or self.start())
+        for sequence in ("<Button-1>", "<KeyPress-Up>", "<KeyPress-Down>", "<KeyPress-Home>", "<KeyPress-End>",
+                         "<KeyPress-Prior>", "<KeyPress-Next>"):
+            self.tree.bind(sequence, self.locked, add=True)
+        menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
+                       activeforeground=INK, borderwidth=0, font=(FAMILY, 10))
         menu.add_command(label="打开曲谱文件夹", command=self.open_folder)
-        self.listbox.bind("<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root))
+        self.tree.bind("<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root))
 
-        row = ttk.Frame(frame)
-        row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-        ttk.Label(row, text="速度", font=FONT).pack(side="left")
+        tk.Frame(root, bg=LINE, height=1).pack(fill="x", padx=px(14), pady=(px(6), 0))
+
+        # ---- now playing ----
+        panel = tk.Frame(root, bg=PAPER)
+        panel.pack(fill="x", padx=px(18), pady=(px(12), px(14)))
+        heading = tk.Frame(panel, bg=PAPER)
+        heading.pack(fill="x")
+        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, 9))
+        self.time_label.pack(side="right", anchor="s")
+        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, 13, "bold"), anchor="w")
+        self.title_label.pack(side="left", fill="x", expand=True)
+
+        self.bar_height = px(14)  # the clickable band; the drawn track is thinner
+        self.bar = tk.Canvas(panel, height=self.bar_height, bg=PAPER, highlightthickness=0, cursor="hand2")
+        self.bar.pack(fill="x", pady=(px(6), 0))
+        self.bar.bind("<Configure>", lambda _: self.draw_bar())
+        self.bar.bind("<Button-1>", self.seek)
+
+        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=(FAMILY, 9), anchor="w", justify="left")
+        self.status_label.pack(fill="x", pady=(px(2), 0))
+        panel.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
+
+        controls = tk.Frame(panel, bg=PAPER)
+        controls.pack(fill="x", pady=(px(10), 0))
         self.speed = tk.StringVar(value="100%")
-        self.speed_box = ttk.Combobox(row, values=SPEEDS, textvariable=self.speed, state="readonly",
-                                      width=5, font=FONT)
-        self.speed_box.pack(side="left", padx=(4, 8))
-        self.speed_box.bind("<<ComboboxSelected>>", lambda _: self.show_selected())
         self.mode = tk.StringVar(value=SINGLE)
-        self.mode_box = ttk.Combobox(row, values=MODES, textvariable=self.mode, state="readonly",
-                                     width=8, font=FONT)
-        self.mode_box.pack(side="left")
+        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, 10))
+        self.speed_choice.pack(side="left")
+        self.mode_choice = Choice(controls, self.mode, MODES, lambda: None, (FAMILY, 10))
+        self.mode_choice.pack(side="left", padx=(px(4), 0))
         # While a song plays these stay disabled: clicking LyreBot already stops the song
         # (the game loses focus), and a live button would start it again on release.
-        self.next_button = ttk.Button(row, text=NEXT, width=3, style="Icon.TButton", command=self.play_next)
+        self.next_button = IconButton(controls, self.next_images, self.play_next)
         self.next_button.pack(side="right")
-        self.button = ttk.Button(row, text=PLAY, width=3, style="Icon.TButton", command=self.start)
-        self.button.pack(side="right", padx=(0, 4))
-
-        self.progress = ttk.Progressbar(frame, maximum=1.0, cursor="hand2")
-        self.progress.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 0))
-        self.progress.bind("<Button-1>", self.seek)
-        self.status = tk.StringVar()
-        ttk.Label(frame, textvariable=self.status, font=FONT, foreground="#555").grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.button = IconButton(controls, self.play_images, self.start)
+        self.button.pack(side="right", padx=(0, px(6)))
 
         self.refresh()
         if self.songs:
@@ -134,10 +250,57 @@ class App:
         root.after(30, self.poll)
         root.after(2000, self.watch)
 
+    def build_images(self, big: int, small: int) -> None:
+        def image(size: int, layers) -> tk.PhotoImage:
+            picture = tk.PhotoImage(master=self.root, width=size, height=size)
+            picture.put(" ".join(icons.render(size, PAPER, layers)))
+            return picture
+
+        c = big / 2
+        disc = lambda color: (color, icons.circle(c, c, c - 0.5))  # noqa: E731
+        self.play_images = {"normal": image(big, [disc(ORANGE), ("#FFFFFF", icons.play(big))]),
+                            "hover": image(big, [disc(ORANGE_DEEP), ("#FFFFFF", icons.play(big))]),
+                            "disabled": image(big, [disc(PEACH), ("#FFFFFF", icons.play(big))])}
+        stop = image(big, [disc(PEACH), ("#FFFFFF", icons.stop(big))])
+        self.stop_images = {"normal": stop, "hover": stop, "disabled": stop}
+        s = small / 2
+        mark = lambda color: [(color, shape) for shape in icons.next_track(small)]  # noqa: E731
+        self.next_images = {"normal": image(small, mark(INK)),
+                            "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + mark(INK)),
+                            "disabled": image(small, mark(FAINT))}
+
     def watch(self) -> None:
         """Pick up scores added, removed or edited while the window is open."""
         self.refresh()
         self.root.after(2000, self.watch)
+
+    # ---- small view helpers ----
+    def scrolled(self, first: str, last: str) -> None:
+        if float(first) <= 0 and float(last) >= 1:
+            self.scrollbar.pack_forget()
+        else:
+            self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar.set(first, last)
+
+    def locked(self, _: tk.Event | None = None) -> str | None:
+        return "break" if self.worker else None
+
+    def say(self, text: str, warn: bool = False) -> None:
+        self.status_label.configure(text=text, fg=WARN if warn else MUTED)
+
+    def draw_bar(self) -> None:
+        bar, width = self.bar, self.bar.winfo_width()
+        thick = max(2, round(4 * self.scale))
+        top = (self.bar_height - thick) // 2
+        bar.delete("all")
+        bar.create_rectangle(0, top, width, top + thick, fill=TRACK, width=0)
+        filled = round(width * min(max(self.fraction, 0.0), 1.0))
+        if filled > 0:
+            bar.create_rectangle(0, top, filled, top + thick, fill=ORANGE, width=0)
+
+    def set_fraction(self, fraction: float) -> None:
+        self.fraction = fraction
+        self.draw_bar()
 
     # ---- songs ----
     def read(self, path: Path) -> Score | ScoreError:
@@ -160,32 +323,35 @@ class App:
             return
         chosen = self.selected()
         songs = sorted(self.music_dir.glob("*.txt"), key=lambda p: p.stem) if self.music_dir.is_dir() else []
-        labels = [("⚠ " if isinstance(self.read(p), ScoreError) else "") + p.stem for p in songs]
-        if songs != self.songs or list(self.listbox.get(0, "end")) != labels:
+        bad = [isinstance(self.read(p), ScoreError) for p in songs]
+        rows = [("  " + ("⚠ " if wrong else "") + p.stem, wrong) for p, wrong in zip(songs, bad)]
+        current = [(self.tree.item(iid, "text"), "bad" in self.tree.item(iid, "tags"))
+                   for iid in self.tree.get_children()]
+        if songs != self.songs or current != rows:
             self.songs = songs
-            self.listbox.delete(0, "end")
-            for label in labels:
-                self.listbox.insert("end", label)
+            self.tree.delete(*self.tree.get_children())
+            for index, (text, wrong) in enumerate(rows):
+                self.tree.insert("", "end", iid=str(index), text=text, tags=("bad",) if wrong else ())
             if chosen in songs:
                 self.select(chosen)
             self.show_selected()
         if not songs:
-            self.status.set("music 文件夹里还没有 .txt 曲谱（右键列表可打开文件夹）")
+            self.title_label.configure(text="还没有曲谱")
+            self.time_label.configure(text="")
+            self.say("把 .txt 曲谱放进 music 文件夹（右键列表可以打开它）")
 
     def selected(self) -> Path | None:
-        chosen = self.listbox.curselection()
-        return self.songs[chosen[0]] if chosen and chosen[0] < len(self.songs) else None
+        chosen = self.tree.selection()
+        index = int(chosen[0]) if chosen else -1
+        return self.songs[index] if 0 <= index < len(self.songs) else None
 
     def select(self, path: Path) -> None:
         if path not in self.songs:
             return
-        index = self.songs.index(path)
-        state = self.listbox.cget("state")
-        self.listbox.configure(state="normal")
-        self.listbox.selection_clear(0, "end")
-        self.listbox.selection_set(index)
-        self.listbox.see(index)
-        self.listbox.configure(state=state)
+        iid = str(self.songs.index(path))
+        self.tree.selection_set(iid)
+        self.tree.focus(iid)
+        self.tree.see(iid)
         self.show_selected()
 
     def speed_factor(self) -> float:
@@ -198,12 +364,15 @@ class App:
         if path is None:
             return
         score = self.read(path)
-        self.progress["value"] = 0
+        self.title_label.configure(text=path.stem)
+        self.set_fraction(0.0)
         if isinstance(score, ScoreError):
-            self.status.set(f"曲谱有误：{score}")
+            self.time_label.configure(text="")
+            self.say(f"曲谱有误：{score}", warn=True)
             return
-        tempo = f"{score.bpm:g} BPM" + (f"（变速 {score.tempo_changes} 处）" if score.tempo_changes else "")
-        self.status.set(f"{tempo} · {clock(score.duration_seconds / self.speed_factor())}")
+        self.time_label.configure(text=clock(score.duration_seconds / self.speed_factor()))
+        tempo = f"{score.bpm:g} BPM" + (f" · 变速 {score.tempo_changes} 处" if score.tempo_changes else "")
+        self.say(tempo)
 
     def open_folder(self) -> None:
         self.music_dir.mkdir(exist_ok=True)
@@ -227,7 +396,7 @@ class App:
         timeline = compile_timeline(score, speed)
         self.select(path)
         self.duration = timeline.duration
-        self.progress["value"] = fraction
+        self.set_fraction(fraction)
         self.cancel = threading.Event()
         self.set_playing(True)
         args = (path, timeline, fraction * timeline.duration, speed, self.mode.get(), list(self.songs))
@@ -242,16 +411,17 @@ class App:
     def seek(self, event: tk.Event) -> None:
         if self.worker:
             return
-        width = self.progress.winfo_width()
+        width = self.bar.winfo_width()
         self.start(fraction=min(max(event.x / width, 0.0), 0.999) if width > 0 else 0.0)
 
     def set_playing(self, playing: bool) -> None:
-        state = "disabled" if playing else "normal"
-        self.button.configure(text=STOP if playing else PLAY, state=state)
-        self.next_button.configure(state=state)
-        self.speed_box.configure(state=state if playing else "readonly")
-        self.mode_box.configure(state=state if playing else "readonly")
-        self.listbox.configure(state=state)
+        self.button.set(self.stop_images if playing else self.play_images, enabled=not playing)
+        self.next_button.set(enabled=not playing)
+        self.speed_choice.set_enabled(not playing)
+        self.mode_choice.set_enabled(not playing)
+        self.bar.configure(cursor="arrow" if playing else "hand2")
+        if not playing:
+            self.root.title(self.base_title)
 
     def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path]) -> None:
         post = self.updates.put
@@ -304,15 +474,19 @@ class App:
             except queue.Empty:
                 break
             if kind == "status":
-                self.status.set(value)
+                self.say(value)
             elif kind == "song":
                 path, self.duration = value
                 self.select(path)
+                self.title_label.configure(text=path.stem)
+                self.time_label.configure(text=f"0:00 / {clock(self.duration)}")
+                self.root.title(f"{path.stem} · LyreBot")
             elif kind == "progress":
-                self.progress["value"] = value / self.duration if self.duration else 0
-                self.status.set(f"{clock(value)} / {clock(self.duration)} · 按 F8 或切换窗口停止")
+                self.set_fraction(value / self.duration if self.duration else 0)
+                self.time_label.configure(text=f"{clock(value)} / {clock(self.duration)}")
+                self.say("正在演奏 · 按 F8 或切换窗口停止")
             elif kind == "error":
-                self.status.set("出错，已停止")
+                self.say("出错，已停止", warn=True)
                 if not self.closing:
                     messagebox.showerror("演奏出错", value, parent=self.root)
             elif kind == "done":
