@@ -196,7 +196,7 @@ class Harmony(unittest.TestCase):
     def chords(self, *notes, melody=(), bars=None):
         others = [tone(s, e, p, 2) for s, e, p in notes]
         bass = outer_line(others, top=False)
-        spans = detect_chords([tone(s, e, p) for s, e, p in melody], others, bass, 0, bars or self.BARS)
+        spans = detect_chords([tone(s, e, p) for s, e, p in melody], others, bass, bars or self.BARS)
         return [(span.name, span.start, span.end) for span in spans]
 
     def block(self, start, length, *pitches):
@@ -306,6 +306,42 @@ class Arranging(unittest.TestCase):
         first = [line for line in result.text.splitlines() if not line.startswith(("#", "speed="))][0]
         self.assertTrue(first.startswith("q-j-h-g-"))
         self.assertIn("# 改动 ♯5→g", first)
+
+    def test_a_song_that_changes_key_is_transposed_one_key_at_a_time(self):
+        tune = (0, 2, 4, 5, 7, 9, 11, 12, 12, 11, 9, 7, 5, 4, 2, 0)  # up and down the major scale
+        in_g = [(i, i + 1, 67 + tune[i % 16]) for i in range(32)]
+        in_b_flat = [(32 + i, 33 + i, 70 + tune[i % 16]) for i in range(32)]
+        bass = [(i, i + 2, (43 if i < 32 else 46) + 7 * (i % 4 == 2)) for i in range(0, 64, 2)]
+        result = arrange(parse_midi(song((0, in_g + in_b_flat), (1, bass))), accompaniment="bass")
+        self.assertEqual([(key.start, key.shift) for key in result.keys], [(0, 5), (32, 2)])
+        self.assertEqual((result.changes, result.white_share), ([], 1.0))
+        bars = bars_of(result.text)
+        self.assertEqual(bars[:8], bars[8:])  # both halves land on the same white keys
+        self.assertIn("# 第 1–8 小节相当于 G 大调 / E 小调，升 5 个半音", result.text)
+        self.assertIn("# 第 9–16 小节相当于 B♭ 大调 / G 小调，升 2 个半音", result.text)
+        ninth = [line for line in result.text.splitlines() if not line.startswith(("#", "speed="))][8]
+        self.assertIn("# 转调，从这里起升 2 个半音", ninth)
+
+    def test_a_few_bars_leaning_to_the_dominant_keep_the_key(self):
+        tune = [(i, i + 1, 72 + (0, 2, 4, 5, 7, 5, 4, 2)[i % 8]) for i in range(16)]
+        lean = [(16 + i, 17 + i, (74, 78, 81, 79)[i % 4]) for i in range(8)]  # D F♯ A G, twice
+        home = [(24 + start, 24 + end, pitch) for start, end, pitch in tune]
+        result = arrange(parse_midi(song((0, tune + lean + home))))
+        self.assertEqual([key.shift for key in result.keys], [0])
+        self.assertEqual(len(result.changes), 2)  # the two F♯s move to a white key instead
+        self.assertNotIn("转调", result.text)
+
+    def test_a_borrowed_ending_keeps_the_key_and_the_final_chord(self):
+        tune = [(i, i + 1, 72 + (0, 4, 7, 11, 12, 7, 4, 2)[i % 8]) for i in range(32)]  # eight bars in C
+        roots = [48, 55] * 4 + [56, 58] * 2 + [48]  # C G ..., then A♭ B♭ A♭ B♭ (♭VI ♭VII), then C
+        chords = [(bar * 4, bar * 4 + 4, root + step) for bar, root in enumerate(roots) for step in (0, 4, 7)]
+        for bar, root in enumerate(roots[8:12], start=8):
+            tune += [(bar * 4 + i, bar * 4 + i + 1, root + 12 + step) for i, step in enumerate((0, 4, 7, 4))]
+        tune.append((48, 52, 72))
+        result = arrange(parse_midi(song((0, tune), (1, chords))))
+        self.assertEqual([key.shift for key in result.keys], [0])
+        self.assertNotIn("转调", result.text)
+        self.assertEqual(result.chords[-1].name, "C")
 
     def test_borrowed_notes_fill_bars_where_the_melody_rests(self):
         melody = [(i, i + 1, (72, 74, 76, 77)[i % 4]) for i in (*range(4), *range(8, 12))]

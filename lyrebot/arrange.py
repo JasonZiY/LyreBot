@@ -7,8 +7,9 @@ how people arrange for the lyre by hand:
    effects are left out.
 2. Pick the melody part and take its top line.  Bars where it is silent
    borrow the top line of the other parts.
-3. Transpose the whole song so that as many notes as possible land on the
-   white keys, which are the only notes the lyre has.
+3. Transpose the song so that as many notes as possible land on the white
+   keys, which are the only notes the lyre has.  A song that changes key
+   part way is transposed one key at a time.
 4. Put the melody on the middle and high rows and move the few notes still
    on black keys to a neighbouring white key.
 5. Find the chord on every beat and rewrite the accompaniment as broken
@@ -58,6 +59,8 @@ OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝�
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
 SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
+KEY_CHANGE = 1.0  # what changing key part way costs, in average bars of notes left on black keys
+MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, not a modulation
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 BOTH_HANDS = 0.6  # a melody part with fewer single-note onsets likely holds the left hand too
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
@@ -122,8 +125,8 @@ class Change:
 class Arrangement:
     text: str
     parts: list[Part]
-    shift: int  # semitones applied to the whole song
-    white_share: float  # share of the notes (by weight) on white keys after the shift
+    shift: int  # semitones applied to the song, or to its first key when it changes key
+    white_share: float  # share of the notes (by weight) on white keys after transposing
     exact: bool  # the file was already on a written grid
     bars: int
     changes: list[Change] = field(default_factory=list)
@@ -131,6 +134,7 @@ class Arrangement:
     strays: int = 0  # top-line notes handed back to the accompaniment
     chords: list[ChordSpan] = field(default_factory=list)
     timing: Timing | None = None  # set when the beat was found in the notes
+    keys: list[KeyRegion] = field(default_factory=list)  # one per key, more than one when the song modulates
 
 
 def note_name(pitch: int) -> str:
@@ -388,8 +392,105 @@ def white_share(melody: list[Tone], others: list[Tone], shift: int) -> float:
     return float(inside / total) if total else 1.0
 
 
-def place_octave(line: list[Tone], shift: int, preferred: tuple[int, int], allowed: tuple[int, int],
-                 centre: int) -> int:
+@dataclass(frozen=True)
+class KeyRegion:
+    start: Fraction  # the beat where this key begins
+    shift: int  # semitones applied from here on
+    share: float  # share of its notes (by weight) on white keys after the shift
+
+
+def key_regions(melody: list[Tone], others: list[Tone], bars: list[tuple[Fraction, Fraction]]) -> list[KeyRegion]:
+    """One transposition for each key the song passes through.
+
+    The lyre has only white keys, so a song that changes key part way (G
+    major, then B♭ major) needs each part moved on its own.  For every bar
+    and transposition, the notes left on black keys are weighed as in
+    ``choose_shift`` and counted in average bars.  A Viterbi pass charges
+    ``KEY_CHANGE`` for each change of key, so a borrowed chord or a few bars
+    leaning towards the dominant stay in the key around them.  A key that
+    lasts fewer than ``MIN_KEY_BARS`` bars joins its neighbour too: a ♭VI–
+    ♭VII–I ending moved on its own would end the song on the wrong chord.
+    Each region then takes its transposition from ``choose_shift``, with the
+    same tie-breaks as a song in one key.
+    """
+    whole, share = choose_shift(melody, others)
+    starts = [start for start, _ in bars]
+
+    def bar_of(tone: Tone) -> int:
+        return max(bisect_right(starts, tone.start) - 1, 0)
+
+    classes: dict[int, list[Fraction]] = {}
+    for tones, factor in ((melody, 3), (others, 1)):
+        for tone in tones:
+            classes.setdefault(bar_of(tone), [Fraction(0)] * 12)[tone.pitch % 12] += factor * _weight(tone)
+    total = sum(sum(weights) for weights in classes.values())
+    if len(classes) < 2 or not total:
+        return [KeyRegion(starts[0], whole, share)]
+    average = total / len(classes)
+    shifts = range(-5, 7)
+
+    def cost(bar: int, shift: int) -> float:
+        weights = classes.get(bar)
+        off = sum(weights[(step - shift) % 12] for step in range(12) if step not in WHITE) if weights else 0
+        return float(off / average) + 1e-6 * (shift != whole)  # ties stay in the song's overall key
+
+    best = {shift: cost(0, shift) for shift in shifts}
+    steps: list[dict[int, int]] = []
+    for bar in range(1, len(bars)):
+        leader = min(shifts, key=lambda shift: best[shift])
+        came_from = {shift: shift if best[shift] <= best[leader] + KEY_CHANGE else leader for shift in shifts}
+        best = {shift: best[came_from[shift]] + KEY_CHANGE * (came_from[shift] != shift) + cost(bar, shift)
+                for shift in shifts}
+        steps.append(came_from)
+    shift = min(shifts, key=lambda candidate: best[candidate])
+    path = [shift]
+    for came_from in reversed(steps):
+        shift = came_from[shift]
+        path.append(shift)
+    path.reverse()
+
+    runs = _joined([(bar, bar + 1, shift) for bar, shift in enumerate(path)])
+    # A short run is a borrowed cadence or an ending, not a new key: it joins the neighbour that fits it better.
+    while len(runs) > 1:
+        short = min(range(len(runs)), key=lambda index: runs[index][1] - runs[index][0])
+        first, end, _ = runs[short]
+        if end - first >= MIN_KEY_BARS:
+            break
+        into = min((index for index in (short - 1, short + 1) if 0 <= index < len(runs)),
+                   key=lambda index: sum(cost(bar, runs[index][2]) for bar in range(first, end)))
+        runs[into] = (min(runs[into][0], first), max(runs[into][1], end), runs[into][2])
+        del runs[short]
+        runs = _joined(runs)
+
+    def inside(first: int, end: int) -> tuple[list[Tone], list[Tone]]:
+        return ([tone for tone in melody if first <= bar_of(tone) < end],
+                [tone for tone in others if first <= bar_of(tone) < end])
+
+    runs = _joined([(first, end, choose_shift(*inside(first, end))[0]) for first, end, _ in runs])
+    if len(runs) == 1:
+        return [KeyRegion(starts[0], whole, share)]
+    return [KeyRegion(starts[first], shift, white_share(*inside(first, end), shift)) for first, end, shift in runs]
+
+
+def _joined(runs: list[tuple[int, int, int]]) -> list[tuple[int, int, int]]:
+    """Neighbouring (first bar, end bar, shift) runs with the same shift, made one."""
+    joined: list[tuple[int, int, int]] = []
+    for first, end, shift in runs:
+        if joined and joined[-1][2] == shift:
+            joined[-1] = (joined[-1][0], end, shift)
+        else:
+            joined.append((first, end, shift))
+    return joined
+
+
+def transposed(tones: list[Tone], keys: list[KeyRegion]) -> list[Tone]:
+    """Each tone moved by the transposition of the key it starts in."""
+    starts = [key.start for key in keys]
+    return [replace(tone, pitch=tone.pitch + keys[max(bisect_right(starts, tone.start) - 1, 0)].shift)
+            for tone in tones]
+
+
+def place_octave(line: list[Tone], preferred: tuple[int, int], allowed: tuple[int, int], centre: int) -> int:
     """The octave shift for a whole line.
 
     The line moves as one piece so that its shape survives.  Notes in the
@@ -399,12 +500,12 @@ def place_octave(line: list[Tone], shift: int, preferred: tuple[int, int], allow
     if not line:
         return 0
     total = sum(_weight(tone) for tone in line)
-    mean = float(sum(tone.pitch * _weight(tone) for tone in line) / total) + shift
+    mean = float(sum(tone.pitch * _weight(tone) for tone in line) / total)
 
     def rank(octave: int) -> tuple:
         score = Fraction(0)
         for tone in line:
-            pitch = tone.pitch + shift + octave
+            pitch = tone.pitch + octave
             if preferred[0] <= pitch <= preferred[1]:
                 score += 2 * _weight(tone)
             elif allowed[0] <= pitch <= allowed[1]:
@@ -416,7 +517,7 @@ def place_octave(line: list[Tone], shift: int, preferred: tuple[int, int], allow
     return min((12 * step for step in range(-6, 7)), key=rank)
 
 
-def melody_octaves(line: list[Tone], shift: int, bars: list[tuple[Fraction, Fraction]]) -> list[int]:
+def melody_octaves(line: list[Tone], bars: list[tuple[Fraction, Fraction]]) -> list[int]:
     """An octave shift for each melody note, chosen bar by bar.
 
     A bar costs nothing for notes on the middle and high rows, 1 per beat of
@@ -437,7 +538,7 @@ def melody_octaves(line: list[Tone], shift: int, bars: list[tuple[Fraction, Frac
     def cost(tones: list[Tone], octave: int) -> float:
         total = 0.0
         for tone in tones:
-            pitch = tone.pitch + shift + octave
+            pitch = tone.pitch + octave
             misplaced = 0 if MIDDLE <= pitch <= HIGH else 1 if LOW <= pitch < MIDDLE else 3
             total += float(_weight(tone)) * (misplaced + 0.001 * abs(pitch - 71.5))
         return total
@@ -536,7 +637,7 @@ def chord_fit(profile: list[float], bass: list[float], chord: int) -> float:
     return fit - 0.15 * (CHORDS[chord][0] == "Bdim")  # rarely a chord of its own
 
 
-def detect_chords(melody: list[Tone], others: list[Tone], bass: list[Tone], shift: int,
+def detect_chords(melody: list[Tone], others: list[Tone], bass: list[Tone],
                   bars: list[tuple[Fraction, Fraction]]) -> list[ChordSpan]:
     """One white-key triad per stretch of the song, found beat by beat.
 
@@ -558,7 +659,7 @@ def detect_chords(melody: list[Tone], others: list[Tone], bass: list[Tone], shif
             while index < len(beats) and beats[index][0] < end:
                 overlap = min(end, beats[index][1]) - max(tone.start, beats[index][0])
                 if overlap > 0:
-                    into[index][(tone.pitch + shift) % 12] += weight * float(overlap)
+                    into[index][tone.pitch % 12] += weight * float(overlap)
                 index += 1
 
     add(melody, 0.5, profiles)
@@ -738,16 +839,28 @@ def describe_timing(timing: Timing) -> str:
     return f"节拍是从音符推断的：约每分钟 {timing.bpm:.0f} 拍（四分音符），{pace}，{timing.signature} 拍"
 
 
-def _header(title: str, parts: list[Part], shift: int, share: float, signature: str, voices: int,
-            accompaniment: str, timing: Timing | None = None) -> list[str]:
+def key_name(shift: int) -> str:
+    """The scale a transposition brings to C major / A minor."""
     tonic = (-shift) % 12
-    if shift:
-        moved = f"整体{'升' if shift > 0 else '降'} {abs(shift)} 个半音"
+    return f"{TONIC_NAMES[tonic]} 大调 / {TONIC_NAMES[(tonic + 9) % 12]} 小调"
+
+
+def moved_text(shift: int) -> str:
+    return f"{'升' if shift > 0 else '降'} {abs(shift)} 个半音" if shift else "不移调"
+
+
+def _header(title: str, parts: list[Part], keys: list[tuple[int, int, KeyRegion]], share: float, signature: str,
+            voices: int, accompaniment: str, timing: Timing | None = None) -> list[str]:
+    """``keys`` holds (first bar, last bar, key) with bars numbered as written."""
+    lines = [f"# 由 MIDI 自动编配：{title}" if title else "# 由 MIDI 自动编配"]
+    if len(keys) == 1:
+        shift = keys[0][2].shift
+        moved = f"整体{moved_text(shift)}" if shift else "不用移调"
+        lines.append(f"# 原曲的音阶相当于 {key_name(shift)}，{moved}，{share:.0%} 的音落在白键上")
     else:
-        moved = "不用移调"
-    lines = [f"# 由 MIDI 自动编配：{title}" if title else "# 由 MIDI 自动编配",
-             f"# 原曲的音阶相当于 {TONIC_NAMES[tonic]} 大调 / {TONIC_NAMES[(tonic + 9) % 12]} 小调，"
-             f"{moved}，{share:.0%} 的音落在白键上"]
+        lines.append(f"# 原曲中途转调，各段分别移调，{share:.0%} 的音落在白键上")
+        lines += [f"# 第 {first}–{last} 小节相当于 {key_name(key.shift)}，{moved_text(key.shift)}"
+                  for first, last, key in keys]
     roles: dict[str, list[Part]] = defaultdict(list)
     for part in parts:
         roles[part.role].append(part)
@@ -841,23 +954,26 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     borrowed = fill_silences(top, [tone for tone in others if tone not in lowest], bars) if fill else []
 
     if transpose is None:
-        shift, share = choose_shift(top, others)
+        keys = key_regions(top, others, bars)
     else:
-        shift, share = transpose, white_share(top, others, transpose)
-    octaves = melody_octaves(top, shift, bars)
-    borrowed_octave = place_octave(borrowed, shift, (MIDDLE, HIGH), (MIDDLE, HIGH), 72)
-    bass_octave = place_octave(bass, shift, (LOW, MIDDLE - 1), (LOW, BASS_HIGH), 55)
+        keys = [KeyRegion(bars[0][0], transpose, white_share(top, others, transpose))]
+    # From here on every pitch is already moved into C major / A minor.
+    top, others, bass, borrowed = (transposed(line, keys) for line in (top, others, bass, borrowed))
+    share = keys[0].share if len(keys) == 1 else white_share(top, others, 0)
+    octaves = melody_octaves(top, bars)
+    borrowed_octave = place_octave(borrowed, (MIDDLE, HIGH), (MIDDLE, HIGH), 72)
+    bass_octave = place_octave(bass, (LOW, MIDDLE - 1), (LOW, BASS_HIGH), 55)
 
     folded = 0
     melody_notes: list[tuple[Tone, int]] = []
     for tone, octave in zip(top, octaves):
-        pitch = tone.pitch + shift + octave
+        pitch = tone.pitch + octave
         placed = _fold(pitch, LOW, HIGH)
         folded += placed != pitch
         melody_notes.append((tone, placed))
-    melody_notes += [(tone, _fold(tone.pitch + shift + borrowed_octave, MIDDLE, HIGH)) for tone in borrowed]
+    melody_notes += [(tone, _fold(tone.pitch + borrowed_octave, MIDDLE, HIGH)) for tone in borrowed]
     melody_notes.sort(key=lambda item: item[0].start)
-    bass_notes = [(tone, _fold(tone.pitch + shift + bass_octave, LOW, BASS_HIGH)) for tone in bass]
+    bass_notes = [(tone, _fold(tone.pitch + bass_octave, LOW, BASS_HIGH)) for tone in bass]
 
     clock = _Clock(midi)
     total = bars[-1][0] + bars[-1][1]
@@ -874,7 +990,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
                     for tone, before, after in zip(tones, pitches, snapped) if before != after]
         lines.append([(tone.start, tone.end, KEY_OF[pitch]) for tone, pitch in zip(tones, snapped)])
         if voice == 0 and accompaniment == "chords":
-            spans = detect_chords(top, others, bass, shift, bars)
+            spans = detect_chords(top, others, bass, bars)
             unit = Fraction(1) if clock.bpm(Fraction(0), total) > FAST else HALF
             lines.append(accompany(spans, bars, others,
                                    [(tone.start, pitch) for tone, pitch in zip(tones, snapped)], unit))
@@ -896,11 +1012,17 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
                 if index in played and (not harmony[index] or harmony[index][-1] != span.name):
                     harmony[index].append(span.name)
 
+    written = len(bars) - first_bar
+    key_bars = [max(bisect_right(starts, key.start) - 1 - first_bar, 0) + 1 for key in keys]
+    key_spans = [(first, last, key) for first, last, key
+                 in zip(key_bars, [bar - 1 for bar in key_bars[1:]] + [written], keys)]
+    modulations = {first_bar + first - 1: f"转调，从这里起{moved_text(key.shift)}" for first, _, key in key_spans[1:]}
+
     numerator, denominator = 4, 4
     for tick, top_number, bottom_number in midi.time_signatures:
         if tick == 0:
             numerator, denominator = top_number, bottom_number
-    text_lines = _header(title, parts, shift, share, f"{numerator}/{denominator}",
+    text_lines = _header(title, parts, key_spans, share, f"{numerator}/{denominator}",
                          len(lines), accompaniment, timing)
     cursors = [0] * len(segments)
     last_bpm: float | None = None
@@ -917,7 +1039,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
             piece, cursors[voice] = _bar_text(voice_segments, cursors[voice], begin, begin + length)
             pieces.append(piece)
         line = "|".join(pieces)
-        notes = []
+        notes = [modulations[index]] if index in modulations else []
         if harmony.get(index):
             notes.append("和弦 " + " ".join(harmony[index]))
         if remarks.get(index):
@@ -930,8 +1052,8 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         parse_score(text)
     except ScoreError as error:  # a bug here, not a problem with the MIDI file
         raise ArrangeError(f"生成的曲谱无法解析：{error}") from error
-    return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded, len(strays),
-                       spans, timing)
+    return Arrangement(text, parts, keys[0].shift, share, grid.exact, written, changes, folded, len(strays),
+                       spans, timing, keys)
 
 
 # --- Command line -----------------------------------------------------------
@@ -1013,8 +1135,11 @@ def main(argv: list[str] | None = None) -> int:
             failed += 1
             continue
         print(_part_table(result.parts))
-        moved = f"{'升' if result.shift > 0 else '降'} {abs(result.shift)} 个半音" if result.shift else "不移调"
-        print(f"   整体{moved}，{result.white_share:.0%} 的音落在白键上；"
+        if len(result.keys) > 1:
+            moved = f"中途转调，分 {len(result.keys)} 段移调（{'、'.join(moved_text(key.shift) for key in result.keys)}）"
+        else:
+            moved = f"整体{moved_text(result.shift)}"
+        print(f"   {moved}，{result.white_share:.0%} 的音落在白键上；"
               f"{'按原谱的拍点' if result.exact else '已按拍子量化'}；共 {result.bars} 小节")
         if result.timing:
             print(f"   {describe_timing(result.timing)}")
