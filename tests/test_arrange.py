@@ -1,10 +1,12 @@
+import bisect
 from fractions import Fraction as F
 from pathlib import Path
 import struct
 import unittest
 
 from lyrebot.arrange import (
-    ArrangeError, Grid, Tone, arrange, choose_shift, duration_text, outer_line, snap_line,
+    ArrangeError, Grid, Tone, accompany, arrange, choose_shift, detect_chords, duration_text, mountain,
+    outer_line, snap_line, voicing,
 )
 from lyrebot.midi import MidiError, parse_midi
 from lyrebot.score import load_score, parse_score
@@ -72,6 +74,12 @@ def song(*parts, bpm=100, numerator=4, denominator=4, ppq=PPQ):
     for channel, items in parts:
         tracks.append(notes(channel, [(round(s * ppq), round(e * ppq), p) for s, e, p in items]))
     return smf(tracks, ppq)
+
+
+def written_scores():
+    """The scores in the music folder transcribed by hand, not arranged from MIDI."""
+    return [path for path in sorted(MUSIC.glob("*.txt"))
+            if not path.read_text(encoding="utf-8").startswith("# 由 MIDI 自动编配")]
 
 
 def bars_of(text):
@@ -182,6 +190,73 @@ class Pieces(unittest.TestCase):
 
 # --- Whole arrangements ---------------------------------------------------------
 
+class Harmony(unittest.TestCase):
+    BARS = [(F(4 * i), F(4)) for i in range(4)]
+
+    def chords(self, *notes, melody=(), bars=None):
+        others = [tone(s, e, p, 2) for s, e, p in notes]
+        bass = outer_line(others, top=False)
+        spans = detect_chords([tone(s, e, p) for s, e, p in melody], others, bass, 0, bars or self.BARS)
+        return [(span.name, span.start, span.end) for span in spans]
+
+    def block(self, start, length, *pitches):
+        return [(start, start + length, pitch) for pitch in pitches]
+
+    def test_one_chord_per_bar(self):
+        notes = (self.block(0, 4, 48, 52, 55) + self.block(4, 4, 45, 52, 60)
+                 + self.block(8, 4, 41, 57, 60) + self.block(12, 4, 43, 59, 62))
+        self.assertEqual([name for name, _, _ in self.chords(*notes)], ["C", "Am", "F", "G"])
+
+    def test_a_change_on_the_third_beat(self):
+        notes = self.block(0, 2, 48, 52, 55) + self.block(2, 2, 43, 50, 59)
+        self.assertEqual(self.chords(*notes, bars=[(F(0), F(4))]), [("C", 0, 2), ("G", 2, 4)])
+
+    def test_passing_notes_in_the_melody_do_not_change_the_chord(self):
+        run = [(i / 2, i / 2 + 0.5, (72, 74, 76, 77, 79, 77, 76, 74)[i]) for i in range(8)]
+        notes = self.block(0, 4, 48, 55, 64)
+        self.assertEqual(self.chords(*notes, melody=run, bars=[(F(0), F(4))]), [("C", 0, 4)])
+
+    def test_the_bass_picks_between_chords_sharing_two_notes(self):
+        notes = self.block(0, 4, 45, 64, 72)  # A under E and C: A minor, not C
+        self.assertEqual(self.chords(*notes, bars=[(F(0), F(4))])[0][0], "Am")
+
+    def test_voicings_and_patterns(self):
+        self.assertEqual(voicing(0), [48, 55, 60, 64, 67])  # C3 G3 C4 E4 G4
+        self.assertEqual(voicing(3), [53, 48, 57, 60, 65])  # F3 C3 A3 C4 F4
+        self.assertEqual([mountain(n) for n in (8, 6, 4, 2, 1)],
+                         [[0, 1, 2, 3, 4, 3, 2, 1], [0, 1, 2, 3, 2, 1], [0, 1, 2, 1], [0, 1], [0]])
+
+    def test_broken_chords_play_only_where_the_source_does_and_stay_under_the_melody(self):
+        from lyrebot.arrange import ChordSpan
+        spans = [ChordSpan(F(0), F(8), 0)]
+        bars = [(F(0), F(4)), (F(4), F(4))]
+        source = [tone(0, 4, 48, 2)]  # the source accompaniment stops after one bar
+        line = accompany(spans, bars, source, [(F(0), 79)], F(1, 2))
+        self.assertEqual("".join(key for _, _, key in line), "zbadgdab")
+        low = accompany(spans, bars, source, [(F(0), 65)], F(1, 2))  # melody on F4
+        self.assertEqual("".join(key for _, _, key in low), "zbacbcab")  # E4 and G4 drop an octave
+
+    def test_every_written_score_gets_an_accompaniment_below_its_melody(self):
+        for path in written_scores():
+            with self.subTest(path.stem):
+                original = load_score(path)
+                parts = ([], [])
+                for event in original.events:
+                    for key in event.keys:
+                        parts[min(event.part, 1)].append((event.start, event.start + event.duration, PITCH_OF[key]))
+                score = parse_score(arrange(parse_midi(song((0, parts[0]), (1, parts[1]), bpm=original.bpm))).text)
+                melody = sorted((e.start, max(PITCH_OF[k] for k in e.keys)) for e in score.events
+                                if e.part == 0 and e.strikes)
+                starts = [start for start, _ in melody]
+                for event in score.events:
+                    if event.part != 1 or not event.strikes:
+                        continue
+                    self.assertTrue(set(event.keys) <= set("zxcvbnmasdfghj"), event)
+                    index = bisect.bisect_right(starts, event.start) - 1
+                    if index >= 0 and event.start - melody[index][0] < 4:
+                        self.assertLessEqual(PITCH_OF[event.keys[0]], melody[index][1] - 3, (path.stem, event))
+
+
 class Arranging(unittest.TestCase):
     def test_finds_the_melody_and_leaves_out_drums(self):
         melody = [(i, i + 1, 74 + (0, 2, 4, 5)[i % 4]) for i in range(16)]  # D major-ish, high, one at a time
@@ -236,23 +311,23 @@ class Arranging(unittest.TestCase):
         melody = [(i, i + 1, (72, 74, 76, 77)[i % 4]) for i in (*range(4), *range(8, 12))]
         pad = [(4, 8, 64), (4, 8, 67)]  # a sustained chord while the melody rests
         bass = [(i, i + 1, 36 + (i % 2) * 7) for i in range(12)]
-        result = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))))
+        result = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))), accompaniment="bass")
         bars = [line.split("|") for line in bars_of(result.text)]
         self.assertEqual([bar[0] for bar in bars], ["q-w-e-r-", "g----", "q-w-e-r-"])  # the pad's top note
         self.assertEqual([bar[1] for bar in bars], ["z-b-z-b-"] * 3)  # the bass is untouched
-        unfilled = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))), fill=False)
+        unfilled = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))), fill=False, accompaniment="bass")
         self.assertEqual(bars_of(unfilled.text)[1].split("|")[0], "0----")
 
     def test_the_bass_line_keeps_its_shape_across_two_rows(self):
         broken = [(i / 2, i / 2 + 0.5, 33 + step) for i, step in enumerate((0, -5, 7, 5, 12, 7))]  # A1 E1 E2 D2 A2 E2
-        result = arrange(parse_midi(song((0, [(0, 3, 76)]), (1, broken), numerator=3)))
+        result = arrange(parse_midi(song((0, [(0, 3, 76)]), (1, broken), numerator=3)), accompaniment="bass")
         self.assertEqual(bars_of(result.text)[0].split("|")[1], "n.c.d.s.h.d.")
 
     def test_round_trip_through_every_score(self):
         """Each score, moved to E♭ with the melody an octave up, the
         accompaniment an octave down and a drum track added, comes back with
         the same melody and the same lowest accompaniment line."""
-        for path in sorted(MUSIC.glob("*.txt")):
+        for path in written_scores():
             with self.subTest(path.stem):
                 original = load_score(path)
                 top, bottom, melody, accompaniment = {}, {}, [], []
@@ -269,7 +344,7 @@ class Arranging(unittest.TestCase):
                         accompaniment += [(s, e, p + 3 - 12) for s, e, p in items]
                 drums = [(i, i + F(1, 8), 42) for i in range(int(original.total_beats))]
                 midi = parse_midi(song((0, melody), (1, accompaniment), (9, drums), bpm=original.bpm))
-                result = arrange(midi, fill=False)
+                result = arrange(midi, fill=False, accompaniment="bass")
                 self.assertEqual(result.shift, -3)
                 self.assertTrue(result.exact)
                 self.assertEqual((result.folded, result.changes), (0, []))

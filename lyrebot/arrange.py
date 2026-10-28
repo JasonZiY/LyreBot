@@ -6,13 +6,15 @@ how people arrange for the lyre by hand:
 1. Split the file into parts, one per track and channel.  Drums and sound
    effects are left out.
 2. Pick the melody part and take its top line.  Bars where it is silent
-   borrow the top line of the other parts.  The lowest line of everything
-   else becomes the bass.
+   borrow the top line of the other parts.
 3. Transpose the whole song so that as many notes as possible land on the
    white keys, which are the only notes the lyre has.
-4. Put the melody on the middle and high rows, the bass on the low row, and
-   move the few notes still on black keys to a neighbouring white key.
-5. Snap onsets to the beat and write one line per bar.
+4. Put the melody on the middle and high rows and move the few notes still
+   on black keys to a neighbouring white key.
+5. Find the chord on every beat and rewrite the accompaniment as broken
+   chords on the low and middle rows (or keep the lowest line of the source
+   accompaniment as a bass line).
+6. Snap onsets to the beat and write one line per bar.
 """
 
 from __future__ import annotations
@@ -125,6 +127,7 @@ class Arrangement:
     changes: list[Change] = field(default_factory=list)
     folded: int = 0  # melody notes moved by an octave to fit the lyre
     strays: int = 0  # top-line notes handed back to the accompaniment
+    chords: list[ChordSpan] = field(default_factory=list)
 
 
 def note_name(pitch: int) -> str:
@@ -477,6 +480,179 @@ def snap_line(pitches: list[int]) -> list[int]:
     return snapped
 
 
+# --- Harmony ----------------------------------------------------------------
+
+CHORDS = (("C", (0, 4, 7)), ("Dm", (2, 5, 9)), ("Em", (4, 7, 11)), ("F", (5, 9, 0)),
+          ("G", (7, 11, 2)), ("Am", (9, 0, 4)), ("Bdim", (11, 2, 5)))  # the triads on the white keys
+FAST = 150  # above this tempo the accompaniment moves in quarters instead of eighths
+
+
+@dataclass(frozen=True)
+class ChordSpan:
+    start: Fraction
+    end: Fraction
+    chord: int  # index into CHORDS
+
+    @property
+    def name(self) -> str:
+        return CHORDS[self.chord][0]
+
+
+def _beats(bars: list[tuple[Fraction, Fraction]]) -> list[tuple[Fraction, Fraction, float]]:
+    """(start, end, cost of changing chord there) for every beat."""
+    beats = []
+    for start, length in bars:
+        position = Fraction(0)
+        while position < length:
+            step = min(Fraction(1), length - position)
+            if position == 0:
+                change = 0.15  # the downbeat
+            elif length >= 4 and position == length / 2:
+                change = 0.3  # the middle of a four-beat bar
+            else:
+                change = 0.6
+            beats.append((start + position, start + position + step, change))
+            position += step
+    return beats
+
+
+def chord_fit(profile: list[float], bass: list[float], chord: int) -> float:
+    """How well a beat's notes (weight per pitch class) match a triad."""
+    total = sum(profile)
+    if not total:
+        return 0.0
+    tones = CHORDS[chord][1]
+    inside = sum(profile[step] for step in tones) / total
+    fit = inside - 0.6 * (1 - inside)
+    lowest = sum(bass)
+    if lowest:  # a bass on the root makes the chord much more likely; on the third or fifth, a little
+        fit += (0.4 * bass[tones[0]] + 0.1 * (bass[tones[1]] + bass[tones[2]])) / lowest
+    return fit - 0.15 * (CHORDS[chord][0] == "Bdim")  # rarely a chord of its own
+
+
+def detect_chords(melody: list[Tone], others: list[Tone], bass: list[Tone], shift: int,
+                  bars: list[tuple[Fraction, Fraction]]) -> list[ChordSpan]:
+    """One white-key triad per stretch of the song, found beat by beat.
+
+    Each beat's notes, weighted by how long they sound in it, are compared
+    with the seven triads.  Melody notes count half, since the melody carries
+    passing notes; the bass favours the chord built on it.  A Viterbi pass
+    then settles where the chord changes: cheaply on a downbeat, a little
+    more in the middle of a four-beat bar, dearly anywhere else.
+    """
+    beats = _beats(bars)
+    starts = [beat[0] for beat in beats]
+    profiles = [[0.0] * 12 for _ in beats]
+    lows = [[0.0] * 12 for _ in beats]
+
+    def add(tones: list[Tone], weight: float, into: list[list[float]]) -> None:
+        for tone in tones:
+            end = tone.end if tone.end > tone.start else tone.start + QUARTER
+            index = max(bisect_right(starts, tone.start) - 1, 0)
+            while index < len(beats) and beats[index][0] < end:
+                overlap = min(end, beats[index][1]) - max(tone.start, beats[index][0])
+                if overlap > 0:
+                    into[index][(tone.pitch + shift) % 12] += weight * float(overlap)
+                index += 1
+
+    add(melody, 0.5, profiles)
+    add(others, 1.0, profiles)
+    add(bass, 1.0, lows)
+    chords = range(len(CHORDS))
+    cost = [-chord_fit(profiles[0], lows[0], chord) for chord in chords]
+    steps: list[list[int]] = []
+    for index in range(1, len(beats)):
+        change = beats[index][2]
+        cheapest = min(chords, key=lambda chord: cost[chord])
+        came_from = [chord if cost[chord] <= cost[cheapest] + change else cheapest for chord in chords]
+        cost = [cost[came_from[chord]] + change * (came_from[chord] != chord)
+                - chord_fit(profiles[index], lows[index], chord) for chord in chords]
+        steps.append(came_from)
+    chord = min(chords, key=lambda candidate: cost[candidate])
+    path = [chord]
+    for came_from in reversed(steps):
+        chord = came_from[chord]
+        path.append(chord)
+    path.reverse()
+    spans: list[ChordSpan] = []
+    for (start, end, _), chord in zip(beats, path):
+        if spans and spans[-1].chord == chord:
+            spans[-1] = ChordSpan(spans[-1].start, end, chord)
+        else:
+            spans.append(ChordSpan(start, end, chord))
+    return spans
+
+
+def voicing(chord: int) -> list[int]:
+    """Root and fifth on the low row, then the next three chord tones above
+    them: F is F3 C3 A3 C4 F4, C is C3 G3 C4 E4 G4."""
+    tones = CHORDS[chord][1]
+    root, fifth = LOW + tones[0], LOW + tones[2]
+    upper = [pitch for pitch in range(max(root, fifth) + 1, HIGH + 1) if pitch % 12 in tones]
+    return [root, fifth, *upper[:3]]
+
+
+def mountain(count: int) -> list[int]:
+    """Indices into a voicing for ``count`` notes: up from the root and back
+    down, 0 1 2 3 4 3 2 1 for a bar of eighths in 4/4, 0 1 2 3 2 1 in 3/4."""
+    if count > 8:
+        cycle = (0, 1, 2, 3, 4, 3, 2, 1)
+        return [cycle[index % 8] for index in range(count)]
+    peak = count // 2 + 1
+    return list(range(peak)) + list(range(peak - 2, peak - 2 - (count - peak), -1))
+
+
+def accompany(spans: list[ChordSpan], bars: list[tuple[Fraction, Fraction]], others: list[Tone],
+              melody: list[tuple[Fraction, int]], unit: Fraction) -> list[tuple[Fraction, Fraction, str]]:
+    """Broken chords, one note per ``unit``, wherever the source accompaniment plays.
+
+    The pattern restarts at every bar and every chord change.  A note that
+    would reach within a minor third of the melody drops an octave, or is left
+    out when it cannot.
+    """
+    covered: list[list[Fraction]] = []
+    for start, end in sorted((tone.start, max(tone.end, tone.start + QUARTER)) for tone in others):
+        if covered and start <= covered[-1][1]:
+            covered[-1][1] = max(covered[-1][1], end)
+        else:
+            covered.append([start, end])
+    covered_starts = [start for start, _ in covered]
+
+    def busy(begin: Fraction, end: Fraction) -> bool:
+        index = bisect_left(covered_starts, end) - 1
+        return index >= 0 and covered[index][1] > begin
+
+    melody_starts = [start for start, _ in melody]
+
+    def under_melody(at: Fraction, pitch: int) -> int | None:
+        index = bisect_right(melody_starts, at) - 1
+        if index < 0 or at - melody[index][0] >= 4:
+            return pitch
+        ceiling = melody[index][1] - 3
+        while pitch > ceiling and pitch - 12 >= LOW:
+            pitch -= 12
+        return pitch if pitch <= ceiling else None
+
+    line: list[tuple[Fraction, Fraction, str]] = []
+    first = 0
+    for bar_start, length in bars:
+        bar_end = bar_start + length
+        while first < len(spans) and spans[first].end <= bar_start:
+            first += 1
+        index = first
+        while index < len(spans) and spans[index].start < bar_end:
+            begin, end = max(spans[index].start, bar_start), min(spans[index].end, bar_end)
+            voiced = voicing(spans[index].chord)
+            for step, which in enumerate(mountain(math.ceil((end - begin) / unit))):
+                at = begin + step * unit
+                stop = min(at + unit, end)
+                pitch = under_melody(at, voiced[which]) if busy(at, stop) else None
+                if pitch is not None:
+                    line.append((at, stop, KEY_OF[pitch]))
+            index += 1
+    return line
+
+
 # --- Writing ----------------------------------------------------------------
 
 def duration_text(length: Fraction) -> str:
@@ -551,7 +727,8 @@ def _numbers(parts: list[Part]) -> str:
     return "、".join(str(part.number) for part in parts)
 
 
-def _header(title: str, parts: list[Part], shift: int, share: float, signature: str, voices: int) -> list[str]:
+def _header(title: str, parts: list[Part], shift: int, share: float, signature: str, voices: int,
+            accompaniment: str) -> list[str]:
     tonic = (-shift) % 12
     if shift:
         moved = f"整体{'升' if shift > 0 else '降'} {abs(shift)} 个半音"
@@ -571,7 +748,8 @@ def _header(title: str, parts: list[Part], shift: int, share: float, signature: 
     if unused:
         described.append(f"未使用：第 {_numbers(unused)} 部分")
     lines.append("# " + "；".join(described))
-    layout = "第 1 声部是旋律，第 2 声部是伴奏的低音线" if voices > 1 else "只有旋律一个声部"
+    second = "按和弦重写的分解和弦" if accompaniment == "chords" else "伴奏的低音线"
+    layout = f"第 1 声部是旋律，第 2 声部是{second}" if voices > 1 else "只有旋律一个声部"
     lines.append(f"# 拍号 {signature}；{layout}")
     return lines
 
@@ -579,7 +757,11 @@ def _header(title: str, parts: list[Part], shift: int, share: float, signature: 
 # --- The whole arrangement --------------------------------------------------
 
 def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop: Iterable[int] = (),
-            transpose: int | None = None, fill: bool = True) -> Arrangement:
+            transpose: int | None = None, fill: bool = True, accompaniment: str = "chords") -> Arrangement:
+    """``accompaniment`` is "chords" (broken chords rewritten from the
+    harmony) or "bass" (the lowest line of the source accompaniment)."""
+    if accompaniment not in ("chords", "bass"):
+        raise ArrangeError(f"未知的伴奏方式 {accompaniment!r}")
     ppq = midi.ticks_per_beat
     onsets = [Fraction(note.start, ppq) for note in midi.notes if note.channel != DRUM_CHANNEL]
     grid = Grid(onsets, Fraction(1, ppq))
@@ -638,34 +820,49 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     melody_notes.sort(key=lambda item: item[0].start)
     bass_notes = [(tone, _fold(tone.pitch + shift + bass_octave, LOW, BASS_HIGH)) for tone in bass]
 
+    clock = _Clock(midi)
+    total = bars[-1][0] + bars[-1][1]
+    starts = [start for start, _ in bars]
+    spans: list[ChordSpan] = []
     changes: list[Change] = []
     lines = []
-    for voice, placed in enumerate((melody_notes, bass_notes)):
+    voices = (melody_notes,) if accompaniment == "chords" else (melody_notes, bass_notes)
+    for voice, placed in enumerate(voices):
         tones = [tone for tone, _ in placed]
         pitches = [pitch for _, pitch in placed]
         snapped = snap_line(pitches)
         changes += [Change(tone.start, voice, before, after)
                     for tone, before, after in zip(tones, pitches, snapped) if before != after]
         lines.append([(tone.start, tone.end, KEY_OF[pitch]) for tone, pitch in zip(tones, snapped)])
+        if voice == 0 and accompaniment == "chords":
+            spans = detect_chords(top, others, bass, shift, bars)
+            unit = Fraction(1) if clock.bpm(Fraction(0), total) > FAST else HALF
+            lines.append(accompany(spans, bars, others,
+                                   [(tone.start, pitch) for tone, pitch in zip(tones, snapped)], unit))
     lines = [line for line in lines if line]
 
-    total = bars[-1][0] + bars[-1][1]
     segments = [_segments(line, total, grid) for line in lines]
     first_onset = min(line[0][0] for line in lines)
-    starts = [start for start, _ in bars]
     first_bar = bisect_right(starts, first_onset) - 1
     remarks: dict[int, list[str]] = defaultdict(list)
     for change in changes:
         voice = "" if change.voice == 0 else "低音"
         remarks[bisect_right(starts, change.start) - 1].append(
             f"{voice}{ACCIDENTALS[change.before % 12]}→{KEY_OF[change.after]}")
+    harmony: dict[int, list[str]] = defaultdict(list)
+    if accompaniment == "chords" and len(lines) > 1:
+        played = {bisect_right(starts, start) - 1 for start, _, _ in lines[-1]}
+        for span in spans:
+            for index in range(bisect_right(starts, span.start) - 1, bisect_left(starts, span.end)):
+                if index in played and (not harmony[index] or harmony[index][-1] != span.name):
+                    harmony[index].append(span.name)
 
     numerator, denominator = 4, 4
     for tick, top_number, bottom_number in midi.time_signatures:
         if tick == 0:
             numerator, denominator = top_number, bottom_number
-    text_lines = _header(title, parts, shift, share, f"{numerator}/{denominator}", len(lines))
-    clock = _Clock(midi)
+    text_lines = _header(title, parts, shift, share, f"{numerator}/{denominator}",
+                         len(lines), accompaniment)
     cursors = [0] * len(segments)
     last_bpm: float | None = None
     for index in range(first_bar, len(bars)):
@@ -679,15 +876,21 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
             piece, cursors[voice] = _bar_text(voice_segments, cursors[voice], begin, begin + length)
             pieces.append(piece)
         line = "|".join(pieces)
+        notes = []
+        if harmony.get(index):
+            notes.append("和弦 " + " ".join(harmony[index]))
         if remarks.get(index):
-            line += "  # 改动 " + " ".join(remarks[index])
+            notes.append("改动 " + " ".join(remarks[index]))
+        if notes:
+            line += "  # " + "；".join(notes)
         text_lines.append(line)
     text = "\n".join(text_lines) + "\n"
     try:
         parse_score(text)
     except ScoreError as error:  # a bug here, not a problem with the MIDI file
         raise ArrangeError(f"生成的曲谱无法解析：{error}") from error
-    return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded, len(strays))
+    return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded, len(strays),
+                       spans)
 
 
 # --- Command line -----------------------------------------------------------
@@ -726,13 +929,14 @@ def main(argv: list[str] | None = None) -> int:
         if reconfigure:
             reconfigure(errors="replace")
     parser = argparse.ArgumentParser(prog="python -m lyrebot.arrange",
-                                     description="把 MIDI 文件编配成 LyreBot 曲谱（旋律 + 低音两个声部）")
+                                     description="把 MIDI 文件编配成 LyreBot 曲谱（旋律 + 伴奏两个声部）")
     parser.add_argument("midi", nargs="+", type=Path, help="MIDI 文件，可以一次给多个")
     parser.add_argument("-o", "--output", type=Path, help="曲谱保存位置（只给一个 MIDI 时可用）；默认存进 music 文件夹")
     parser.add_argument("--list", action="store_true", help="只列出各个部分和自动判断的角色，不生成曲谱")
     parser.add_argument("--melody", help="指定旋律所在的部分编号，可写多个，如 2,3")
     parser.add_argument("--drop", help="不使用的部分编号，如 4,5")
     parser.add_argument("--transpose", type=int, help="手动指定整体移调的半音数，如 -3")
+    parser.add_argument("--bass-line", action="store_true", help="第 2 声部用原曲伴奏的低音线，不按和弦重写")
     parser.add_argument("--force", action="store_true", help="覆盖同名曲谱，而不是另存为「名字 (2).txt」")
     args = parser.parse_args(argv)
     if args.output and len(args.midi) > 1:
@@ -744,7 +948,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             midi = load_midi(path)
             result = arrange(midi, title=path.name, melody=_numbers_argument(args.melody),
-                             drop=_numbers_argument(args.drop), transpose=args.transpose)
+                             drop=_numbers_argument(args.drop), transpose=args.transpose,
+                             accompaniment="bass" if args.bass_line else "chords")
         except (OSError, MidiError, ArrangeError) as error:
             print(f"   无法编配：{error}")
             failed += 1
