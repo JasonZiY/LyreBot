@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 import math
 from pathlib import Path
@@ -30,6 +30,7 @@ import re
 import sys
 from typing import Iterable
 
+from .beats import Timing, find_beats
 from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
 from .score import ScoreError, parse_score
 
@@ -57,6 +58,7 @@ OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝�
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
 SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
+HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 BOTH_HANDS = 0.6  # a melody part with fewer single-note onsets likely holds the left hand too
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
 MAX_BARS = 20_000
@@ -128,6 +130,7 @@ class Arrangement:
     folded: int = 0  # melody notes moved by an octave to fit the lyre
     strays: int = 0  # top-line notes handed back to the accompaniment
     chords: list[ChordSpan] = field(default_factory=list)
+    timing: Timing | None = None  # set when the beat was found in the notes
 
 
 def note_name(pitch: int) -> str:
@@ -288,10 +291,12 @@ def pick_melody(parts: list[Part]) -> Part:
     return max(sizeable, key=score)
 
 
-def outer_line(tones: Iterable[Tone], top: bool) -> list[Tone]:
+def outer_line(tones: Iterable[Tone], top: bool, hold: Fraction | None = None) -> list[Tone]:
     """The highest (or lowest) line: at each onset, the outermost note, unless
     a note further out is still sounding from before.  A note that overlaps
-    the next one by at most an eighth of a beat is legato, not still sounding."""
+    the next one by at most an eighth of a beat is legato, not still sounding.
+    With ``hold``, no note counts as sounding longer than that many beats:
+    lengths heard in a recording include the ring of the instrument."""
     sign = 1 if top else -1
     ordered = sorted(tones, key=lambda tone: (tone.start, -sign * tone.pitch))
     line: list[Tone] = []
@@ -302,7 +307,8 @@ def outer_line(tones: Iterable[Tone], top: bool) -> list[Tone]:
         stop = index
         while stop < len(ordered) and ordered[stop].start == start:
             stop += 1
-        sounding = [tone for tone in sounding if tone.end > start + LEGATO]
+        sounding = [tone for tone in sounding
+                    if tone.end > start + LEGATO and (hold is None or start - tone.start < hold)]
         best = ordered[index]
         if all(sign * best.pitch >= sign * tone.pitch for tone in sounding):
             line.append(best)
@@ -727,8 +733,13 @@ def _numbers(parts: list[Part]) -> str:
     return "、".join(str(part.number) for part in parts)
 
 
+def describe_timing(timing: Timing) -> str:
+    pace = "速度平稳" if timing.steady else "速度有起伏，逐拍跟随"
+    return f"节拍是从音符推断的：约每分钟 {timing.bpm:.0f} 拍（四分音符），{pace}，{timing.signature} 拍"
+
+
 def _header(title: str, parts: list[Part], shift: int, share: float, signature: str, voices: int,
-            accompaniment: str) -> list[str]:
+            accompaniment: str, timing: Timing | None = None) -> list[str]:
     tonic = (-shift) % 12
     if shift:
         moved = f"整体{'升' if shift > 0 else '降'} {abs(shift)} 个半音"
@@ -751,20 +762,47 @@ def _header(title: str, parts: list[Part], shift: int, share: float, signature: 
     second = "按和弦重写的分解和弦" if accompaniment == "chords" else "伴奏的低音线"
     layout = f"第 1 声部是旋律，第 2 声部是{second}" if voices > 1 else "只有旋律一个声部"
     lines.append(f"# 拍号 {signature}；{layout}")
+    if timing:
+        lines.append(f"# {describe_timing(timing)}")
     return lines
 
 
 # --- The whole arrangement --------------------------------------------------
 
+def needs_beats(midi: MidiFile, grid: Grid) -> bool:
+    """Whether the file's own beat means nothing: notes off any written grid,
+    no time signature, and at most one tempo, as transcribed MIDI comes."""
+    return not grid.exact and not midi.time_signatures and len({tempo for _, tempo in midi.tempos}) <= 1
+
+
+def _grid(midi: MidiFile) -> Grid:
+    onsets = [Fraction(note.start, midi.ticks_per_beat) for note in midi.notes if note.channel != DRUM_CHANNEL]
+    return Grid(onsets, Fraction(1, midi.ticks_per_beat))
+
+
 def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop: Iterable[int] = (),
-            transpose: int | None = None, fill: bool = True, accompaniment: str = "chords") -> Arrangement:
+            transpose: int | None = None, fill: bool = True, accompaniment: str = "chords",
+            beats: str = "auto", meter: int | None = None) -> Arrangement:
     """``accompaniment`` is "chords" (broken chords rewritten from the
-    harmony) or "bass" (the lowest line of the source accompaniment)."""
+    harmony) or "bass" (the lowest line of the source accompaniment).
+    ``beats`` is "auto" (find the beat in the notes when the file has none of
+    its own), "midi" (always trust the file) or "notes" (always find it);
+    ``meter`` fixes the beats per bar."""
     if accompaniment not in ("chords", "bass"):
         raise ArrangeError(f"未知的伴奏方式 {accompaniment!r}")
-    ppq = midi.ticks_per_beat
-    onsets = [Fraction(note.start, ppq) for note in midi.notes if note.channel != DRUM_CHANNEL]
-    grid = Grid(onsets, Fraction(1, ppq))
+    if beats not in ("auto", "midi", "notes"):
+        raise ArrangeError(f"未知的节拍来源 {beats!r}")
+    if meter is not None and not 1 <= meter <= 12:
+        raise ArrangeError("每小节的拍数应在 1 到 12 之间")
+    grid = _grid(midi)
+    timing: Timing | None = None
+    if beats == "notes" or (beats == "auto" and needs_beats(midi, grid)):
+        found = find_beats(midi, meter)
+        if found:
+            midi, timing = found
+            grid = _grid(midi)
+    elif meter:
+        midi = replace(midi, time_signatures=((0, meter, 4),))
     parts = split_parts(midi, grid)
     if not parts:
         raise ArrangeError("MIDI 文件里没有音符")
@@ -791,13 +829,14 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     for part in usable:
         part.role = "旋律" if part in chosen else "伴奏"
 
-    top = outer_line([tone for part in chosen for tone in part.tones], top=True)
+    hold = HELD if timing else None  # a recording's note lengths include the ring
+    top = outer_line([tone for part in chosen for tone in part.tones], top=True, hold=hold)
     strays: list[Tone] = []
     if min(part.monophony for part in chosen) < BOTH_HANDS:
         top, strays = drop_strays(top)
     taken = set(top)
     others = [tone for part in usable for tone in part.tones if tone not in taken]
-    bass = outer_line(others, top=False)
+    bass = outer_line(others, top=False, hold=hold)
     lowest = set(bass)
     borrowed = fill_silences(top, [tone for tone in others if tone not in lowest], bars) if fill else []
 
@@ -862,13 +901,15 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         if tick == 0:
             numerator, denominator = top_number, bottom_number
     text_lines = _header(title, parts, shift, share, f"{numerator}/{denominator}",
-                         len(lines), accompaniment)
+                         len(lines), accompaniment, timing)
     cursors = [0] * len(segments)
     last_bpm: float | None = None
+    # A followed beat wobbles a little from bar to bar; only real tempo changes get a speed= line.
+    tolerance = 0.03 if timing and not timing.steady else 0.01
     for index in range(first_bar, len(bars)):
         begin, length = bars[index]
         bpm = round(clock.bpm(begin, length), 1)
-        if last_bpm is None or abs(bpm - last_bpm) > 0.01 * last_bpm:
+        if last_bpm is None or abs(bpm - last_bpm) > tolerance * last_bpm:
             text_lines.append(f"speed={_bpm_text(bpm)}")
             last_bpm = bpm
         pieces = []
@@ -890,7 +931,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     except ScoreError as error:  # a bug here, not a problem with the MIDI file
         raise ArrangeError(f"生成的曲谱无法解析：{error}") from error
     return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded, len(strays),
-                       spans)
+                       spans, timing)
 
 
 # --- Command line -----------------------------------------------------------
@@ -949,6 +990,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--drop", help="不使用的部分编号，如 4,5")
     parser.add_argument("--transpose", type=int, help="手动指定整体移调的半音数，如 -3")
     parser.add_argument("--bass-line", action="store_true", help="第 2 声部用原曲伴奏的低音线，不按和弦重写")
+    parser.add_argument("--beats", choices=("auto", "midi", "notes"), default="auto",
+                        help="节拍从哪来：auto 只在 MIDI 没有拍号和速度信息时（如音频转录的）从音符推断，"
+                             "midi 一律用 MIDI 自带的，notes 一律从音符推断")
+    parser.add_argument("--meter", type=int, help="指定每小节几拍，如 3 或 4")
     parser.add_argument("--force", action="store_true", help="覆盖同名曲谱，而不是另存为「名字 (2).txt」")
     args = parser.parse_args(argv)
     if args.output and len(args.midi) > 1:
@@ -961,7 +1006,8 @@ def main(argv: list[str] | None = None) -> int:
             midi = load_midi(path)
             result = arrange(midi, title=path.name, melody=_numbers_argument(args.melody),
                              drop=_numbers_argument(args.drop), transpose=args.transpose,
-                             accompaniment="bass" if args.bass_line else "chords")
+                             accompaniment="bass" if args.bass_line else "chords",
+                             beats=args.beats, meter=args.meter)
         except (OSError, MidiError, ArrangeError) as error:
             print(f"   无法编配：{error}")
             failed += 1
@@ -970,6 +1016,8 @@ def main(argv: list[str] | None = None) -> int:
         moved = f"{'升' if result.shift > 0 else '降'} {abs(result.shift)} 个半音" if result.shift else "不移调"
         print(f"   整体{moved}，{result.white_share:.0%} 的音落在白键上；"
               f"{'按原谱的拍点' if result.exact else '已按拍子量化'}；共 {result.bars} 小节")
+        if result.timing:
+            print(f"   {describe_timing(result.timing)}")
         if result.changes:
             print(f"   {len(result.changes)} 个黑键音改到了相邻白键，曲谱里对应小节末尾有注释")
         if result.strays:
