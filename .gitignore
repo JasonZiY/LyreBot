@@ -5,4 +5,5 @@ dist/
 build/
 *.spec
 score/
-midi/
+midi/*
+!midi/.gitkeep

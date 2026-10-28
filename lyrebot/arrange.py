@@ -33,7 +33,7 @@ from typing import Iterable
 from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
 from .score import ScoreError, parse_score
 
-MUSIC_DIR = Path(__file__).resolve().parent.parent / "music"
+SCORES_DIR = Path(__file__).resolve().parent.parent / "txt"
 
 LOW, HIGH = 48, 83  # C3 to B5: the lyre's three rows
 MIDDLE = 60  # C4: the melody belongs on the middle and high rows
@@ -913,6 +913,18 @@ def _numbers_argument(text: str | None) -> list[int]:
         raise SystemExit(f"部分编号应写成 2 或 2,3，而不是 {text!r}") from None
 
 
+def save_score(result: Arrangement, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(result.text, encoding="utf-8", newline="\n")
+
+
+def arrange_file(source: Path, target: Path) -> Arrangement:
+    """Arrange a MIDI file with the automatic choices and save the score."""
+    result = arrange(load_midi(source), title=source.name)
+    save_score(result, target)
+    return result
+
+
 def _free_path(path: Path) -> Path:
     if not path.exists():
         return path
@@ -931,7 +943,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m lyrebot.arrange",
                                      description="把 MIDI 文件编配成 LyreBot 曲谱（旋律 + 伴奏两个声部）")
     parser.add_argument("midi", nargs="+", type=Path, help="MIDI 文件，可以一次给多个")
-    parser.add_argument("-o", "--output", type=Path, help="曲谱保存位置（只给一个 MIDI 时可用）；默认存进 music 文件夹")
+    parser.add_argument("-o", "--output", type=Path, help="曲谱保存位置（只给一个 MIDI 时可用）；默认存进 txt 文件夹")
     parser.add_argument("--list", action="store_true", help="只列出各个部分和自动判断的角色，不生成曲谱")
     parser.add_argument("--melody", help="指定旋律所在的部分编号，可写多个，如 2,3")
     parser.add_argument("--drop", help="不使用的部分编号，如 4,5")
@@ -966,11 +978,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"   {result.folded} 个旋律音超出音域，移了八度")
         if args.list:
             continue
-        target = args.output or MUSIC_DIR / f"{path.stem}.txt"
+        target = args.output or SCORES_DIR / f"{path.stem}.txt"
         if not args.force:
             target = _free_path(target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(result.text, encoding="utf-8", newline="\n")
+        save_score(result, target)
         print(f"   已保存到 {target}")
     return 1 if failed else 0
 

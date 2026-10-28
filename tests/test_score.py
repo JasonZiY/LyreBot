@@ -5,7 +5,7 @@ import unittest
 
 from lyrebot.score import ScoreError, Strike, load_score, parse_score
 
-MUSIC = Path(__file__).resolve().parent.parent / "music"
+MUSIC = Path(__file__).resolve().parent.parent / "txt"
 
 
 def notes(text, part=0):

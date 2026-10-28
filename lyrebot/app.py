@@ -16,14 +16,19 @@ from tkinter import messagebox, ttk
 from typing import Callable
 
 from . import icons
+from .arrange import ArrangeError, arrange_file
 from .collate import pinyin_key
 from .keyboard import Keyboard, foreground_title_and_pid
+from .midi import MidiError
 from .player import play
 from .score import Score, ScoreError, load_score
 from .timeline import compile_timeline
 
 PROJECT = Path(__file__).resolve().parent.parent
-MUSIC_DIR = PROJECT / "music"
+SCORES_DIR = PROJECT / "txt"
+MIDI_DIR = PROJECT / "midi"
+MIDI_SUFFIXES = (".mid", ".midi")
+SETTLE = 1.5  # seconds a MIDI file must stay unchanged before it is arranged: it may still be copying
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0
 FAMILY = "Microsoft YaHei UI"
@@ -76,6 +81,42 @@ def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None
         return random.choice(others or songs)
     index = songs.index(current) if current in songs else -1
     return songs[(index + 1) % len(songs)]
+
+
+def midi_files(midi_dir: Path) -> list[Path]:
+    if not midi_dir.is_dir():
+        return []
+    files = [path for path in midi_dir.iterdir() if path.suffix.lower() in MIDI_SUFFIXES and path.is_file()]
+    return sorted(files, key=lambda path: pinyin_key(path.stem))
+
+
+def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], now: float | None = None) -> list[Path]:
+    """MIDI files that have no score of the same name yet.
+
+    A score that already exists is never replaced, so edits to it are safe.
+    Files still being copied (changed in the last ``SETTLE`` seconds) and files
+    that already failed as they are now wait.
+    """
+    now = time.time() if now is None else now
+    found = []
+    for path in midi_files(midi_dir):
+        if (scores_dir / f"{path.stem}.txt").exists():
+            continue
+        try:
+            stamp = path.stat().st_mtime
+        except OSError:
+            continue
+        if failed.get(path) != stamp and now - stamp >= SETTLE:
+            found.append(path)
+    return found
+
+
+def midi_for(score: Path, midi_dir: Path) -> Path | None:
+    """The MIDI file a score was arranged from, matched by name."""
+    for path in midi_files(midi_dir):
+        if path.stem.casefold() == score.stem.casefold():
+            return path
+    return None
 
 
 class IconButton(tk.Label):
@@ -152,9 +193,11 @@ class Choice(tk.Label):
 
 
 class App:
-    def __init__(self, root: tk.Tk, music_dir: Path = MUSIC_DIR):
+    def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR):
         self.root = root
-        self.music_dir = music_dir
+        self.scores_dir = scores_dir
+        self.midi_dir = midi_dir
+        self.failed_midi: dict[Path, float] = {}  # MIDI files that could not be arranged, by change time
         self.songs: list[Path] = []
         self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
         self.worker: threading.Thread | None = None
@@ -203,10 +246,13 @@ class App:
         for sequence in ("<Button-1>", "<KeyPress-Up>", "<KeyPress-Down>", "<KeyPress-Home>", "<KeyPress-End>",
                          "<KeyPress-Prior>", "<KeyPress-Next>"):
             self.tree.bind(sequence, self.locked, add=True)
-        menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
-                       activeforeground=INK, borderwidth=0, font=(FAMILY, 10))
-        menu.add_command(label="打开曲谱文件夹", command=self.open_folder)
-        self.tree.bind("<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root))
+        self.menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
+                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, 10))
+        self.menu.add_command(label="打开曲谱文件夹（txt）", command=lambda: self.open_folder(self.scores_dir))
+        self.menu.add_command(label="打开 MIDI 文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
+        self.menu.add_separator()
+        self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
+        self.tree.bind("<Button-3>", self.context_menu)
 
         tk.Frame(root, bg=LINE, height=1).pack(fill="x", padx=px(14), pady=(px(6), 0))
 
@@ -249,6 +295,7 @@ class App:
         if self.songs:
             self.select(self.songs[0])
         root.after(30, self.poll)
+        root.after(300, self.arrange_next)
         root.after(2000, self.watch)
 
     def build_images(self, big: int, small: int) -> None:
@@ -271,8 +318,9 @@ class App:
                             "disabled": image(small, mark(FAINT))}
 
     def watch(self) -> None:
-        """Pick up scores added, removed or edited while the window is open."""
+        """Pick up scores and MIDI files added, removed or edited while the window is open."""
         self.refresh()
+        self.arrange_next()
         self.root.after(2000, self.watch)
 
     # ---- small view helpers ----
@@ -323,7 +371,7 @@ class App:
         if self.worker:
             return
         chosen = self.selected()
-        songs = sorted(self.music_dir.glob("*.txt"), key=lambda p: pinyin_key(p.stem)) if self.music_dir.is_dir() else []
+        songs = sorted(self.scores_dir.glob("*.txt"), key=lambda p: pinyin_key(p.stem)) if self.scores_dir.is_dir() else []
         bad = [isinstance(self.read(p), ScoreError) for p in songs]
         rows = [("  " + ("⚠ " if wrong else "") + p.stem, wrong) for p, wrong in zip(songs, bad)]
         current = [(self.tree.item(iid, "text"), "bad" in self.tree.item(iid, "tags"))
@@ -339,7 +387,7 @@ class App:
         if not songs:
             self.title_label.configure(text="还没有曲谱")
             self.time_label.configure(text="")
-            self.say("把 .txt 曲谱放进 music 文件夹（右键列表可以打开它）")
+            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们）")
 
     def selected(self) -> Path | None:
         chosen = self.tree.selection()
@@ -375,9 +423,67 @@ class App:
         tempo = f"{score.bpm:g} BPM" + (f" · 变速 {score.tempo_changes} 处" if score.tempo_changes else "")
         self.say(tempo)
 
-    def open_folder(self) -> None:
-        self.music_dir.mkdir(exist_ok=True)
-        os.startfile(self.music_dir)  # type: ignore[attr-defined]
+    def open_folder(self, folder: Path) -> None:
+        folder.mkdir(exist_ok=True)
+        os.startfile(folder)  # type: ignore[attr-defined]
+
+    def context_menu(self, event: tk.Event) -> None:
+        if not self.worker:
+            row = self.tree.identify_row(event.y)
+            if row:
+                self.tree.selection_set(row)
+                self.tree.focus(row)
+        chosen = self.selected()
+        can = not self.worker and chosen is not None and midi_for(chosen, self.midi_dir) is not None
+        self.menu.entryconfigure(3, state="normal" if can else "disabled")
+        self.menu.tk_popup(event.x_root, event.y_root)
+
+    # ---- MIDI ----
+    def arrange_next(self) -> None:
+        """Arrange one new MIDI file from the midi folder, then come back for the next."""
+        if self.worker or self.closing:
+            return
+        pending = pending_midi(self.midi_dir, self.scores_dir, self.failed_midi)
+        if not pending:
+            return
+        source = pending[0]
+        target = self.scores_dir / f"{source.stem}.txt"
+        self.say(f"正在编配 {source.name}…")
+        self.root.update_idletasks()
+        try:
+            arrange_file(source, target)
+        except (OSError, MidiError, ArrangeError) as error:
+            try:
+                self.failed_midi[source] = source.stat().st_mtime
+            except OSError:
+                pass
+            self.say(f"{source.name} 无法编配：{error}", warn=True)
+        else:
+            self.refresh()
+            self.select(target)
+            self.say(f"刚从 MIDI 编配好 · {self.status_label.cget('text')}")
+        if len(pending) > 1:
+            self.root.after(50, self.arrange_next)
+
+    def rearrange(self) -> None:
+        """Arrange the selected score again from its MIDI file, replacing it."""
+        score = self.selected()
+        source = midi_for(score, self.midi_dir) if score and not self.worker else None
+        if source is None:
+            return
+        question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
+        if not messagebox.askyesno("从 MIDI 重新编配", question, parent=self.root):
+            return
+        try:
+            arrange_file(source, score)
+        except (OSError, MidiError, ArrangeError) as error:
+            messagebox.showerror("无法编配", f"{source.name}：{error}", parent=self.root)
+            return
+        self.failed_midi.pop(source, None)
+        self.cache.pop(score, None)
+        self.refresh()
+        self.select(score)
+        self.say(f"已重新编配 · {self.status_label.cget('text')}")
 
     # ---- playing ----
     def start(self, path: Path | None = None, fraction: float = 0.0) -> None:

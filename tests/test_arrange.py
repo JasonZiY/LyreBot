@@ -11,7 +11,7 @@ from lyrebot.arrange import (
 from lyrebot.midi import MidiError, parse_midi
 from lyrebot.score import load_score, parse_score
 
-MUSIC = Path(__file__).resolve().parent.parent / "music"
+MUSIC = Path(__file__).resolve().parent.parent / "txt"
 PPQ = 480
 PITCH_OF = {key: 48 + 12 * row + step
             for row, keys in enumerate(("zxcvbnm", "asdfghj", "qwertyu"))
@@ -77,7 +77,7 @@ def song(*parts, bpm=100, numerator=4, denominator=4, ppq=PPQ):
 
 
 def written_scores():
-    """The scores in the music folder transcribed by hand, not arranged from MIDI."""
+    """The scores in the txt folder transcribed by hand, not arranged from MIDI."""
     return [path for path in sorted(MUSIC.glob("*.txt"))
             if not path.read_text(encoding="utf-8").startswith("# 由 MIDI 自动编配")]
 
