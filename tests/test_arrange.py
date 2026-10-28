@@ -164,6 +164,21 @@ class Pieces(unittest.TestCase):
         self.assertTrue(grid.exact)
         self.assertEqual(grid.onset(F(3, 5)), F(3, 5))
 
+    def test_a_beat_of_unrelated_subdivisions_snaps_to_32nds(self):
+        flourish = [F(43, 12), F(59, 16), F(19, 5)]  # placed by hand before the downbeat
+        grid = Grid([F(0), F(1), F(3, 2), F(2), F(7, 3), *flourish, F(4)], F(1, 256))
+        self.assertTrue(grid.exact)
+        self.assertEqual([grid.onset(x) for x in flourish], [F(29, 8), F(15, 4), F(15, 4)])
+        self.assertEqual(grid.onset(F(7, 3)), F(7, 3))  # a plain triplet elsewhere is kept
+
+    def test_left_hand_notes_leave_a_two_handed_melody(self):
+        right = [(i / 2, i / 2 + 0.25, (76, 74, 72, 74)[i % 4]) for i in range(16) if i % 4 != 2]
+        left = [(i, i + 0.5, pitch) for i in range(8) for pitch in (45, 52)]
+        result = arrange(parse_midi(song((0, right + left))))
+        self.assertEqual(result.strays, 4)  # the left hand shows through where the right hand rests
+        melody = bars_of(result.text)[0].split("|")[0]
+        self.assertFalse(set(melody) & set("zxcvbnm"), melody)
+
 
 # --- Whole arrangements ---------------------------------------------------------
 

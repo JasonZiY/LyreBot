@@ -54,6 +54,8 @@ OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝�
 
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
+SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
+BOTH_HANDS = 0.6  # a melody part with fewer single-note onsets likely holds the left hand too
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
 MAX_BARS = 20_000
 
@@ -122,6 +124,7 @@ class Arrangement:
     bars: int
     changes: list[Change] = field(default_factory=list)
     folded: int = 0  # melody notes moved by an octave to fit the lyre
+    strays: int = 0  # top-line notes handed back to the accompaniment
 
 
 def note_name(pitch: int) -> str:
@@ -154,8 +157,15 @@ class Grid:
 
     def __init__(self, onsets: list[Fraction], tick: Fraction):
         self.tick = tick
-        on_grid = sum(1 for onset in onsets if _written(onset, tick) is not None)
-        self.exact = bool(onsets) and on_grid >= 0.9 * len(onsets)
+        written = [_written(onset, tick) for onset in onsets]
+        self.exact = bool(onsets) and sum(1 for place in written if place is not None) >= 0.9 * len(onsets)
+        # A beat mixing unrelated subdivisions (a flourish placed by hand, a
+        # glissando) is free time: all of it goes to the nearest 32nd.
+        subdivisions: dict[int, int] = defaultdict(lambda: 1)
+        for onset, place in zip(onsets, written):
+            beat = math.floor(place if place is not None else onset)
+            subdivisions[beat] = math.lcm(subdivisions[beat], place.denominator if place is not None else 8)
+        self.free = {beat for beat, steps in subdivisions.items() if steps not in WRITTEN or steps > 16}
         by_beat: dict[int, list[Fraction]] = defaultdict(list)
         for onset in onsets:
             beat = math.floor(onset + Fraction(1, 8))
@@ -170,8 +180,11 @@ class Grid:
 
     def onset(self, position: Fraction) -> Fraction:
         if self.exact:
+            # Fast runs and glissandi written in odd tuplets go to the nearest 32nd.
             written = _written(position, self.tick)
-            return written if written is not None else Fraction(round(position * 48), 48)
+            if written is not None and math.floor(written) not in self.free:
+                return written
+            return Fraction(round(position * 8), 8)
         return self.coarse(position)
 
     def end(self, position: Fraction) -> Fraction:
@@ -295,6 +308,25 @@ def outer_line(tones: Iterable[Tone], top: bool) -> list[Tone]:
     return line
 
 
+def drop_strays(line: list[Tone], window: Fraction = Fraction(2), reach: int = 12) -> tuple[list[Tone], list[Tone]]:
+    """Split off top-line notes far below the line around them.
+
+    In a piano part the top line falls into the left hand whenever the right
+    hand pauses.  Such a note lies more than ``reach`` semitones under the
+    median of the top line within ``window`` beats either side, so it goes
+    back to the accompaniment.
+    """
+    starts = [tone.start for tone in line]
+    kept: list[Tone] = []
+    strays: list[Tone] = []
+    for tone in line:
+        nearby = sorted(other.pitch for other in
+                        line[bisect_left(starts, tone.start - window):bisect_right(starts, tone.start + window)])
+        median = nearby[(len(nearby) - 1) // 2]
+        (strays if tone.pitch < median - reach else kept).append(tone)
+    return kept, strays
+
+
 def fill_silences(melody: list[Tone], spare: list[Tone], bars: list[tuple[Fraction, Fraction]]) -> list[Tone]:
     """The top line of ``spare`` (notes neither melody nor bass) in bars where
     the melody is silent, so a countermelody or the upper accompaniment can
@@ -373,6 +405,49 @@ def place_octave(line: list[Tone], shift: int, preferred: tuple[int, int], allow
         return -score, abs(mean + octave - centre)
 
     return min((12 * step for step in range(-6, 7)), key=rank)
+
+
+def melody_octaves(line: list[Tone], shift: int, bars: list[tuple[Fraction, Fraction]]) -> list[int]:
+    """An octave shift for each melody note, chosen bar by bar.
+
+    A bar costs nothing for notes on the middle and high rows, 1 per beat of
+    notes on the low row and 3 per beat of notes that would have to be folded
+    back.  Changing octave between bars costs ``SWITCH``, so a whole passage
+    moves together (an intro doubled an octave higher, say) while a single
+    stray note stays where it is.  Ties go to the octave nearest the centre.
+    """
+    if not line:
+        return []
+    starts = [start for start, _ in bars]
+    octaves = [12 * step for step in range(-6, 7)]
+    by_bar: dict[int, list[Tone]] = defaultdict(list)
+    for tone in line:
+        by_bar[bisect_right(starts, tone.start) - 1].append(tone)
+    order = sorted(by_bar)
+
+    def cost(tones: list[Tone], octave: int) -> float:
+        total = 0.0
+        for tone in tones:
+            pitch = tone.pitch + shift + octave
+            misplaced = 0 if MIDDLE <= pitch <= HIGH else 1 if LOW <= pitch < MIDDLE else 3
+            total += float(_weight(tone)) * (misplaced + 0.001 * abs(pitch - 71.5))
+        return total
+
+    best = {octave: cost(by_bar[order[0]], octave) for octave in octaves}
+    steps: list[dict[int, int]] = []
+    for bar in order[1:]:
+        came_from = {octave: min(octaves, key=lambda before: best[before] + SWITCH * (before != octave))
+                     for octave in octaves}
+        best = {octave: best[came_from[octave]] + SWITCH * (came_from[octave] != octave) + cost(by_bar[bar], octave)
+                for octave in octaves}
+        steps.append(came_from)
+    octave = min(octaves, key=lambda candidate: best[candidate])
+    chosen = [octave]
+    for came_from in reversed(steps):
+        octave = came_from[octave]
+        chosen.append(octave)
+    per_bar = dict(zip(order, reversed(chosen)))
+    return [per_bar[bisect_right(starts, tone.start) - 1] for tone in line]
 
 
 def _fold(pitch: int, low: int, high: int) -> int:
@@ -535,6 +610,9 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         part.role = "旋律" if part in chosen else "伴奏"
 
     top = outer_line([tone for part in chosen for tone in part.tones], top=True)
+    strays: list[Tone] = []
+    if min(part.monophony for part in chosen) < BOTH_HANDS:
+        top, strays = drop_strays(top)
     taken = set(top)
     others = [tone for part in usable for tone in part.tones if tone not in taken]
     bass = outer_line(others, top=False)
@@ -545,13 +623,13 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         shift, share = choose_shift(top, others)
     else:
         shift, share = transpose, white_share(top, others, transpose)
-    octave = place_octave(top, shift, (MIDDLE, HIGH), (LOW, HIGH), 72)
+    octaves = melody_octaves(top, shift, bars)
     borrowed_octave = place_octave(borrowed, shift, (MIDDLE, HIGH), (MIDDLE, HIGH), 72)
     bass_octave = place_octave(bass, shift, (LOW, MIDDLE - 1), (LOW, BASS_HIGH), 55)
 
     folded = 0
     melody_notes: list[tuple[Tone, int]] = []
-    for tone in top:
+    for tone, octave in zip(top, octaves):
         pitch = tone.pitch + shift + octave
         placed = _fold(pitch, LOW, HIGH)
         folded += placed != pitch
@@ -609,7 +687,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         parse_score(text)
     except ScoreError as error:  # a bug here, not a problem with the MIDI file
         raise ArrangeError(f"生成的曲谱无法解析：{error}") from error
-    return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded)
+    return Arrangement(text, parts, shift, share, grid.exact, len(bars) - first_bar, changes, folded, len(strays))
 
 
 # --- Command line -----------------------------------------------------------
@@ -677,6 +755,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{'按原谱的拍点' if result.exact else '已按拍子量化'}；共 {result.bars} 小节")
         if result.changes:
             print(f"   {len(result.changes)} 个黑键音改到了相邻白键，曲谱里对应小节末尾有注释")
+        if result.strays:
+            print(f"   {result.strays} 个最高音比周围旋律低一个八度以上（多半是左手），交给了伴奏")
         if result.folded:
             print(f"   {result.folded} 个旋律音超出音域，移了八度")
         if args.list:
