@@ -13,8 +13,8 @@ q.~w.~w-.a.g.|z.b.a.d.g.d.0-  # 和弦 C
 w.q~w.q~w-q.w.e.|n.c.a.d.a.c.b.x.  # 和弦 Am G
 y.~t.~t.0-e.t.|b.x.m.s.g.s.m.x.  # 和弦 G
 r.e~w.q.q~0-.e~t~|v.z.n.z.z.b.a.b.  # 和弦 F C
-r.e~w.q.w.e~w.q.~*a*|b.x.m.s.0-.b.  # 和弦 G C
-s.q.q.j~q~0.j.q.j.|z.b.a.b.b.x.m.x.  # 和弦 C G
+r.e~w.q.w.e~w.q.0.|b.x.m.s.0-.b.  # 和弦 G C
+0.q.q.j~q~0.j.q.j.|z.b.a.b.b.x.m.x.  # 和弦 C G
 q.~w.~w.0-.~d*h*|b.x.m.s.m.0-.  # 和弦 G Am
 w.w.w.q~w.~q.w.e.|x.n.s.n.c.m.d.m.  # 和弦 Dm Em
 y.~t.~t.0-e.t.|b.x.m.s.m.0-.  # 和弦 G C
@@ -39,7 +39,7 @@ t-.r~e~w-g.q~j~|n.c.m.v.z.b.a.b.  # 和弦 Am Bdim C
 q-q-q.h.q.w.|v.z.n.a.f.a.n.z.  # 和弦 F
 w-w.q.w.q.w.e.|b.x.m.s.g.s.m.x.  # 和弦 G
 e-e.y.t.e.e-|n.c.a.d.h.d.a.c.  # 和弦 Am
-s.a.d-b.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c-d.a-  # 和弦 C
+s.a.d-.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c.b.d.a-  # 和弦 C
 a-a-a.n.a.s.|x.n.x.v.n.v.x.n.  # 和弦 Dm
 s-s.a.s.a.s.d.|z.b.z.c.b.c.z.b.  # 和弦 C
 d-d.h.g.d.d-|v.z.n.a.v.a.n.z.  # 和弦 F
@@ -55,7 +55,7 @@ f.d~s.a.s.~j~q~g~q~j.|b.x.m.x.b.s.m.x.  # 和弦 G
 n.m.a.m-n.b.n.|.c.0-c.0-z.  # 和弦 Am Em F
 .a.v.c-b~b~s~s~g.|v.z-z.z-m.v.  # 和弦 F C Bdim
 n.m.a.a-s.d.d.|.c.z.c-v.v.z.  # 和弦 Am Bdim F
-.s.a.s-x.g.*a*g~|v.z.b.x.m-m.x.  # 和弦 F G
+.s.a.s.0-g.*a*g~|v.z.b.x.m.x.m.x.  # 和弦 F G
 q---.~*f*|z.b.a.d.g.d.a.b.  # 和弦 C
 q----|v.z.n.a.f.a.n.z.  # 和弦 F
 s----|b.x.m.x.b.x.m.x.  # 和弦 G
@@ -71,7 +71,7 @@ g-.f~d~s.b~b~b.n~m~|n.c.c.m.z-z-  # 和弦 Am Em C
 a-a-a.n.a.s.|v.z.n.z.v.z.n.z.  # 和弦 F
 s-s.a.s.a.s.d.|b.x.m.x.b.x.m.x.  # 和弦 G
 d-d.h.g.d.d-|n.c.a.d.n.c.a.c.  # 和弦 Am
-s.a.d-b.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c-d.a-  # 和弦 C
+s.a.d-.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c.b.d.a-  # 和弦 C
 a-a-a.n.a.s.|x.n.x.v.n.v.x.n.  # 和弦 Dm
 s-s.a.s.a.s.d.|z.b.z.c.b.c.z.b.  # 和弦 C
 d-d.h.g.d.d-|v.z.n.a.v.a.n.z.  # 和弦 F
@@ -103,16 +103,16 @@ g-.f~d~s.b~b~b~b~n~m~|n.c.c.m.z-z-  # 和弦 Am Em C
 a-a-a.n.a.s.|v.z.n.z.v.z.n.z.  # 和弦 F
 s-s.a.s.a.s.d.|b.x.m.x.b.x.m.x.  # 和弦 G
 d-d.h.g.d.d-|n.c.a.d.n.c.a.c.  # 和弦 Am
-s.a.d-b.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c-d.a-  # 和弦 C
+s.a.d-.j~q~t.b{1/6}n{1/6}m{1/6}|z.b.a.c.b.d.a-  # 和弦 C
 a-a-a.n.a.s.|x.n.x.v.n.v.x.n.  # 和弦 Dm
 s-s.a.s.a.s.d.|z.b.z.c.b.c.z.b.  # 和弦 C
 d-d.h.g.d.d-|v.z.n.a.v.a.n.z.  # 和弦 F
 s.a.d~0.~f.d.s.a.|b.x.m.x.z.b.z.b.  # 和弦 G C
-a-{2/3}b{1/6}b{1/6}b~b~b~b~n*z*b*n*s*g*j~|0---z.b.  # 和弦 C；改动 ♯5→n ♯1→z ♭7→n ♭3→s ♯5→g
-q.a~b~b~a~j-g.g.b.|v.z-a.f.a.n.z.  # 和弦 F
+a-{2/3}b{1/6}b{1/6}b~b.b~n*z*b*n*s*g*j~|0--.x-x.  # 和弦 C G；改动 ♯5→n ♯1→z ♭7→n ♭3→s ♯5→g
+q.a~b~b~a~j-g.g-|v.z-a.f.a.n.z.  # 和弦 F
 g.b~m~b~m~q.w.~e.~q.|b.x-s.g.s.m.x.  # 和弦 G
 q-m.j-c~*a*g-|n.c.z.d.n-a.c.  # 和弦 Am
-w.~w~0.e.s.m~a~t-|z.b.a.d.b.c.a.b.  # 和弦 C
+w.~w~0.e.0-t-|z.b.a.d.g.d.a.b.  # 和弦 C
 g-.q-a~a~a.q.|x.n.s.f.h.v.x.n.  # 和弦 Dm
 j-b.w.g.a.t.g.|c.m.c.m.z.b.a.b.  # 和弦 Em C
 q.j~h~g.t-b~b~b.~x*b*|v.z.n.a.f.z-z.  # 和弦 F

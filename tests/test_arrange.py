@@ -187,6 +187,14 @@ class Pieces(unittest.TestCase):
         melody = bars_of(result.text)[0].split("|")[0]
         self.assertFalse(set(melody) & set("zxcvbnm"), melody)
 
+    def test_left_hand_chords_between_staccato_notes_leave_the_melody(self):
+        right = [(i, i + 0.25, (84, 86, 88, 89)[i % 4]) for i in range(17)]  # C6 D6 E6 F6, short
+        left = [(i + 0.5, i + 0.75, pitch) for i in range(16) for pitch in (72, 76)]  # C5 E5 in between
+        result = arrange(parse_midi(song((0, right + left))), accompaniment="chords")
+        self.assertEqual(result.strays, 16)
+        melody = "".join(bar.split("|")[0] for bar in bars_of(result.text))
+        self.assertEqual(set(melody) - set("0-.~"), set("qwer"), melody)
+
 
 # --- Whole arrangements ---------------------------------------------------------
 
@@ -235,6 +243,20 @@ class Harmony(unittest.TestCase):
         self.assertEqual("".join(key for _, _, key in line), "zbadgdab")
         low = accompany(spans, bars, source, [(F(0), 65)], F(1, 2))  # melody on F4
         self.assertEqual("".join(key for _, _, key in low), "zbacbcab")  # E4 and G4 drop an octave
+
+    def test_the_kept_accompaniment_plays_what_the_source_played(self):
+        from lyrebot.arrange import Change, keep_accompaniment
+        others = [tone(0, 0.5, 48, 2),  # C3
+                  tone(0.5, 1, 64, 2), tone(0.5, 1, 67, 2),  # E4 G4
+                  tone(1, 2, 61, 2), tone(1, 2, 64, 2), tone(1, 2, 69, 2),  # C♯4 E4 A4: the C♯ is left out
+                  tone(2, 3, 54, 2),  # F♯3 alone: moves to F3
+                  *(tone(3, 4, pitch, 2) for pitch in (48, 52, 55, 60, 64))]  # five notes: lowest and top two
+        line, changes = keep_accompaniment(others, [(F(0), 84)])
+        self.assertEqual([(start, keys) for start, _, keys in line],
+                         [(0, "z"), (F(1, 2), "dg"), (1, "dh"), (2, "v"), (3, "zad")])
+        self.assertEqual(changes, [Change(F(2), 1, 54, 53)])
+        line, _ = keep_accompaniment(others[:3], [(F(0), 65)])  # under F4, E4 and G4 drop an octave
+        self.assertEqual([keys for _, _, keys in line], ["z", "cb"])
 
     def test_every_written_score_gets_an_accompaniment_below_its_melody(self):
         for path in written_scores():

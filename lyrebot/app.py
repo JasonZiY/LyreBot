@@ -33,6 +33,7 @@ TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
+RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
             "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
             "下载地址和放法见 README 的「从录音生成曲谱」。")
@@ -140,6 +141,15 @@ def pending_audio(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], n
         if failed.get(path) != stamp and now - stamp >= SETTLE:
             found.append(path)
     return found
+
+
+def recording_name(title: str) -> str:
+    """The name a recording of ``title`` is saved under: 曲名-录音, or the
+    time of day when no title is given."""
+    title = title.strip()
+    if not title:
+        return "录音 " + time.strftime("%m%d-%H%M")  # Windows strftime cannot take Chinese in the format
+    return title if title.endswith(RECORDING_SUFFIX) else title + RECORDING_SUFFIX
 
 
 def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
@@ -580,13 +590,13 @@ class App:
         self.worker.start()
 
     def ask_name(self) -> str | None:
-        name = "录音 " + time.strftime("%m%d-%H%M")  # Windows strftime cannot take Chinese in the format
-        prompt = "给这段录音起个名字，生成的曲谱也叫这个名字："
+        prompt = f"要录的是哪首曲子？曲谱会叫「曲名{RECORDING_SUFFIX}」（不填就按时间起名）："
+        answer = ""
         while True:
-            answer = simpledialog.askstring("录音", prompt, initialvalue=name, parent=self.root)
+            answer = simpledialog.askstring("录音", prompt, initialvalue=answer, parent=self.root)
             if answer is None:
                 return None
-            name = answer.strip()
+            name = recording_name(answer)
             problem = name_problem(name, self.scores_dir, self.midi_dir)
             if problem is None:
                 return name

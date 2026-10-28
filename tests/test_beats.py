@@ -115,6 +115,16 @@ class WhenToFindIt(unittest.TestCase):
         self.assertIsNotNone(arrange(with_meter, beats="notes").timing)
         self.assertIsNone(arrange(midi, beats="midi").timing)
 
+    def test_a_recording_keeps_the_accompaniment_it_was_played_with(self):
+        result = arrange(performed(self.score, "d"))
+        self.assertIn("第 2 声部是原曲伴奏弹的音", result.text)
+        written = parse_midi(song((0, [(i, i + 1, 72 + i % 5) for i in range(16)]), (1, [(0, 16, 48)])))
+        self.assertIn("第 2 声部是按和弦重写的分解和弦", arrange(written).text)
+        source = {PITCH_OF[key] % 12 for event in self.score.events if event.part == 1 for key in event.keys}
+        kept = {PITCH_OF[key] % 12 for event in parse_score(result.text).events if event.part == 1
+                for key in event.keys}
+        self.assertLessEqual(kept, source)
+
     def test_the_bar_can_be_fixed_by_hand(self):
         result = arrange(performed(self.score, "c"), meter=4)
         self.assertEqual(result.timing.signature, "4/4")

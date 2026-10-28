@@ -14,7 +14,8 @@ how people arrange for the lyre by hand:
    on black keys to a neighbouring white key.
 5. Find the chord on every beat and rewrite the accompaniment as broken
    chords on the low and middle rows (or keep the lowest line of the source
-   accompaniment as a bass line).
+   accompaniment as a bass line).  A recording keeps the notes its
+   accompaniment really played, so the result sounds like what was recorded.
 6. Snap onsets to the beat and write one line per bar.
 """
 
@@ -63,6 +64,7 @@ KEY_CHANGE = 1.0  # what changing key part way costs, in average bars of notes l
 MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, not a modulation
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 BOTH_HANDS = 0.6  # a melody part with fewer single-note onsets likely holds the left hand too
+DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
 MAX_BARS = 20_000
 
@@ -322,21 +324,34 @@ def outer_line(tones: Iterable[Tone], top: bool, hold: Fraction | None = None) -
 
 
 def drop_strays(line: list[Tone], window: Fraction = Fraction(2), reach: int = 12) -> tuple[list[Tone], list[Tone]]:
-    """Split off top-line notes far below the line around them.
+    """Split off top-line notes that belong to the left hand.
 
     In a piano part the top line falls into the left hand whenever the right
     hand pauses.  Such a note lies more than ``reach`` semitones under the
-    median of the top line within ``window`` beats either side, so it goes
-    back to the accompaniment.
+    median of the top line within ``window`` beats either side.  Or it sits
+    in a short dip: up to ``DIP_NOTES`` notes, each at least ``DIP`` semitones
+    under the notes on both sides of the dip, which are at most ``DIP_SPAN``
+    beats apart, as when a staccato tune alternates with left-hand chords.
+    Either way the note goes back to the accompaniment.
     """
     starts = [tone.start for tone in line]
+    dips: set[int] = set()
+    for first in range(1, len(line) - 1):
+        for last in range(first, min(first + DIP_NOTES, len(line) - 1)):
+            before, after = line[first - 1], line[last + 1]
+            if after.start - before.start > DIP_SPAN:
+                break
+            floor = min(before.pitch, after.pitch) - DIP
+            if all(line[index].pitch <= floor for index in range(first, last + 1)):
+                dips.update(range(first, last + 1))
+                break
     kept: list[Tone] = []
     strays: list[Tone] = []
-    for tone in line:
+    for index, tone in enumerate(line):
         nearby = sorted(other.pitch for other in
                         line[bisect_left(starts, tone.start - window):bisect_right(starts, tone.start + window)])
         median = nearby[(len(nearby) - 1) // 2]
-        (strays if tone.pitch < median - reach else kept).append(tone)
+        (strays if index in dips or tone.pitch < median - reach else kept).append(tone)
     return kept, strays
 
 
@@ -592,6 +607,8 @@ def snap_line(pitches: list[int]) -> list[int]:
 CHORDS = (("C", (0, 4, 7)), ("Dm", (2, 5, 9)), ("Em", (4, 7, 11)), ("F", (5, 9, 0)),
           ("G", (7, 11, 2)), ("Am", (9, 0, 4)), ("Bdim", (11, 2, 5)))  # the triads on the white keys
 FAST = 150  # above this tempo the accompaniment moves in quarters instead of eighths
+CHORD_NOTES = 3  # keys struck together at most when the source accompaniment is kept
+ACCOMPANIMENTS = {"chords": "按和弦重写的分解和弦", "bass": "伴奏的低音线", "keep": "原曲伴奏弹的音"}
 
 
 @dataclass(frozen=True)
@@ -709,6 +726,59 @@ def mountain(count: int) -> list[int]:
     return list(range(peak)) + list(range(peak - 2, peak - 2 - (count - peak), -1))
 
 
+def _under(melody: list[tuple[Fraction, int]]):
+    """A function placing an accompaniment note at least a minor third under
+    the melody note sounding then: an octave lower if it must, or None."""
+    starts = [start for start, _ in melody]
+
+    def place(at: Fraction, pitch: int) -> int | None:
+        index = bisect_right(starts, at) - 1
+        if index < 0 or at - melody[index][0] >= 4:
+            return pitch
+        ceiling = melody[index][1] - 3
+        while pitch > ceiling and pitch - 12 >= LOW:
+            pitch -= 12
+        return pitch if pitch <= ceiling else None
+    return place
+
+
+def keep_accompaniment(others: list[Tone], melody: list[tuple[Fraction, int]]) -> tuple[
+        list[tuple[Fraction, Fraction, str]], list[Change]]:
+    """The source accompaniment as it was played, on the low and middle rows.
+
+    For a recording the notes under the tune are what the piano's left hand
+    (or the band) really played, so they are kept instead of rewritten.  The
+    whole line moves by one octave to sit low, and each note folds into the
+    lower two rows and under the melody.  Notes starting together make one
+    chord of at most ``CHORD_NOTES`` keys, the lowest and the highest.  Black
+    keys are left out of a chord that has white keys, so the harmony thins
+    rather than turns into another chord; a black key on its own moves to
+    the white key below.
+    """
+    octave = place_octave(others, (LOW, MIDDLE - 1), (LOW, BASS_HIGH), 55)
+    under_melody = _under(melody)
+    onsets: dict[Fraction, list[Tone]] = defaultdict(list)
+    for tone in others:
+        onsets[tone.start].append(tone)
+    line: list[tuple[Fraction, Fraction, str]] = []
+    changes: list[Change] = []
+    for start in sorted(onsets):
+        tones = onsets[start]
+        end = max(tone.end for tone in tones)
+        placed = sorted({_fold(tone.pitch + octave, LOW, BASS_HIGH) for tone in tones})
+        white = [pitch for pitch in placed if pitch % 12 in WHITE]
+        lone = None if white else placed[0]
+        keys = sorted({pitch for pitch in (under_melody(start, pitch) for pitch in white or [lone - 1])
+                       if pitch is not None})
+        if len(keys) > CHORD_NOTES:
+            keys = keys[:1] + keys[1 - CHORD_NOTES:]
+        if keys:
+            line.append((start, end, "".join(KEY_OF[pitch] for pitch in keys)))
+            if lone is not None:
+                changes.append(Change(start, 1, lone, keys[0]))
+    return line, changes
+
+
 def accompany(spans: list[ChordSpan], bars: list[tuple[Fraction, Fraction]], others: list[Tone],
               melody: list[tuple[Fraction, int]], unit: Fraction) -> list[tuple[Fraction, Fraction, str]]:
     """Broken chords, one note per ``unit``, wherever the source accompaniment plays.
@@ -729,17 +799,7 @@ def accompany(spans: list[ChordSpan], bars: list[tuple[Fraction, Fraction]], oth
         index = bisect_left(covered_starts, end) - 1
         return index >= 0 and covered[index][1] > begin
 
-    melody_starts = [start for start, _ in melody]
-
-    def under_melody(at: Fraction, pitch: int) -> int | None:
-        index = bisect_right(melody_starts, at) - 1
-        if index < 0 or at - melody[index][0] >= 4:
-            return pitch
-        ceiling = melody[index][1] - 3
-        while pitch > ceiling and pitch - 12 >= LOW:
-            pitch -= 12
-        return pitch if pitch <= ceiling else None
-
+    under_melody = _under(melody)
     line: list[tuple[Fraction, Fraction, str]] = []
     first = 0
     for bar_start, length in bars:
@@ -872,7 +932,7 @@ def _header(title: str, parts: list[Part], keys: list[tuple[int, int, KeyRegion]
     if unused:
         described.append(f"未使用：第 {_numbers(unused)} 部分")
     lines.append("# " + "；".join(described))
-    second = "按和弦重写的分解和弦" if accompaniment == "chords" else "伴奏的低音线"
+    second = ACCOMPANIMENTS[accompaniment]
     layout = f"第 1 声部是旋律，第 2 声部是{second}" if voices > 1 else "只有旋律一个声部"
     lines.append(f"# 拍号 {signature}；{layout}")
     if timing:
@@ -894,14 +954,16 @@ def _grid(midi: MidiFile) -> Grid:
 
 
 def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop: Iterable[int] = (),
-            transpose: int | None = None, fill: bool = True, accompaniment: str = "chords",
+            transpose: int | None = None, fill: bool = True, accompaniment: str = "auto",
             beats: str = "auto", meter: int | None = None) -> Arrangement:
     """``accompaniment`` is "chords" (broken chords rewritten from the
-    harmony) or "bass" (the lowest line of the source accompaniment).
+    harmony), "bass" (the lowest line of the source accompaniment), "keep"
+    (the source accompaniment as played) or "auto": "keep" for a recording,
+    whose arrangement should sound like what was recorded, "chords" otherwise.
     ``beats`` is "auto" (find the beat in the notes when the file has none of
     its own), "midi" (always trust the file) or "notes" (always find it);
     ``meter`` fixes the beats per bar."""
-    if accompaniment not in ("chords", "bass"):
+    if accompaniment not in ACCOMPANIMENTS and accompaniment != "auto":
         raise ArrangeError(f"未知的伴奏方式 {accompaniment!r}")
     if beats not in ("auto", "midi", "notes"):
         raise ArrangeError(f"未知的节拍来源 {beats!r}")
@@ -916,6 +978,8 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
             grid = _grid(midi)
     elif meter:
         midi = replace(midi, time_signatures=((0, meter, 4),))
+    if accompaniment == "auto":
+        accompaniment = "keep" if timing else "chords"
     parts = split_parts(midi, grid)
     if not parts:
         raise ArrangeError("MIDI 文件里没有音符")
@@ -981,7 +1045,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     spans: list[ChordSpan] = []
     changes: list[Change] = []
     lines = []
-    voices = (melody_notes,) if accompaniment == "chords" else (melody_notes, bass_notes)
+    voices = (melody_notes, bass_notes) if accompaniment == "bass" else (melody_notes,)
     for voice, placed in enumerate(voices):
         tones = [tone for tone, _ in placed]
         pitches = [pitch for _, pitch in placed]
@@ -989,11 +1053,16 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
         changes += [Change(tone.start, voice, before, after)
                     for tone, before, after in zip(tones, pitches, snapped) if before != after]
         lines.append([(tone.start, tone.end, KEY_OF[pitch]) for tone, pitch in zip(tones, snapped)])
+        tune = [(tone.start, pitch) for tone, pitch in zip(tones, snapped)]
         if voice == 0 and accompaniment == "chords":
             spans = detect_chords(top, others, bass, bars)
             unit = Fraction(1) if clock.bpm(Fraction(0), total) > FAST else HALF
-            lines.append(accompany(spans, bars, others,
-                                   [(tone.start, pitch) for tone, pitch in zip(tones, snapped)], unit))
+            lines.append(accompany(spans, bars, others, tune, unit))
+        elif voice == 0 and accompaniment == "keep":
+            lent = set(borrowed)  # already playing in the melody
+            line, kept_changes = keep_accompaniment([tone for tone in others if tone not in lent], tune)
+            lines.append(line)
+            changes += kept_changes
     lines = [line for line in lines if line]
 
     segments = [_segments(line, total, grid) for line in lines]
@@ -1001,7 +1070,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     first_bar = bisect_right(starts, first_onset) - 1
     remarks: dict[int, list[str]] = defaultdict(list)
     for change in changes:
-        voice = "" if change.voice == 0 else "低音"
+        voice = "" if change.voice == 0 else "伴奏" if accompaniment == "keep" else "低音"
         remarks[bisect_right(starts, change.start) - 1].append(
             f"{voice}{ACCIDENTALS[change.before % 12]}→{KEY_OF[change.after]}")
     harmony: dict[int, list[str]] = defaultdict(list)
@@ -1111,7 +1180,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--melody", help="指定旋律所在的部分编号，可写多个，如 2,3")
     parser.add_argument("--drop", help="不使用的部分编号，如 4,5")
     parser.add_argument("--transpose", type=int, help="手动指定整体移调的半音数，如 -3")
-    parser.add_argument("--bass-line", action="store_true", help="第 2 声部用原曲伴奏的低音线，不按和弦重写")
+    parser.add_argument("--accompaniment", choices=("auto", *ACCOMPANIMENTS), default="auto",
+                        help="第 2 声部怎么写：chords 按和弦重写成分解和弦，bass 用原曲伴奏的低音线，"
+                             "keep 保留原曲伴奏弹的音；auto（默认）对从录音转出的 MIDI 用 keep，其余用 chords")
+    parser.add_argument("--bass-line", action="store_true", help="同 --accompaniment bass")
     parser.add_argument("--beats", choices=("auto", "midi", "notes"), default="auto",
                         help="节拍从哪来：auto 只在 MIDI 没有拍号和速度信息时（如音频转录的）从音符推断，"
                              "midi 一律用 MIDI 自带的，notes 一律从音符推断")
@@ -1128,7 +1200,7 @@ def main(argv: list[str] | None = None) -> int:
             midi = load_midi(path)
             result = arrange(midi, title=path.name, melody=_numbers_argument(args.melody),
                              drop=_numbers_argument(args.drop), transpose=args.transpose,
-                             accompaniment="bass" if args.bass_line else "chords",
+                             accompaniment="bass" if args.bass_line else args.accompaniment,
                              beats=args.beats, meter=args.meter)
         except (OSError, MidiError, ArrangeError) as error:
             print(f"   无法编配：{error}")

@@ -6,7 +6,7 @@ import time
 import unittest
 
 from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio,
-                         pending_midi)
+                         pending_midi, recording_name)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_arrange import song
@@ -106,6 +106,11 @@ class Folders(unittest.TestCase):
         self.assertIn(fresh, pending_audio(self.midi, self.scores, {}, now=time.time() + SETTLE + 0.1))
         self.assertNotIn(new, pending_audio(self.midi, self.scores, {new: new.stat().st_mtime}))
 
+    def test_a_recording_is_named_after_its_song(self):
+        self.assertEqual(recording_name(" 飞鼠进行曲 "), "飞鼠进行曲-录音")
+        self.assertEqual(recording_name("飞鼠进行曲-录音"), "飞鼠进行曲-录音")
+        self.assertTrue(recording_name("").startswith("录音 "))
+
     def test_recording_names(self):
         self.add_midi("旧歌.mid")
         (self.scores / "曲谱.txt").write_text("speed=60\na-\n", encoding="utf-8")
@@ -158,14 +163,15 @@ class Folders(unittest.TestCase):
             app.record()
         told.assert_called_once()
         self.assertIsNone(app.worker)
-        self.add_midi("旧歌.mid")
+        self.add_midi("旧歌-录音.mid")
         answers = ["旧歌", "a:b", None]
         with mock.patch("lyrebot.app.find_tools", return_value=fake_tools(self.root)), \
                 mock.patch("lyrebot.app.simpledialog.askstring", side_effect=answers) as asked:
             app.record()  # two names refused, then cancelled
         self.assertEqual(asked.call_count, 3)
-        self.assertIn("已经有", asked.call_args_list[1].args[1])
+        self.assertIn("已经有叫「旧歌-录音」", asked.call_args_list[1].args[1])
         self.assertIn("不能", asked.call_args_list[2].args[1])
+        self.assertEqual(asked.call_args_list[1].kwargs["initialvalue"], "旧歌")  # the title is kept to edit
         self.assertIsNone(app.worker)
         self.assertFalse(app.recording)
 
