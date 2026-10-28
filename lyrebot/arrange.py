@@ -68,6 +68,8 @@ DRIFT = 0.04  # seconds the written speeds may let the score run ahead of or beh
 BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
+CLEARLY = Fraction(3, 5)  # a beat's notes clearly fit one grid when they miss it by this share of the other's miss
+TERNARY = 3  # a performance with this many times more clear triplet beats than sixteenth beats moves in triplets
 MAX_BARS = 20_000
 
 
@@ -166,7 +168,9 @@ class Grid:
     Files exported from notation software already sit on a written grid, so
     their notes are kept where they are, tuplets included.  Recorded
     performances are snapped beat by beat to sixteenths, or to triplets where
-    those fit better.  Rests always start on the coarse grid.
+    those fit better; in a piece that moves in triplets (12/8, a swing) a beat
+    takes triplets unless sixteenths clearly fit better.  Rests always start
+    on the coarse grid.
     """
 
     def __init__(self, onsets: list[Fraction], tick: Fraction):
@@ -184,8 +188,16 @@ class Grid:
         for onset in onsets:
             beat = math.floor(onset + Fraction(1, 8))
             by_beat[beat].append(onset - beat)
-        self.triplets = {beat for beat, offsets in by_beat.items()
-                         if _misfit(offsets, 3) < Fraction(3, 5) * _misfit(offsets, 4)}
+        misfits = {beat: (_misfit(offsets, 3), _misfit(offsets, 4)) for beat, offsets in by_beat.items()}
+        threes = sum(1 for three, four in misfits.values() if three < CLEARLY * four)
+        fours = sum(1 for three, four in misfits.values() if four < CLEARLY * three)
+        if threes > TERNARY * fours:
+            # Compound time or a swing: a long-short pair is two thirds and a
+            # third of the beat throughout, even where timing slop puts the
+            # short note nearer a sixteenth, unless sixteenths clearly fit.
+            self.triplets = {beat for beat, (three, four) in misfits.items() if not four < CLEARLY * three}
+        else:
+            self.triplets = {beat for beat, (three, four) in misfits.items() if three < CLEARLY * four}
 
     def coarse(self, position: Fraction) -> Fraction:
         beat = math.floor(position + Fraction(1, 8))

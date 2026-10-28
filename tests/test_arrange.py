@@ -166,6 +166,18 @@ class Pieces(unittest.TestCase):
         self.assertEqual([grid.onset(F(x)) for x in ("49/100", "103/100", "134/100", "167/100")],
                          [F(1, 2), F(1), F(4, 3), F(5, 3)])
 
+    def test_a_played_compound_time_keeps_its_lilt(self):
+        """In 12/8 or a swing every long-short pair is two thirds and a third
+        of the beat.  Played or transcribed a little late, the short note can
+        sit nearer a sixteenth; it still snaps to the triplet when the piece
+        moves in triplets, while a dotted rhythm keeps its sixteenths."""
+        late = {3: F(70, 100), 7: F(71, 100), 11: F(70, 100)}
+        for usual, wanted in ((F(67, 100), F(2, 3)), (F(76, 100), F(3, 4))):
+            with self.subTest(usual=usual):
+                played = [beat + offset for beat in range(12) for offset in (F(0), late.get(beat, usual))]
+                grid = Grid(played, F(1, 480))
+                self.assertEqual({grid.onset(beat + offset) - beat for beat, offset in late.items()}, {wanted})
+
     def test_written_files_keep_their_tuplets(self):
         onsets = [F(i, 5) for i in range(10)] + [F(2), F(5, 2)]
         grid = Grid(onsets, F(1, 480))
