@@ -187,6 +187,24 @@ class Pieces(unittest.TestCase):
         melody = bars_of(result.text)[0].split("|")[0]
         self.assertFalse(set(melody) & set("zxcvbnm"), melody)
 
+    def test_a_held_recorded_note_keeps_far_lower_notes_out_of_the_top_line(self):
+        held = [tone(0, 3, 84), tone(1.5, 2, 67), tone(2, 2.5, 72), tone(2.5, 3, 83), tone(3, 4, 81)]
+        line = outer_line(held, top=True, hold=F(1))
+        # G4 and C5 run under the held C6; B5 steps down from it and A5 comes after it.
+        self.assertEqual([t.pitch for t in line], [84, 83, 81])
+
+    def test_a_tune_under_an_upper_pedal_stays_in_the_melody(self):
+        from lyrebot.arrange import drop_strays
+        low = (67, 62, 60, 71)  # G4 D4 C4 B4
+
+        def line(high):
+            return outer_line([tone(i / 2, i / 2 + 0.5, high(i // 2) if i % 2 == 0 else low[i // 2 % 4])
+                               for i in range(17)], top=True)
+        _, strays = drop_strays(line(lambda step: 79))  # G5 every other note: a pedal over the tune
+        self.assertEqual(strays, [])
+        _, strays = drop_strays(line(lambda step: (84, 86, 88, 89)[step % 4]))  # a tune over a left hand
+        self.assertEqual(sorted({t.pitch for t in strays}), sorted(low))
+
     def test_left_hand_chords_between_staccato_notes_leave_the_melody(self):
         right = [(i, i + 0.25, (84, 86, 88, 89)[i % 4]) for i in range(17)]  # C6 D6 E6 F6, short
         left = [(i + 0.5, i + 0.75, pitch) for i in range(16) for pitch in (72, 76)]  # C5 E5 in between
@@ -320,6 +338,21 @@ class Arranging(unittest.TestCase):
         text = arrange(parse_midi(smf([conductor, track]))).text
         self.assertEqual([line for line in text.splitlines() if line.startswith("speed=")],
                          ["speed=120", "speed=80"])
+
+    def test_a_gradual_tempo_change_is_followed_without_drifting(self):
+        from lyrebot.arrange import DRIFT
+        bars = 32
+        conductor = [(bar * 4 * PPQ, -1, tempo(100 + bar / 2)) for bar in range(bars)]  # 100 to 115.5 BPM
+        conductor.append((0, -1, signature(4, 4)))
+        track = notes(0, [(beat * PPQ, (beat + 1) * PPQ, 72 + (0, 2, 4, 5)[beat % 4]) for beat in range(bars * 4)])
+        text = arrange(parse_midi(smf([conductor, track]))).text
+        score = parse_score(text)
+        clock = score.tempo_map()
+        source = [sum(240 / (100 + bar / 2) for bar in range(beat // 4)) + (beat % 4) * 60 / (100 + beat // 4 / 2)
+                  for beat in range(bars * 4)]
+        written = sorted(clock.seconds(event.start) for event in score.events if event.strikes)
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(written, source)), DRIFT + 0.01)
+        self.assertLess(sum(line.startswith("speed=") for line in text.splitlines()), bars / 2)
 
     def test_black_keys_are_snapped_and_noted(self):
         melody = [(0, 1, 72), (1, 2, 71), (2, 3, 69), (3, 4, 68), (4, 8, 69)]  # C B A G♯ A, in A minor

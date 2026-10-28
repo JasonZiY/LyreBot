@@ -63,7 +63,9 @@ SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misp
 KEY_CHANGE = 1.0  # what changing key part way costs, in average bars of notes left on black keys
 MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, not a modulation
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
-BOTH_HANDS = 0.6  # a melody part with fewer single-note onsets likely holds the left hand too
+FAR, FAR_HELD = 7, Fraction(4)  # ... except over notes a fifth or more away: then up to its length, at most 4 beats
+DRIFT = 0.04  # seconds the written speeds may let the score run ahead of or behind the source
+BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
 MAX_BARS = 20_000
@@ -301,8 +303,12 @@ def outer_line(tones: Iterable[Tone], top: bool, hold: Fraction | None = None) -
     """The highest (or lowest) line: at each onset, the outermost note, unless
     a note further out is still sounding from before.  A note that overlaps
     the next one by at most an eighth of a beat is legato, not still sounding.
-    With ``hold``, no note counts as sounding longer than that many beats:
-    lengths heard in a recording include the ring of the instrument."""
+    With ``hold``, a note counts as sounding for at most that many beats,
+    since lengths heard in a recording include the ring of the instrument;
+    but over notes at least ``FAR`` semitones further in it sounds for its
+    whole length, up to ``FAR_HELD`` beats.  A long melody note thus keeps the
+    accompaniment running under it out of the melody, while the tune itself
+    can still step down from it."""
     sign = 1 if top else -1
     ordered = sorted(tones, key=lambda tone: (tone.start, -sign * tone.pitch))
     line: list[Tone] = []
@@ -313,10 +319,16 @@ def outer_line(tones: Iterable[Tone], top: bool, hold: Fraction | None = None) -
         stop = index
         while stop < len(ordered) and ordered[stop].start == start:
             stop += 1
-        sounding = [tone for tone in sounding
-                    if tone.end > start + LEGATO and (hold is None or start - tone.start < hold)]
+        sounding = [tone for tone in sounding if tone.end > start + LEGATO]
         best = ordered[index]
-        if all(sign * best.pitch >= sign * tone.pitch for tone in sounding):
+
+        def hides(tone: Tone) -> bool:
+            beyond = sign * (tone.pitch - best.pitch)
+            if hold is None or start - tone.start < hold:
+                return beyond > 0
+            return beyond >= FAR and start - tone.start < FAR_HELD
+
+        if not any(hides(tone) for tone in sounding):
             line.append(best)
         sounding.extend(ordered[index:stop])
         index = stop
@@ -332,19 +344,29 @@ def drop_strays(line: list[Tone], window: Fraction = Fraction(2), reach: int = 1
     in a short dip: up to ``DIP_NOTES`` notes, each at least ``DIP`` semitones
     under the notes on both sides of the dip, which are at most ``DIP_SPAN``
     beats apart, as when a staccato tune alternates with left-hand chords.
-    Either way the note goes back to the accompaniment.
+    Either way the note goes back to the accompaniment.  Dips whose sides are
+    all one repeated note are kept: there the tune runs under an upper pedal.
     """
     starts = [tone.start for tone in line]
-    dips: set[int] = set()
+    runs: list[tuple[int, int]] = []  # first and last index of each dip
     for first in range(1, len(line) - 1):
+        if runs and first <= runs[-1][1]:
+            continue
         for last in range(first, min(first + DIP_NOTES, len(line) - 1)):
             before, after = line[first - 1], line[last + 1]
             if after.start - before.start > DIP_SPAN:
                 break
             floor = min(before.pitch, after.pitch) - DIP
             if all(line[index].pitch <= floor for index in range(first, last + 1)):
-                dips.update(range(first, last + 1))
+                runs.append((first, last))
                 break
+    dips: set[int] = set()
+    for first, last in runs:
+        # Dips between one repeated note are a tune under an upper pedal, not a left hand.
+        near = [run for run in runs if abs(line[run[0]].start - line[first].start) <= DIP_SPAN]
+        sides = {line[run[0] - 1].pitch for run in near} | {line[run[1] + 1].pitch for run in near}
+        if len(near) < 2 or len(sides) > 1:
+            dips.update(range(first, last + 1))
     kept: list[Tone] = []
     strays: list[Tone] = []
     for index, tone in enumerate(line):
@@ -886,6 +908,46 @@ def _bar_text(segments: list[_Segment], cursor: int, begin: Fraction, end: Fract
     return "".join(pieces), cursor
 
 
+def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock) -> dict[int, float]:
+    """Where the score sets its speed: bar index -> BPM, rounded to 0.1.
+
+    The fewest pieces of constant tempo that keep every beat within
+    ``DRIFT`` seconds of the source, found greedily: a piece grows bar by
+    bar while some tempo still fits all its beats.  A tempo followed beat by beat
+    wobbles from bar to bar, so writing each bar's own tempo would jitter,
+    and holding one tempo while it wobbles lets the score drift off the
+    recording.  A piece keeps the tempo of its first bar when that fits, so
+    a file with exact tempo changes gets exactly those.
+    """
+    speeds: dict[int, float] = {}
+    written_at = clock.seconds(bars[first][0])  # where the score, by its own speeds, starts the piece
+    index = first
+    while index < len(bars):
+        low, high, end = 0.0, math.inf, index
+        while end < len(bars):
+            fit_low, fit_high = low, high
+            bar_start, length = bars[end]
+            for step in range(1, math.ceil(length) + 1):  # every beat, and the bar line
+                position = bar_start + min(Fraction(step), length)
+                beats = float(position - bars[index][0])
+                elapsed = clock.seconds(position) - written_at
+                fit_low = max(fit_low, 60 * beats / (elapsed + DRIFT))
+                if elapsed > DRIFT:
+                    fit_high = min(fit_high, 60 * beats / (elapsed - DRIFT))
+            if fit_low > fit_high and end > index:
+                break
+            low, high, end = fit_low, fit_high, end + 1
+        beats = sum(float(length) for _, length in bars[index:end])
+        whole = 60 * beats / (clock.seconds(bars[end - 1][0] + bars[end - 1][1]) - written_at)
+        tempo = round(min(max(whole, low), high), 1)  # the fitting tempo nearest the piece's average
+        if low <= round(clock.bpm(*bars[index]), 1) <= high:  # or the first bar's own, when it fits
+            tempo = round(clock.bpm(*bars[index]), 1)
+        speeds[index] = tempo
+        written_at += 60 * beats / tempo
+        index = end
+    return speeds
+
+
 def _bpm_text(bpm: float) -> str:
     return f"{bpm:.1f}".rstrip("0").rstrip(".")
 
@@ -1009,7 +1071,8 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     hold = HELD if timing else None  # a recording's note lengths include the ring
     top = outer_line([tone for part in chosen for tone in part.tones], top=True, hold=hold)
     strays: list[Tone] = []
-    if min(part.monophony for part in chosen) < BOTH_HANDS:
+    # A transcribed piano holds both hands in one part even when they seldom strike together.
+    if timing or min(part.monophony for part in chosen) < BOTH_HANDS:
         top, strays = drop_strays(top)
     taken = set(top)
     others = [tone for part in usable for tone in part.tones if tone not in taken]
@@ -1095,14 +1158,12 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
                          len(lines), accompaniment, timing)
     cursors = [0] * len(segments)
     last_bpm: float | None = None
-    # A followed beat wobbles a little from bar to bar; only real tempo changes get a speed= line.
-    tolerance = 0.03 if timing and not timing.steady else 0.01
+    speeds = speed_lines(bars, first_bar, clock)
     for index in range(first_bar, len(bars)):
         begin, length = bars[index]
-        bpm = round(clock.bpm(begin, length), 1)
-        if last_bpm is None or abs(bpm - last_bpm) > tolerance * last_bpm:
-            text_lines.append(f"speed={_bpm_text(bpm)}")
-            last_bpm = bpm
+        if index in speeds and speeds[index] != last_bpm:
+            text_lines.append(f"speed={_bpm_text(speeds[index])}")
+            last_bpm = speeds[index]
         pieces = []
         for voice, voice_segments in enumerate(segments):
             piece, cursors[voice] = _bar_text(voice_segments, cursors[voice], begin, begin + length)

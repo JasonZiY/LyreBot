@@ -20,9 +20,11 @@ def bar_starts(score):
     return sorted(set(firsts.values()))
 
 
-def performed(score, seed, jitter=0.012):
+def performed(score, seed, jitter=0.012, staccato=False, transpose=0, one_part=False):
     """The score as a transcription would give it: real seconds, a little
-    timing slop, written against 120 BPM with no time signature."""
+    timing slop, written against 120 BPM with no time signature.  Optionally
+    with a short melody, in another key, or both voices in one part as a
+    piano transcription gives them."""
     clock = score.tempo_map()
     rng = random.Random(seed)
     shift, parts = {}, {0: [], 1: []}
@@ -34,7 +36,11 @@ def performed(score, seed, jitter=0.012):
         for strike in event.strikes:
             for key in strike.keys:
                 at = max(0.0, begin + strike.delay_ms / 1000 + rng.gauss(0, 0.003))
-                parts[min(event.part, 1)].append((round(at * 960), round(max(stop, at + 0.05) * 960), PITCH_OF[key]))
+                end = max(stop, at + 0.05)
+                if staccato and event.part == 0:
+                    end = at + min(0.2, max(0.08, 0.4 * (end - at)))
+                part = 0 if one_part else min(event.part, 1)
+                parts[part].append((round(at * 960), round(end * 960), PITCH_OF[key] + transpose))
     return parse_midi(smf([[]] + [notes(channel, sorted(found)) for channel, found in parts.items() if found]))
 
 
@@ -131,6 +137,55 @@ class WhenToFindIt(unittest.TestCase):
         self.assertIn("4/4", result.text)
         self.assertIn("节拍是从音符推断的", result.text)
         parse_score(result.text)
+
+
+def common_length(a, b):
+    """Length of the longest common subsequence."""
+    previous = [0] * (len(b) + 1)
+    for item in a:
+        current = [0]
+        for index, other in enumerate(b):
+            current.append(previous[index] + 1 if item == other else max(previous[index + 1], current[index]))
+        previous = current
+    return previous[-1]
+
+
+def tune(score):
+    """(seconds, pitch class) of the top note of every melody event."""
+    clock = score.tempo_map()
+    return [(clock.seconds(event.start), max(PITCH_OF[key] for key in event.keys) % 12)
+            for event in score.events if event.part == 0 and event.strikes]
+
+
+class EverySong(unittest.TestCase):
+    def test_every_score_played_on_one_piano_comes_back_in_key_and_on_time(self):
+        """Each hand-written score, played with a short melody, in another key
+        and with both hands in one part, as a piano recording transcribes:
+        the melody comes back in order on the same white keys, and the score
+        keeps time with the performance.  This guards the arranger's rules
+        against fitting a few songs and failing the rest.  (绵远的诀别 changes
+        tempo three times in ten seconds; the beat is lost for a few bars there,
+        so a song may fall to 85% on time while the songs on average keep 95%.)"""
+        found, on_time = {}, {}
+        for path in written_scores():
+            score = load_score(path)
+            transpose = random.Random(path.stem).randint(-5, 6)
+            midi = performed(score, path.stem, staccato=True, transpose=transpose, one_part=True)
+            arranged = parse_score(arrange(midi).text)
+            answer, melody = tune(score), tune(arranged)
+            found[path.stem] = common_length([pc for _, pc in answer], [pc for _, pc in melody]) / len(answer)
+            clock = arranged.tempo_map()
+            heard = sorted((clock.seconds(event.start), PITCH_OF[key] % 12)
+                           for event in arranged.events if event.strikes for key in event.keys)
+            offset = heard[0][0] - min(score.tempo_map().seconds(event.start)
+                                       for event in score.events if event.strikes)
+            on_time[path.stem] = sum(1 for time, pc in answer
+                                     if any(abs(at - offset - time) <= 0.1 and other == pc for at, other in heard)
+                                     ) / len(answer)
+        self.assertGreaterEqual(min(found.values()), 0.85, found)
+        self.assertGreaterEqual(sum(found.values()) / len(found), 0.95, found)
+        self.assertGreaterEqual(min(on_time.values()), 0.85, on_time)
+        self.assertGreaterEqual(sum(on_time.values()) / len(on_time), 0.95, on_time)
 
 
 MUSIC = written_scores()[0].parent
