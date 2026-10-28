@@ -1,11 +1,11 @@
 # LyreBot
 
-把文本曲谱变成定时的键盘按键，用来在原神等游戏里自动弹琴。只支持 Windows，需要 Python 3.11 或更新版本，不需要安装其他包。
+把文本曲谱变成定时的键盘按键，用来在原神等游戏里自动弹琴。只支持 Windows，需要 Python 3.11 或更新版本，不需要安装其他包。从录音生成曲谱另外要用到两个免费工具，见「从录音生成曲谱」。
 
 ## 使用
 
 1. 双击 `LyreBot.vbs` 启动，不会弹出黑色命令行窗口。LyreBot 会请求管理员权限，点「是」即可：游戏是以管理员身份运行的，LyreBot 也要这样，按键才送得进去。启动不了时改为右键 `Start LyreBot.cmd`、选择「以管理员身份运行」，窗口里会显示报错。
-2. 曲目列表就是 `txt` 文件夹里的 `.txt` 曲谱，按拼音排序，改动会自动刷新。把 MIDI 文件放进 `midi` 文件夹，LyreBot 会自动编配成同名的曲谱加进列表（见下文「从 MIDI 生成曲谱」）。右键列表可以打开这两个文件夹。写错的曲谱前面有 ⚠，选中后底部会显示错在哪一行。
+2. 曲目列表就是 `txt` 文件夹里的 `.txt` 曲谱，按拼音排序，改动会自动刷新。把 MIDI 文件放进 `midi` 文件夹，LyreBot 会自动编配成同名的曲谱加进列表（见下文「从 MIDI 生成曲谱」）。点 ▶ 左边的 ● 可以把电脑正在播放的音乐录下来，同样编配成曲谱（见「从录音生成曲谱」）。右键列表可以打开这两个文件夹。写错的曲谱前面有 ⚠，选中后底部会显示错在哪一行。
 3. 双击曲目或点 ▶，2 秒内切到游戏并打开琴。倒计时结束时在前台的窗口就是演奏对象。点进度条可以从点击的位置开始演奏，点 ⏭ 演奏下一首。
 4. 按 **F8** 或切换到别的窗口，演奏就会停止。演奏时 ■ 按钮是灰的，不用点它，切回 LyreBot 就已经停下了。
 
@@ -158,6 +158,37 @@ python -m lyrebot.arrange 歌曲.mid --list
 
 再用 `--melody 2` 指定旋律所在的部分（可以写多个，如 `2,3`），`--drop 4,5` 去掉不要的部分，`--transpose -3` 手动指定移调的半音数。命令行生成的曲谱默认也存进 `txt` 文件夹，已有同名文件时另存为「名字 (2).txt」，加 `--force` 才覆盖。
 
+## 从录音生成曲谱
+
+点 ▶ 左边的 ●，给录音起个名字，然后在别处播放想编配的音乐，视频网站、音乐软件、游戏里的背景音乐都可以。LyreBot 录的是电脑扬声器正在放的声音，所以开始前先关掉其他声音。有声音时才开始录，点 ■、安静 5 秒或录满 10 分钟就结束。
+
+录完以后，录音存成 `midi` 文件夹里的「名字.wav」，再由 MuScriptor 模型转成同名的 MIDI，最后照上一节的方法编配成 `txt` 里的曲谱并选中它。转录在后台进行，不影响演奏；演奏时不会开始新的转录。也可以直接把音频文件放进 `midi` 文件夹，WAV 可以直接转，MP3、FLAC、M4A、OGG 需要电脑上装有 [ffmpeg](https://ffmpeg.org/)。已经有同名 MIDI 或曲谱的音频不会再转。
+
+### 准备转录工具
+
+转录要用到 [audio.cpp](https://github.com/0xShug0/audio.cpp)（Apache-2.0 许可证）和 MuScriptor 模型，LyreBot 没有自带。
+
+1. 在 audio.cpp 的 [Releases](https://github.com/0xShug0/audio.cpp/releases) 页面下载 Windows 版。`audio-版本号-bin-windows-x64-vulkan.zip` 用显卡计算，`…-cpu.zip` 只用处理器，老电脑上 cpu 版闪退时换成 `…-cpu-portable.zip`。显卡版不一定能改用处理器计算，所以两个都放进去最稳，显卡用不了时会自动改用处理器版。
+2. 在 [audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf) 下载 `MuScriptor-Small-GGUF` 里的 `muscriptor-small-f32.gguf`（约 400 MB）。这个模型采用 CC BY-NC 4.0 许可证，只能非商业使用。
+3. 放进 LyreBot 文件夹里的 `tools` 文件夹（已在 `.gitignore` 里），也可以放进与 LyreBot 文件夹并排的 `LyreBot-tools` 文件夹：
+
+```text
+tools/
+  audiocpp-vulkan/audiocpp_cli.exe   （zip 解压出来的整个文件夹）
+  audiocpp-cpu/audiocpp_cli.exe
+  models/muscriptor-small-f32.gguf
+```
+
+文件夹名里带 `vulkan` 的当作显卡版，带 `cpu` 的当作处理器版，模型放在 `tools` 里任何位置都能找到。
+
+### 速度和效果
+
+用显卡转一首 100 秒的曲子大约 5 秒，只用处理器大约是音频长度的一半。转录时占用约 3.5 GB 内存，超过 6 GB 或 30 分钟会自动停止。
+
+MuScriptor 会按乐器分开记谱，编配时就能直接挑出旋律所在的乐器。拿《林中晨歌》的游戏原曲（长笛加钢琴，100 秒）来测，节拍认出是 6/8 拍、每分钟约 79 拍，调也认对了，前 16 小节和手写谱几乎一样。整首算下来，不计八度时找回了 77% 的旋律音，编配出的旋律音有 82% 是对的；有几段整体低了一个八度，第 19 到 24 小节有十来个音转错。
+
+配器复杂的曲子差很多。《飞鼠进行曲》的原曲里，MuScriptor 把除了鼓和贝斯以外的声音都记成了钢琴，旋律只能从一大团音里取最高的一条线，不计八度只找回 40%；12/8 拍也被当成了带三连音的 4/4 拍，速度倒是对的。这类曲子生成的谱只能当作手改的底稿，生成后请先试听。
+
 ## 开发
 
 ```text
@@ -169,6 +200,8 @@ lyrebot/app.py       界面
 lyrebot/midi.py      读取 MIDI 文件，只用标准库
 lyrebot/arrange.py   把 MIDI 编配成诗琴曲谱
 lyrebot/beats.py     从音符推断节拍、拍号和小节线
+lyrebot/record.py    录下扬声器正在播放的声音（WASAPI 环回），只用标准库
+lyrebot/transcribe.py 调用 audio.cpp 和 MuScriptor，把录音转成 MIDI
 ```
 
 运行测试：

@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, simpledialog, ttk
 from typing import Callable
 
 from . import icons
@@ -21,14 +21,21 @@ from .collate import pinyin_key
 from .keyboard import Keyboard, foreground_title_and_pid
 from .midi import MidiError
 from .player import play
+from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score
 from .timeline import compile_timeline
+from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
 MIDI_DIR = PROJECT / "midi"
+TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
-SETTLE = 1.5  # seconds a MIDI file must stay unchanged before it is arranged: it may still be copying
+SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
+BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
+NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
+            "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
+            "下载地址和放法见 README 的「从录音生成曲谱」。")
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0
 FAMILY = "Microsoft YaHei UI"
@@ -109,6 +116,39 @@ def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], no
         if failed.get(path) != stamp and now - stamp >= SETTLE:
             found.append(path)
     return found
+
+
+def audio_files(midi_dir: Path) -> list[Path]:
+    if not midi_dir.is_dir():
+        return []
+    files = [path for path in midi_dir.iterdir() if path.suffix.lower() in AUDIO_SUFFIXES and path.is_file()]
+    return sorted(files, key=lambda path: pinyin_key(path.stem))
+
+
+def pending_audio(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], now: float | None = None) -> list[Path]:
+    """Recordings and other audio files in the midi folder with no MIDI file or score of the same name yet."""
+    now = time.time() if now is None else now
+    done = {path.stem.casefold() for path in midi_files(midi_dir)}
+    found = []
+    for path in audio_files(midi_dir):
+        if path.stem.casefold() in done or (scores_dir / f"{path.stem}.txt").exists():
+            continue
+        try:
+            stamp = path.stat().st_mtime
+        except OSError:
+            continue
+        if failed.get(path) != stamp and now - stamp >= SETTLE:
+            found.append(path)
+    return found
+
+
+def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
+    """Why a recording cannot be called ``name``, or None if it can."""
+    if not name or name.endswith(".") or any(c in BAD_NAME_CHARACTERS or ord(c) < 32 for c in name):
+        return '名字不能为空，也不能有 \\ / : * ? " < > | 这些字符，请换一个：'
+    taken = (scores_dir / f"{name}.txt").exists() or (
+        midi_dir.is_dir() and any(path.stem.casefold() == name.casefold() for path in midi_dir.iterdir()))
+    return f"已经有叫「{name}」的曲谱或文件了，请换一个：" if taken else None
 
 
 def midi_for(score: Path, midi_dir: Path) -> Path | None:
@@ -193,14 +233,24 @@ class Choice(tk.Label):
 
 
 class App:
-    def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR):
+    def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
+                 tool_dirs: list[Path] | None = None):
         self.root = root
         self.scores_dir = scores_dir
         self.midi_dir = midi_dir
+        self.tool_dirs = TOOL_DIRS if tool_dirs is None else tool_dirs
         self.failed_midi: dict[Path, float] = {}  # MIDI files that could not be arranged, by change time
+        self.failed_audio: dict[Path, float] = {}  # audio files that could not be transcribed, likewise
         self.songs: list[Path] = []
+        self.told_empty = False
+        # A note such as "just arranged" kept in front of a song's details while it stays selected:
+        # selecting a row also fires <<TreeviewSelect>> later, which redraws the details.
+        self.notice: tuple[Path, str] | None = None
         self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
-        self.worker: threading.Thread | None = None
+        self.worker: threading.Thread | None = None  # playing or recording
+        self.recording = False
+        self.transcriber: threading.Thread | None = None
+        self.stop_transcribing = threading.Event()
         self.cancel = threading.Event()
         self.updates: queue.Queue = queue.Queue()
         self.duration = 0.0
@@ -249,7 +299,7 @@ class App:
         self.menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
                             activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, 10))
         self.menu.add_command(label="打开曲谱文件夹（txt）", command=lambda: self.open_folder(self.scores_dir))
-        self.menu.add_command(label="打开 MIDI 文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
+        self.menu.add_command(label="打开 MIDI 和录音文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
         self.menu.add_separator()
         self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
         self.tree.bind("<Button-3>", self.context_menu)
@@ -290,12 +340,15 @@ class App:
         self.next_button.pack(side="right")
         self.button = IconButton(controls, self.play_images, self.start)
         self.button.pack(side="right", padx=(0, px(6)))
+        self.record_button = IconButton(controls, self.record_images, self.record)
+        self.record_button.pack(side="right", padx=(0, px(6)))
 
         self.refresh()
         if self.songs:
             self.select(self.songs[0])
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
+        root.after(600, self.transcribe_next)
         root.after(2000, self.watch)
 
     def build_images(self, big: int, small: int) -> None:
@@ -316,11 +369,20 @@ class App:
         self.next_images = {"normal": image(small, mark(INK)),
                             "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + mark(INK)),
                             "disabled": image(small, mark(FAINT))}
+        dot = lambda color: (color, icons.circle(s, s, small * 0.17))  # noqa: E731
+        self.record_images = {"normal": image(small, [dot(ORANGE)]),
+                              "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5)), dot(ORANGE_DEEP)]),
+                              "disabled": image(small, [dot(PEACH)])}
+        square = lambda color: (color, icons.stop(small))  # noqa: E731
+        self.recording_images = {"normal": image(small, [(HIGHLIGHT, icons.circle(s, s, s - 0.5)), square(ORANGE)]),
+                                 "hover": image(small, [(PEACH, icons.circle(s, s, s - 0.5)), square(ORANGE_DEEP)]),
+                                 "disabled": image(small, [square(FAINT)])}
 
     def watch(self) -> None:
-        """Pick up scores and MIDI files added, removed or edited while the window is open."""
+        """Pick up scores, MIDI and audio files added, removed or edited while the window is open."""
         self.refresh()
         self.arrange_next()
+        self.transcribe_next()
         self.root.after(2000, self.watch)
 
     # ---- small view helpers ----
@@ -384,10 +446,12 @@ class App:
             if chosen in songs:
                 self.select(chosen)
             self.show_selected()
-        if not songs:
+            self.told_empty = False
+        if not songs and not self.told_empty:  # once, so it does not cover later messages
+            self.told_empty = True
             self.title_label.configure(text="还没有曲谱")
             self.time_label.configure(text="")
-            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们）")
+            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们），也可以点 ● 录一段音乐")
 
     def selected(self) -> Path | None:
         chosen = self.tree.selection()
@@ -415,13 +479,15 @@ class App:
         score = self.read(path)
         self.title_label.configure(text=path.stem)
         self.set_fraction(0.0)
+        if self.notice and self.notice[0] != path:
+            self.notice = None
         if isinstance(score, ScoreError):
             self.time_label.configure(text="")
             self.say(f"曲谱有误：{score}", warn=True)
             return
         self.time_label.configure(text=clock(score.duration_seconds / self.speed_factor()))
         tempo = f"{score.bpm:g} BPM" + (f" · 变速 {score.tempo_changes} 处" if score.tempo_changes else "")
-        self.say(tempo)
+        self.say(f"{self.notice[1]} · {tempo}" if self.notice else tempo)
 
     def open_folder(self, folder: Path) -> None:
         folder.mkdir(exist_ok=True)
@@ -446,7 +512,11 @@ class App:
         pending = pending_midi(self.midi_dir, self.scores_dir, self.failed_midi)
         if not pending:
             return
-        source = pending[0]
+        self.arrange_one(pending[0])
+        if len(pending) > 1:
+            self.root.after(50, self.arrange_next)
+
+    def arrange_one(self, source: Path, done: str = "刚从 MIDI 编配好") -> None:
         target = self.scores_dir / f"{source.stem}.txt"
         self.say(f"正在编配 {source.name}…")
         self.root.update_idletasks()
@@ -460,10 +530,8 @@ class App:
             self.say(f"{source.name} 无法编配：{error}", warn=True)
         else:
             self.refresh()
+            self.notice = (target, done)
             self.select(target)
-            self.say(f"刚从 MIDI 编配好 · {self.status_label.cget('text')}")
-        if len(pending) > 1:
-            self.root.after(50, self.arrange_next)
 
     def rearrange(self) -> None:
         """Arrange the selected score again from its MIDI file, replacing it."""
@@ -482,8 +550,115 @@ class App:
         self.failed_midi.pop(source, None)
         self.cache.pop(score, None)
         self.refresh()
+        self.notice = (score, "已重新编配")
         self.select(score)
-        self.say(f"已重新编配 · {self.status_label.cget('text')}")
+
+    # ---- recording and transcribing ----
+    def record(self) -> None:
+        """Record what the speakers play into the midi folder; it is then transcribed and arranged."""
+        if self.recording:
+            self.stop()
+            return
+        if self.worker or self.transcriber or time.monotonic() < self.quiet_until:
+            return
+        if find_tools(self.tool_dirs) is None:
+            messagebox.showinfo("还不能录音", NO_TOOLS, parent=self.root)
+            return
+        name = self.ask_name()
+        if name is None:
+            return
+        self.midi_dir.mkdir(exist_ok=True)
+        self.cancel = threading.Event()
+        self.recording = True
+        self.set_playing(False, recording=True)
+        self.title_label.configure(text=name)
+        self.time_label.configure(text="")
+        self.set_fraction(0.0)
+        self.root.title(f"{name} · 录音 · LyreBot")
+        self.say("等待声音：播放想编配的音乐，录完点 ■ 结束")
+        self.worker = threading.Thread(target=self.run_recording, args=(self.midi_dir / f"{name}.wav",), daemon=True)
+        self.worker.start()
+
+    def ask_name(self) -> str | None:
+        name = "录音 " + time.strftime("%m%d-%H%M")  # Windows strftime cannot take Chinese in the format
+        prompt = "给这段录音起个名字，生成的曲谱也叫这个名字："
+        while True:
+            answer = simpledialog.askstring("录音", prompt, initialvalue=name, parent=self.root)
+            if answer is None:
+                return None
+            name = answer.strip()
+            problem = name_problem(name, self.scores_dir, self.midi_dir)
+            if problem is None:
+                return name
+            prompt = problem
+
+    def run_recording(self, path: Path) -> None:
+        post = self.updates.put
+        partial = path.with_name(path.name + ".part")  # not an audio file yet, so nothing picks it up early
+        try:
+            seconds = record(partial, self.cancel, lambda state, value: post(("recording", (state, value))))
+            if seconds > 0:
+                os.replace(partial, path)
+                post(("recorded", (path, seconds)))
+            else:
+                partial.unlink(missing_ok=True)
+                post(("status", "已取消录音" if self.cancel.is_set() else f"等了 {WAIT / 60:g} 分钟也没有声音，没有录音"))
+        except Exception as error:  # report anything to the user rather than dying silently
+            partial.unlink(missing_ok=True)
+            post(("record failed", str(error)))
+        finally:
+            post(("done", None))
+
+    def transcribe_next(self) -> None:
+        """Transcribe one new audio file from the midi folder in the background."""
+        if self.worker or self.transcriber or self.closing:
+            return
+        pending = pending_audio(self.midi_dir, self.scores_dir, self.failed_audio)
+        if pending:
+            self.start_transcription(pending[0])
+
+    def start_transcription(self, source: Path) -> None:
+        tools = find_tools(self.tool_dirs)
+        if tools is None:
+            self.mark_failed(source)
+            self.say(f"{source.name} 无法转录：没有找到转录工具，见 README「从录音生成曲谱」", warn=True)
+            return
+        self.say(f"正在把 {source.name} 转成 MIDI…")
+        self.stop_transcribing = threading.Event()
+        self.transcriber = threading.Thread(target=self.run_transcription,
+                                            args=(source, tools, self.stop_transcribing), daemon=True)
+        self.transcriber.start()
+        if not self.recording:
+            self.record_button.set(enabled=False)
+
+    def run_transcription(self, source: Path, tools: Tools, cancel: threading.Event) -> None:
+        target = source.with_suffix(".mid")
+        error = None
+        try:
+            transcribe(source, target, tools, cancel)
+        except TranscribeError as failure:
+            error = str(failure)
+        except Exception as failure:  # report anything to the user rather than dying silently
+            error = f"出错：{failure}"
+        self.updates.put(("transcribed", (source, target, error)))
+
+    def mark_failed(self, source: Path) -> None:
+        try:
+            self.failed_audio[source] = source.stat().st_mtime
+        except OSError:
+            pass
+
+    def transcribed(self, source: Path, target: Path, error: str | None) -> None:
+        self.transcriber = None
+        if not self.worker:
+            self.record_button.set(enabled=True)
+        if self.closing:
+            return
+        if error:
+            self.mark_failed(source)
+            self.say(f"{source.name} 无法转录：{error}", warn=True)
+        elif not self.worker:  # while a song plays, the watcher arranges it afterwards
+            self.arrange_one(target, "刚从录音编配好")
 
     # ---- playing ----
     def start(self, path: Path | None = None, fraction: float = 0.0) -> None:
@@ -521,13 +696,17 @@ class App:
         width = self.bar.winfo_width()
         self.start(fraction=min(max(event.x / width, 0.0), 0.999) if width > 0 else 0.0)
 
-    def set_playing(self, playing: bool) -> None:
-        self.button.set(self.stop_images if playing else self.play_images, enabled=not playing)
-        self.next_button.set(enabled=not playing)
-        self.speed_choice.set_enabled(not playing)
-        self.mode_choice.set_enabled(not playing)
-        self.bar.configure(cursor="arrow" if playing else "hand2")
-        if not playing:
+    def set_playing(self, playing: bool, recording: bool = False) -> None:
+        busy = playing or recording
+        self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
+        self.next_button.set(enabled=not busy)
+        self.speed_choice.set_enabled(not busy)
+        self.mode_choice.set_enabled(not busy)
+        self.bar.configure(cursor="arrow" if busy else "hand2")
+        # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
+        self.record_button.set(self.recording_images if recording else self.record_images,
+                               enabled=recording or (not busy and self.transcriber is None))
+        if not busy:
             self.root.title(self.base_title)
 
     def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path]) -> None:
@@ -596,11 +775,26 @@ class App:
                 self.say("出错，已停止", warn=True)
                 if not self.closing:
                     messagebox.showerror("演奏出错", value, parent=self.root)
+            elif kind == "recording":
+                state, seconds = value
+                if state == "recording":
+                    self.time_label.configure(text=clock(seconds))
+                    self.say(f"正在录音 · 点 ■ 结束，安静 {SILENCE:g} 秒也会自动结束")
+            elif kind == "recorded":
+                path, seconds = value
+                self.say(f"录好了 {clock(seconds)}")
+                if not self.closing:  # otherwise the recording is transcribed next time
+                    self.start_transcription(path)
+            elif kind == "record failed":
+                self.say(f"录音失败：{value}", warn=True)
+            elif kind == "transcribed":
+                self.transcribed(*value)
             elif kind == "done":
                 self.worker = None
+                self.recording = False
                 self.quiet_until = time.monotonic() + COOLDOWN
                 self.set_playing(False)
-        if self.closing and not self.worker:
+        if self.closing and not self.worker and not self.transcriber:
             self.root.destroy()
             return
         self.root.after(30, self.poll)
@@ -608,7 +802,8 @@ class App:
     def close(self) -> None:
         self.closing = True
         self.stop()
-        if not self.worker:
+        self.stop_transcribing.set()
+        if not self.worker and not self.transcriber:
             self.root.destroy()
 
 
