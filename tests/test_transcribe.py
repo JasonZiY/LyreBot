@@ -40,21 +40,29 @@ class Finding(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
 
-    def put(self, relative):
+    def put(self, relative, size=0):
         path = self.root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"")
+        path.write_bytes(b"\0" * size)
         return path
 
     def test_graphics_card_build_first_and_the_full_precision_model(self):
         cpu = self.put("tools/audiocpp-cpu/audiocpp_cli.exe")
         gpu = self.put("tools/audiocpp-vulkan/audiocpp_cli.exe")
-        self.put("tools/models/MuScriptor-Small-GGUF/muscriptor-small-f16.gguf")
-        f32 = self.put("tools/models/MuScriptor-Small-GGUF/muscriptor-small-f32.gguf")
-        self.put("tools/models/other/sheetsage.gguf")
+        self.put("tools/models/MuScriptor-Small-GGUF/muscriptor-small-f16.gguf", 2)
+        f32 = self.put("tools/models/MuScriptor-Small-GGUF/muscriptor-small-f32.gguf", 4)
+        self.put("tools/models/other/sheetsage.gguf", 9)
         tools = find_tools([self.root / "tools", self.root / "missing"])
         self.assertEqual(tools.attempts, (((str(gpu),), "vulkan"), ((str(cpu),), "cpu")))
         self.assertEqual(tools.model, f32)
+
+    def test_the_biggest_model_wins_in_any_folder(self):
+        self.put("first/audiocpp-vulkan/audiocpp_cli.exe")
+        self.put("first/models/MuScriptor-Small-GGUF/muscriptor-small-f32.gguf", 4)
+        medium = self.put("second/MuScriptor-Medium-GGUF/muscriptor-medium-f16.gguf", 6)
+        self.put("second/MuScriptor-Medium-GGUF/muscriptor-medium-q4_k.gguf", 3)
+        tools = find_tools([self.root / "first", self.root / "second"])
+        self.assertEqual(tools.model, medium)
 
     def test_an_unnamed_build_tries_both_and_folders_combine(self):
         cli = self.put("first/audiocpp/audiocpp_cli.exe")

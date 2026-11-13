@@ -46,6 +46,8 @@ def find_tools(folders: Iterable[Path]) -> Tools | None:
     A build in a folder named like ``audiocpp-vulkan`` runs on the graphics
     card, one named like ``audiocpp-cpu`` on the processor; the graphics card
     is tried first. (The Vulkan build cannot always fall back to the CPU.)
+    Of the MuScriptor models found, the biggest file wins: a larger model
+    (medium over small) or finer weights (f32 over f16) transcribe better.
     """
     clis: list[Path] = []
     models: list[Path] = []
@@ -68,7 +70,7 @@ def find_tools(folders: Iterable[Path]) -> Tools | None:
         else:
             first.append(((str(cli),), "vulkan"))
             last.append(((str(cli),), "cpu"))
-    model = sorted(models, key=lambda path: "f32" not in path.name.lower())[0]
+    model = max(models, key=lambda path: path.stat().st_size)
     return Tools(tuple(first + last), model, ffmpeg)
 
 

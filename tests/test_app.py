@@ -47,8 +47,12 @@ class Folders(unittest.TestCase):
         """A hidden Tk root, closed after the test with its timers cancelled.
 
         Tk's event loop is shared by every root in the thread, so a timer left
-        behind would fire during a later test's update() and complain.
+        behind would fire during a later test's update() and complain.  Its
+        images are freed on the spot: left to the garbage collector, they can
+        be freed in a later test's worker thread, where each one waits a second
+        for a main loop that isn't running (a 20 s join then times out).
         """
+        import gc
         import tkinter as tk
         try:
             root = tk.Tk()
@@ -59,6 +63,7 @@ class Folders(unittest.TestCase):
             for job in root.tk.splitlist(root.tk.call("after", "info")):
                 root.after_cancel(job)
             root.destroy()
+            gc.collect()
         self.addCleanup(close)
         root.withdraw()
         return root
