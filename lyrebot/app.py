@@ -24,7 +24,7 @@ from .midi import MidiError
 from .notate import notate
 from .player import play
 from .record import SILENCE, WAIT, record
-from .score import Score, ScoreError, load_score
+from .score import Score, ScoreError, load_score, score_files
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
 
@@ -35,6 +35,7 @@ TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
+FOLDER = "folder:"  # the list's id for a folder row; songs have their index as id
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
 NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
@@ -101,6 +102,27 @@ def midi_files(midi_dir: Path) -> list[Path]:
     return sorted(files, key=lambda path: pinyin_key(path.stem))
 
 
+def score_names(scores_dir: Path) -> set[str]:
+    """The names (casefolded, without .txt) of the scores in the txt folder and its folders."""
+    return {path.stem.casefold() for path in score_files(scores_dir)}
+
+
+def song_list(scores_dir: Path) -> list[tuple[str, list[Path]]]:
+    """The scores as the list shows them: (folder name, its scores) for each
+    folder inside the txt folder, in pinyin order, then ("", the scores
+    directly in it).  Scores sort by pinyin within each."""
+    groups: dict[str, list[Path]] = {}
+    for path in score_files(scores_dir):
+        folder = "" if path.parent == scores_dir else path.parent.name
+        groups.setdefault(folder, []).append(path)
+    if scores_dir.is_dir():  # an empty folder still shows, ready to drop scores into
+        for folder in scores_dir.iterdir():
+            if folder.is_dir():
+                groups.setdefault(folder.name, [])
+    order = sorted((name for name in groups if name), key=pinyin_key) + ([""] if "" in groups else [])
+    return [(name, sorted(groups[name], key=lambda path: pinyin_key(path.stem))) for name in order]
+
+
 def arranged_from(scores_dir: Path) -> dict[str, Path]:
     """Scores arranged from a MIDI file, by that file's name (casefolded).
 
@@ -109,7 +131,7 @@ def arranged_from(scores_dir: Path) -> dict[str, Path]:
     """
     found: dict[str, Path] = {}
     if scores_dir.is_dir():
-        for score in sorted(scores_dir.glob("*.txt")):
+        for score in score_files(scores_dir):
             name = arranged_name(score)
             if name:
                 found.setdefault(name, score)
@@ -138,9 +160,10 @@ def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], no
     """
     now = time.time() if now is None else now
     arranged = arranged_from(scores_dir)
+    names = score_names(scores_dir)
     found = []
     for path in midi_files(midi_dir):
-        if (scores_dir / f"{path.stem}.txt").exists() or path.name.casefold() in arranged:
+        if path.stem.casefold() in names or path.name.casefold() in arranged:
             continue
         try:
             stamp = path.stat().st_mtime
@@ -164,9 +187,10 @@ def pending_audio(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], n
     now = time.time() if now is None else now
     done = {path.stem.casefold() for path in midi_files(midi_dir)}
     done |= {name.rsplit(".", 1)[0] for name in arranged_from(scores_dir)}
+    done |= score_names(scores_dir)
     found = []
     for path in audio_files(midi_dir):
-        if path.stem.casefold() in done or (scores_dir / f"{path.stem}.txt").exists():
+        if path.stem.casefold() in done:
             continue
         try:
             stamp = path.stat().st_mtime
@@ -191,7 +215,7 @@ def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
     """Why a recording cannot be called ``name``, or None if it can."""
     if not name or name.endswith(".") or any(c in BAD_NAME_CHARACTERS or ord(c) < 32 for c in name):
         return '名字不能为空，也不能有 \\ / : * ? " < > | 这些字符，请换一个：'
-    taken = (scores_dir / f"{name}.txt").exists() or (
+    taken = name.casefold() in score_names(scores_dir) or (
         midi_dir.is_dir() and any(path.stem.casefold() == name.casefold() for path in midi_dir.iterdir()))
     return f"已经有叫「{name}」的曲谱或文件了，请换一个：" if taken else None
 
@@ -293,6 +317,7 @@ class App:
         self.failed_midi: dict[Path, float] = {}  # MIDI files that could not be arranged, by change time
         self.failed_audio: dict[Path, float] = {}  # audio files that could not be transcribed, likewise
         self.songs: list[Path] = []
+        self.rows: list[tuple[str, str, str, tuple[str, ...]]] = []
         self.told_empty = False
         # A note such as "just arranged" kept in front of a song's details while it stays selected:
         # selecting a row also fires <<TreeviewSelect>> later, which redraws the details.
@@ -327,6 +352,9 @@ class App:
         style.configure("Songs.Treeview", background=PAPER, fieldbackground=PAPER, foreground=INK,
                         font=(FAMILY, 11), rowheight=px(32), borderwidth=0, relief="flat", indent=0)
         style.layout("Songs.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
+        # Folders show their own ▾ / ▸, so the rows draw no indicator of their own.
+        style.layout("Songs.Treeview.Item", [("Treeitem.padding", {"sticky": "nswe", "children": [
+            ("Treeitem.image", {"side": "left", "sticky": ""}), ("Treeitem.text", {"sticky": "nswe"})]})])
         style.map("Songs.Treeview", background=[("selected", HIGHLIGHT)], foreground=[("selected", INK)])
         style.configure("Thin.Vertical.TScrollbar", background=LINE, troughcolor=PAPER, bordercolor=PAPER,
                         lightcolor=LINE, darkcolor=LINE, gripcount=0, arrowsize=px(6))
@@ -340,15 +368,20 @@ class App:
         self.tree = ttk.Treeview(top, show="tree", selectmode="browse", style="Songs.Treeview")
         self.tree.column("#0", stretch=True)
         self.tree.tag_configure("bad", foreground=WARN)
+        self.tree.tag_configure("folder", foreground=MUTED, font=(FAMILY, 10, "bold"))
         self.tree.pack(side="left", fill="both", expand=True)
         self.scrollbar = ttk.Scrollbar(top, command=self.tree.yview, style="Thin.Vertical.TScrollbar")
         self.tree.configure(yscrollcommand=self.scrolled)
         self.tree.bind("<<TreeviewSelect>>", lambda _: self.show_selected())
-        self.tree.bind("<Double-Button-1>", lambda _: self.locked() or self.start())
+        self.tree.bind("<Double-Button-1>", lambda event: self.locked() or self.folder_at(event) or self.start())
+        self.tree.bind("<<TreeviewOpen>>", lambda _: self.mark_folders())
+        self.tree.bind("<<TreeviewClose>>", lambda _: self.mark_folders())
         self.tree.bind("<Return>", lambda _: self.locked() or self.start())
         for sequence in ("<Button-1>", "<KeyPress-Up>", "<KeyPress-Down>", "<KeyPress-Home>", "<KeyPress-End>",
                          "<KeyPress-Prior>", "<KeyPress-Next>"):
             self.tree.bind(sequence, self.locked, add=True)
+        self.tree.bind("<Button-1>", self.toggle_folder, add=True)
+        self.closed: set[str] = set()  # folders the user closed
         self.menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
                             activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, 10))
         self.menu.add_command(label="打开曲谱文件夹（txt）", command=lambda: self.open_folder(self.scores_dir))
@@ -494,16 +527,26 @@ class App:
         if self.worker:
             return
         chosen = self.selected()
-        songs = sorted(self.scores_dir.glob("*.txt"), key=lambda p: pinyin_key(p.stem)) if self.scores_dir.is_dir() else []
-        bad = [isinstance(self.read(p), ScoreError) for p in songs]
-        rows = [("  " + ("⚠ " if wrong else "") + p.stem, wrong) for p, wrong in zip(songs, bad)]
-        current = [(self.tree.item(iid, "text"), "bad" in self.tree.item(iid, "tags"))
-                   for iid in self.tree.get_children()]
-        if songs != self.songs or current != rows:
-            self.songs = songs
+        groups = song_list(self.scores_dir)
+        songs = [path for _, paths in groups for path in paths]
+        rows = []  # (parent iid, iid, text, tags)
+        for folder, paths in groups:
+            parent = ""
+            if folder:
+                parent = FOLDER + folder
+                rows.append(("", parent, folder, ("folder",)))
+            for path in paths:
+                wrong = isinstance(self.read(path), ScoreError)
+                indent = "      " if folder else "  "
+                rows.append((parent, str(songs.index(path)), indent + ("⚠ " if wrong else "") + path.stem,
+                             ("bad",) if wrong else ()))
+        if songs != self.songs or rows != self.rows:
+            self.songs, self.rows = songs, rows
             self.tree.delete(*self.tree.get_children())
-            for index, (text, wrong) in enumerate(rows):
-                self.tree.insert("", "end", iid=str(index), text=text, tags=("bad",) if wrong else ())
+            for parent, iid, text, tags in rows:
+                self.tree.insert(parent, "end", iid=iid, text=text, tags=tags,
+                                 open=iid.startswith(FOLDER) and iid not in self.closed)
+            self.mark_folders()
             if chosen in songs:
                 self.select(chosen)
             self.show_selected()
@@ -517,8 +560,31 @@ class App:
 
     def selected(self) -> Path | None:
         chosen = self.tree.selection()
-        index = int(chosen[0]) if chosen else -1
+        index = int(chosen[0]) if chosen and chosen[0].isdigit() else -1
         return self.songs[index] if 0 <= index < len(self.songs) else None
+
+    def mark_folders(self) -> None:
+        """Put ▾ before an open folder and ▸ before a closed one, and remember which are closed."""
+        for iid in self.tree.get_children():
+            if iid.startswith(FOLDER):
+                is_open = bool(self.tree.item(iid, "open"))
+                (self.closed.discard if is_open else self.closed.add)(iid)
+                self.tree.item(iid, text=("  ▾ " if is_open else "  ▸ ") + iid[len(FOLDER):])
+
+    def folder_at(self, event: tk.Event) -> str | None:
+        """"break" when the click is on a folder: double-clicking one plays nothing."""
+        return "break" if self.tree.identify_row(event.y).startswith(FOLDER) else None
+
+    def toggle_folder(self, event: tk.Event) -> str | None:
+        """A click on a folder opens or closes it, without selecting it."""
+        if self.worker:
+            return "break"
+        row = self.tree.identify_row(event.y)
+        if not row.startswith(FOLDER):
+            return None
+        self.tree.item(row, open=not self.tree.item(row, "open"))
+        self.mark_folders()
+        return "break"
 
     def select(self, path: Path) -> None:
         if path not in self.songs:
@@ -526,7 +592,8 @@ class App:
         iid = str(self.songs.index(path))
         self.tree.selection_set(iid)
         self.tree.focus(iid)
-        self.tree.see(iid)
+        self.tree.see(iid)  # opens its folder
+        self.mark_folders()
         self.show_selected()
 
     def speed_factor(self) -> float:

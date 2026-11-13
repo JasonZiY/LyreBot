@@ -384,3 +384,18 @@ def load_score(path: str | Path) -> Score:
     except UnicodeDecodeError as error:
         raise ScoreError("曲谱必须是 UTF-8 编码") from error
     return parse_score(text)
+
+
+def score_files(folder: str | Path) -> list[Path]:
+    """The scores in ``folder`` and in the folders directly inside it (such as
+    ``txt/ost``), sorted by path."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        return []
+    return sorted(path for path in (*folder.glob("*.txt"), *folder.glob("*/*.txt")) if path.is_file())
+
+
+def find_score(folder: str | Path, name: str) -> Path | None:
+    """The score called ``name`` (without .txt) in ``folder`` or a folder inside it."""
+    wanted = name.casefold()
+    return next((path for path in score_files(folder) if path.stem.casefold() == wanted), None)

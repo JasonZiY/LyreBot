@@ -3,7 +3,7 @@ from pathlib import Path
 import math
 import unittest
 
-from lyrebot.score import ScoreError, Strike, load_score, parse_score
+from lyrebot.score import ScoreError, Strike, load_score, parse_score, score_files
 
 MUSIC = Path(__file__).resolve().parent.parent / "txt"
 
@@ -153,7 +153,7 @@ class HeldRoll(unittest.TestCase):
 
 class Files(unittest.TestCase):
     def test_every_bundled_score_loads(self):
-        files = sorted(MUSIC.glob("*.txt"))
+        files = score_files(MUSIC)
         self.assertTrue(files)
         for path in files:
             with self.subTest(path.name):

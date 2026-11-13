@@ -5,12 +5,12 @@ import unittest
 from lyrebot import beats
 from lyrebot.arrange import arrange
 from lyrebot.midi import parse_midi
-from lyrebot.score import load_score, parse_score
+from lyrebot.score import find_score, load_score, parse_score
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
-    from .test_arrange import PITCH_OF, notes, signature, smf, song, tempo, written_scores
+    from .test_arrange import MUSIC, PITCH_OF, notes, signature, smf, song, tempo, written_scores
 except ImportError:
-    from test_arrange import PITCH_OF, notes, signature, smf, song, tempo, written_scores
+    from test_arrange import MUSIC, PITCH_OF, notes, signature, smf, song, tempo, written_scores
 
 
 def bar_starts(score):
@@ -97,7 +97,7 @@ class FindingTheBeat(unittest.TestCase):
     def test_waltz_and_six_eight(self):
         for name, wanted in (("风息的离别诗", "3/4"), ("夜诞的花冠", "6/8")):
             with self.subTest(name):
-                score = load_score(MUSIC / f"{name}.txt")
+                score = load_score(find_score(MUSIC, name))
                 self.assertEqual(beats.find_beats(performed(score, name))[1].signature, wanted)
 
     def test_too_few_notes(self):
@@ -106,7 +106,7 @@ class FindingTheBeat(unittest.TestCase):
 
 class WhenToFindIt(unittest.TestCase):
     def setUp(self):
-        self.score = load_score(MUSIC / "风息的离别诗.txt")
+        self.score = load_score(find_score(MUSIC, "风息的离别诗"))
 
     def test_only_files_without_a_beat_of_their_own(self):
         self.assertIsNotNone(arrange(performed(self.score, "a")).timing)
@@ -187,8 +187,6 @@ class EverySong(unittest.TestCase):
         self.assertGreaterEqual(min(on_time.values()), 0.85, on_time)
         self.assertGreaterEqual(sum(on_time.values()) / len(on_time), 0.95, on_time)
 
-
-MUSIC = written_scores()[0].parent
 
 if __name__ == "__main__":
     unittest.main()

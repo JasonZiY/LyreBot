@@ -4,7 +4,7 @@ import unittest
 from lyrebot.listen import Ear, KEY_AT
 from lyrebot.keyboard import SCAN_CODES, STOP_KEY
 from lyrebot.notate import NotateError, faithfulness, notate
-from lyrebot.score import load_score, parse_score
+from lyrebot.score import load_score, parse_score, score_files
 from lyrebot.timeline import compile_timeline
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
@@ -32,7 +32,7 @@ def by_hand(presses, seed):
 
 
 def all_scores():
-    return sorted(MUSIC.glob("*.txt"))
+    return score_files(MUSIC)
 
 
 class EveryScore(unittest.TestCase):

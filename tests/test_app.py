@@ -5,7 +5,7 @@ import tempfile
 import time
 import unittest
 
-from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio,
+from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio, song_list,
                          pending_midi, recording_name)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
@@ -232,6 +232,48 @@ class Folders(unittest.TestCase):
         self.assertEqual(pending_audio(self.midi, self.scores, {}), [])
         source = self.add_midi("录音 0101-1200.mid")
         self.assertEqual(midi_for(renamed, self.midi), source)
+
+    def test_scores_in_folders(self):
+        """Folders inside txt list first, each with its scores; a score in a
+        folder still keeps its MIDI file and recording, and its name."""
+        (self.scores / "ost").mkdir()
+        (self.scores / "其他").mkdir()
+        (self.scores / "空的").mkdir()
+        for path in ("ost/林中晨歌.txt", "ost/风清月白.txt", "其他/春日影.txt", "新歌.txt"):
+            (self.scores / path).write_text("speed=60\na-\n", encoding="utf-8")
+        self.assertEqual([(name, [path.name for path in paths]) for name, paths in song_list(self.scores)],
+                         [("ost", ["风清月白.txt", "林中晨歌.txt"]), ("空的", []), ("其他", ["春日影.txt"]),
+                          ("", ["新歌.txt"])])  # in pinyin order: feng before lin, kong before qi
+        self.add_midi("林中晨歌.mid")
+        self.add_audio("春日影.wav")
+        self.assertEqual(pending_midi(self.midi, self.scores, {}), [])
+        self.assertEqual(pending_audio(self.midi, self.scores, {}), [])
+        self.assertIn("已经有", name_problem("风清月白", self.scores, self.midi))
+
+        from lyrebot.app import App, FOLDER
+        root = self.window()
+        app = App(root, self.scores, self.midi)
+        tree = app.tree
+        self.assertEqual(tree.get_children(), (FOLDER + "ost", FOLDER + "空的", FOLDER + "其他", "3"))
+        self.assertEqual(tree.item(FOLDER + "ost", "text"), "  ▾ ost")
+        self.assertEqual(app.songs[0], self.scores / "ost" / "风清月白.txt")
+        app.select(self.scores / "其他" / "春日影.txt")
+        self.assertEqual(app.selected(), self.scores / "其他" / "春日影.txt")
+        tree.selection_set(FOLDER + "ost")
+        self.assertIsNone(app.selected())
+
+        from unittest import mock
+
+        class Click:
+            y = 5
+        with mock.patch.object(tree, "identify_row", return_value=FOLDER + "ost"):  # the window is never drawn
+            self.assertEqual(app.toggle_folder(Click), "break")
+            self.assertEqual(app.folder_at(Click), "break")  # double-clicking a folder plays nothing
+        self.assertFalse(tree.item(FOLDER + "ost", "open"))
+        self.assertEqual(tree.item(FOLDER + "ost", "text"), "  ▸ ost")
+        (self.scores / "ost" / "新的.txt").write_text("speed=60\na-\n", encoding="utf-8")
+        app.refresh()  # the list is rebuilt; the folder stays closed
+        self.assertFalse(tree.item(FOLDER + "ost", "open"))
 
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")
