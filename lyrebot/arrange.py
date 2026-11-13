@@ -37,6 +37,7 @@ from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
 from .score import ScoreError, parse_score
 
 SCORES_DIR = Path(__file__).resolve().parent.parent / "txt"
+ARRANGED = "# 由 MIDI 自动编配："  # a score's first line, followed by the MIDI file's name
 
 LOW, HIGH = 48, 83  # C3 to B5: the lyre's three rows
 MIDDLE = 60  # C4: the melody belongs on the middle and high rows
@@ -987,7 +988,7 @@ def moved_text(shift: int) -> str:
 def _header(title: str, parts: list[Part], keys: list[tuple[int, int, KeyRegion]], share: float, signature: str,
             voices: int, accompaniment: str, timing: Timing | None = None) -> list[str]:
     """``keys`` holds (first bar, last bar, key) with bars numbered as written."""
-    lines = [f"# 由 MIDI 自动编配：{title}" if title else "# 由 MIDI 自动编配"]
+    lines = [f"{ARRANGED}{title}" if title else ARRANGED.rstrip("：")]
     if len(keys) == 1:
         shift = keys[0][2].shift
         moved = f"整体{moved_text(shift)}" if shift else "不用移调"

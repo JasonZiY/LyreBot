@@ -16,7 +16,7 @@ from tkinter import messagebox, simpledialog, ttk
 from typing import Callable
 
 from . import icons
-from .arrange import ArrangeError, arrange_file
+from .arrange import ARRANGED, ArrangeError, arrange_file
 from .collate import pinyin_key
 from .keyboard import Keyboard, foreground_title_and_pid
 from .listen import QUIET, listen
@@ -101,17 +101,46 @@ def midi_files(midi_dir: Path) -> list[Path]:
     return sorted(files, key=lambda path: pinyin_key(path.stem))
 
 
+def arranged_from(scores_dir: Path) -> dict[str, Path]:
+    """Scores arranged from a MIDI file, by that file's name (casefolded).
+
+    The arranger names its source on a score's first line, so a score keeps
+    its MIDI file when it is renamed.
+    """
+    found: dict[str, Path] = {}
+    if scores_dir.is_dir():
+        for score in sorted(scores_dir.glob("*.txt")):
+            name = arranged_name(score)
+            if name:
+                found.setdefault(name, score)
+    return found
+
+
+def arranged_name(score: Path) -> str | None:
+    """The name (casefolded) of the MIDI file a score's first line says it was arranged from."""
+    try:
+        with score.open(encoding="utf-8-sig", errors="replace") as text:
+            first = text.readline(1024)
+    except OSError:
+        return None
+    if not first.startswith(ARRANGED):
+        return None
+    return first[len(ARRANGED):].strip().casefold() or None
+
+
 def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], now: float | None = None) -> list[Path]:
-    """MIDI files that have no score of the same name yet.
+    """MIDI files that have no score yet: none of the same name, and none
+    arranged from them and renamed since.
 
     A score that already exists is never replaced, so edits to it are safe.
     Files still being copied (changed in the last ``SETTLE`` seconds) and files
     that already failed as they are now wait.
     """
     now = time.time() if now is None else now
+    arranged = arranged_from(scores_dir)
     found = []
     for path in midi_files(midi_dir):
-        if (scores_dir / f"{path.stem}.txt").exists():
+        if (scores_dir / f"{path.stem}.txt").exists() or path.name.casefold() in arranged:
             continue
         try:
             stamp = path.stat().st_mtime
@@ -130,9 +159,11 @@ def audio_files(midi_dir: Path) -> list[Path]:
 
 
 def pending_audio(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], now: float | None = None) -> list[Path]:
-    """Recordings and other audio files in the midi folder with no MIDI file or score of the same name yet."""
+    """Recordings and other audio files in the midi folder with no MIDI file or score of the same name yet
+    (nor a score arranged from their MIDI file and renamed since)."""
     now = time.time() if now is None else now
     done = {path.stem.casefold() for path in midi_files(midi_dir)}
+    done |= {name.rsplit(".", 1)[0] for name in arranged_from(scores_dir)}
     found = []
     for path in audio_files(midi_dir):
         if path.stem.casefold() in done or (scores_dir / f"{path.stem}.txt").exists():
@@ -166,8 +197,14 @@ def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
 
 
 def midi_for(score: Path, midi_dir: Path) -> Path | None:
-    """The MIDI file a score was arranged from, matched by name."""
-    for path in midi_files(midi_dir):
+    """The MIDI file a score was arranged from: the one its first line names,
+    or else the one of the same name."""
+    files = midi_files(midi_dir)
+    named = arranged_name(score)
+    for path in files:
+        if path.name.casefold() == named:
+            return path
+    for path in files:
         if path.stem.casefold() == score.stem.casefold():
             return path
     return None

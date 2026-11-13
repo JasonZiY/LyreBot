@@ -77,9 +77,10 @@ def song(*parts, bpm=100, numerator=4, denominator=4, ppq=PPQ):
 
 
 def written_scores():
-    """The scores in the txt folder transcribed by hand, not arranged from MIDI."""
+    """The scores in the txt folder transcribed by hand, not arranged from
+    MIDI nor written down from the keys played."""
     return [path for path in sorted(MUSIC.glob("*.txt"))
-            if not path.read_text(encoding="utf-8").startswith("# 由 MIDI 自动编配")]
+            if not path.read_text(encoding="utf-8").startswith(("# 由 MIDI 自动编配", "# 由键盘演奏记录"))]
 
 
 def bars_of(text):

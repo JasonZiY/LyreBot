@@ -216,6 +216,23 @@ class Folders(unittest.TestCase):
         self.assertEqual(recording_name("飞鼠进行曲", "-演奏"), "飞鼠进行曲-演奏")
         self.assertTrue(recording_name("", "-演奏").startswith("演奏 "))
 
+    def test_a_renamed_score_keeps_its_midi_and_recording(self):
+        """Renaming 录音 0101-1200.txt must not bring it back from its MIDI file,
+        nor its MIDI file back from the recording, and 从 MIDI 重新编配 still
+        finds the MIDI file."""
+        old = time.time() - 10
+        source = self.add_midi("录音 0101-1200.mid")
+        audio = self.add_audio("录音 0101-1200.wav")
+        renamed = self.scores / "冰湖-录音.txt"
+        renamed.write_text("# 由 MIDI 自动编配：录音 0101-1200.mid\nspeed=60\na-\n", encoding="utf-8")
+        for path in (source, audio):
+            os.utime(path, (old, old))
+        self.assertEqual(pending_midi(self.midi, self.scores, {}), [])
+        source.unlink()  # even with the MIDI file gone, the recording is not transcribed again
+        self.assertEqual(pending_audio(self.midi, self.scores, {}), [])
+        source = self.add_midi("录音 0101-1200.mid")
+        self.assertEqual(midi_for(renamed, self.midi), source)
+
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")
         self.assertEqual(midi_for(self.scores / "literature.txt", self.midi), source)
