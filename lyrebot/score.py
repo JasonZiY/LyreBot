@@ -388,7 +388,7 @@ def load_score(path: str | Path) -> Score:
 
 def score_files(folder: str | Path) -> list[Path]:
     """The scores in ``folder`` and in the folders directly inside it (such as
-    ``txt/ost``), sorted by path."""
+    ``txt/OST``), sorted by path."""
     folder = Path(folder)
     if not folder.is_dir():
         return []
