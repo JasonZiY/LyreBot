@@ -1,0 +1,54 @@
+# 由 MIDI 自动编配：飞鼠进行曲-录音.mid
+# 原曲中途转调，各段分别移调，92% 的音落在白键上
+# 第 1–20 小节相当于 G 大调 / E 小调，升 5 个半音
+# 第 21–46 小节相当于 B♭ 大调 / G 小调，升 2 个半音
+# 旋律：第 1 部分；伴奏：第 3 部分；未使用：第 2 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 116 拍（四分音符），速度平稳，4/4 拍
+speed=116
+0--q{2/3}t{1/3}t-|0--adg{1/3}0{2/3}adg{1/3}0{2/3}
+{2/3}t{1/3}t-e-r{2/3}r{1/3}|msg{1/3}0{2/3}msg{1/3}0{2/3}nad-nad{1/3}0{2/3}  # 改动 ♯4→r
+t--y{2/3}r{1/3}r-|bad-bad-vah-vah-
+t{2/3}q{1/3}q-h-q{2/3}q{1/3}|cag-cag-xn-xnh-  # 改动 ♯1→q
+w-0-q-0-|bas-bgj-adg-ag-
+w{2/3}t{1/3}0-h-j{2/3}y{1/3}|mg-mg-nad-nsd-
+t--y{2/3}u{1/3}u{2/3}y{1/3}|bdg-bdg-vah-vah-  # 改动 ♭7→u ♭7→u
+t{2/3}q{1/3}t{2/3}q{1/3}e-w{2/3}q{1/3}|cag-cag-xdh-bfj-
+q{1/3}q{1/3}q{1/3}d-d{2/3}g{1/3}g-|afg-ba-zba-bad-
+s{2/3}g{1/3}g-d-f-|bm-bm-na-vna-
+g-m-f-f-|bms-b-vna{2/3}v{1/3}vna-  # 改动 伴奏♯5→b
+d-z-x--|cbm----
+a-m-d-g-|xvb-xvb-zba-bad-
+s-j-q-j-|cm-csd-ndh-cad-
+f-d-q-j{2/3}q{1/3}|bs-zba-vsh-vna-
+g{2/3}q{1/3}g{2/3}q{1/3}e-w{2/3}q{1/3}|cba-ba-xn-bfj-
+q{1/3}q{1/3}q{1/3}q-a-s{2/3}a{1/3}|zfg-zdg-v-v-
+q-w{2/3}q{1/3}q-q-|f-f-dg-d-
+e-q{2/3}w{1/3}q-q-|ad-dg{2/3}b{1/3}sh-sh{2/3}a{1/3}
+q-q{2/3}w{1/3}e-q-|ag-s{2/3}a{1/3}bag-ag-
+j-q{2/3}e{1/3}q-w{2/3}q{1/3}|cnd-cdh{2/3}dhj{1/3}vah-zag{2/3}f{1/3}  # 转调，从这里起升 2 个半音；改动 ♯1→q
+q-w{2/3}q{1/3}q-t-|vfh-vfh{2/3}f{1/3}cdg-cgj-
+e-w{2/3}q{1/3}w-h-|nad-ndh{2/3}nd{1/3}sfh-sf-
+0--f-d-|zad-bd-bs-n-
+f-e-w-w-|cn-asg-bsg-bsg-
+w-0-t-t-|bgj-0-zdg-zdg-
+t-t-e-r{2/3}r{1/3}|msg-msg-na-na-  # 改动 ♯4→r
+t-q-y-r-|ba-b-vah{2/3}f{1/3}vah-
+t-q-h-q{2/3}q{1/3}|cag-cag-xn-xah-
+w-w-t{2/3}t{1/3}t-|bsg-bgj-zdg-zdg-
+t-t-q-u{2/3}y{1/3}|msg-msg-ndh-ndh-
+t-t-y{2/3}y{1/3}u{2/3}y{1/3}|bdg-bdg-vfh-vfh-  # 改动 ♭7→y
+t{2/3}q{1/3}e{2/3}q{1/3}e-w-|cag-cag-xn-bfj-
+r-e-e-t-|zag-zag-zag-zdg{2/3}a{1/3}
+t{2/3}t{1/3}t-e-r{2/3}r{1/3}|msg{2/3}j{1/3}msg{2/3}j{1/3}nad-as-  # 改动 ♯4→r
+t-q-y-r-|bag-bdg-vah{2/3}h{1/3}vaf{2/3}h{1/3}
+t{2/3}q{1/3}q-h-q{2/3}q{1/3}|cag-cag-xn-ah-  # 改动 ♯1→q
+w-e{2/3}j{1/3}q.~t-~|bsg-dj-nd.~ag~n-
+w{2/3}u-{1/3}q-j{2/3}q{1/3}|sd{2/3}j{1/3}b-nad-bs-  # 改动 伴奏♯5→b
+e--{2/3}q{1/3}j-|adh----
+e-e.~e-e~w-|vdh-vhj.~ah~cag.~a~bsg-
+t----|ag-ag-ag{2/3}ag{1/3}ag{2/3}ag{1/3}
+h-j-h{2/3}r{1/3}h{2/3}j{1/3}|sf-sf-sf{2/3}sf{1/3}sf{2/3}sf{1/3}  # 改动 ♭7→h ♭7→j ♭7→h ♭7→h ♭7→j
+q-{2/3}q{1/3}q--|zag-{2/3}ag{1/3}zag--
+----|----
+---0-|---0-
