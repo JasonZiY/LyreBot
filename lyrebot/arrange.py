@@ -920,11 +920,12 @@ def _bar_text(segments: list[_Segment], cursor: int, begin: Fraction, end: Fract
     return "".join(pieces), cursor
 
 
-def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock) -> dict[int, float]:
+def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock,
+                drift: float = DRIFT) -> dict[int, float]:
     """Where the score sets its speed: bar index -> BPM, rounded to 0.1.
 
     The fewest pieces of constant tempo that keep every beat within
-    ``DRIFT`` seconds of the source, found greedily: a piece grows bar by
+    ``drift`` seconds of the source, found greedily: a piece grows bar by
     bar while some tempo still fits all its beats.  A tempo followed beat by beat
     wobbles from bar to bar, so writing each bar's own tempo would jitter,
     and holding one tempo while it wobbles lets the score drift off the
@@ -943,9 +944,9 @@ def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock
                 position = bar_start + min(Fraction(step), length)
                 beats = float(position - bars[index][0])
                 elapsed = clock.seconds(position) - written_at
-                fit_low = max(fit_low, 60 * beats / (elapsed + DRIFT))
-                if elapsed > DRIFT:
-                    fit_high = min(fit_high, 60 * beats / (elapsed - DRIFT))
+                fit_low = max(fit_low, 60 * beats / (elapsed + drift))
+                if elapsed > drift:
+                    fit_high = min(fit_high, 60 * beats / (elapsed - drift))
             if fit_low > fit_high and end > index:
                 break
             low, high, end = fit_low, fit_high, end + 1

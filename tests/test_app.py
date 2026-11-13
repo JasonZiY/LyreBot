@@ -175,6 +175,47 @@ class Folders(unittest.TestCase):
         self.assertIsNone(app.worker)
         self.assertFalse(app.recording)
 
+    def test_the_window_writes_down_the_keys_played(self):
+        from unittest import mock
+        from lyrebot.app import App
+        root = self.window()
+        app = App(root, self.scores, self.midi)
+        presses = [(i * 0.3, "asdfghjq"[i % 8]) for i in range(24)]
+        heard = []
+
+        def listen(cancel, report):
+            report("listening", 1.0, 3)
+            heard.append(app.keys_button.enabled)  # live, to stop with
+            return presses
+
+        with mock.patch("lyrebot.app.listen", side_effect=listen), \
+                mock.patch("lyrebot.app.simpledialog.askstring", return_value="小调"):
+            app.listen()
+            self.assertTrue(app.listening)
+            self.assertFalse(app.button.enabled)
+            app.worker.join(20)
+            app.poll()
+        target = self.scores / "小调-演奏.txt"
+        self.assertTrue(target.read_text(encoding="utf-8").startswith("# 由键盘演奏记录：小调-演奏\n"))
+        self.assertEqual(heard, [True])
+        self.assertFalse(app.listening)
+        self.assertEqual(app.selected(), target)
+        root.update()  # the selection event that follows must not wipe the note
+        self.assertIn("刚从演奏记录好，100% 的按键照原样弹回", app.status_label.cget("text"))
+        self.assertTrue(app.keys_button.enabled)
+
+        with mock.patch("lyrebot.app.listen", return_value=[]), \
+                mock.patch("lyrebot.app.simpledialog.askstring", return_value=""):
+            app.quiet_until = 0
+            app.listen()
+            app.worker.join(20)
+            app.poll()
+        self.assertIn("没有记下", app.status_label.cget("text"))
+
+    def test_the_keys_played_are_named_after_their_song(self):
+        self.assertEqual(recording_name("飞鼠进行曲", "-演奏"), "飞鼠进行曲-演奏")
+        self.assertTrue(recording_name("", "-演奏").startswith("演奏 "))
+
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")
         self.assertEqual(midi_for(self.scores / "literature.txt", self.midi), source)

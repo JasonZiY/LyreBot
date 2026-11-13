@@ -86,3 +86,19 @@ def next_track(size: int) -> list[Shape]:
     left = c - (w + gap + bar) / 2
     return [polygon((left, c - h / 2), (left + w, c), (left, c + h / 2)),
             rect(left + w + gap, c - h / 2, left + w + gap + bar, c + h / 2, radius=bar * 0.3)]
+
+
+def keyboard(size: int) -> list[Shape]:
+    """A small keyboard: the body first, then the keys, to be painted in the background colour."""
+    c = size / 2
+    w, h = size * 0.50, size * 0.32
+    x0, y0 = c - w / 2, c - h / 2
+    body = rect(x0, y0, x0 + w, y0 + h, radius=size * 0.04)
+    key, gap = size * 0.065, size * 0.035
+    columns = 4
+    left = c - (columns * key + (columns - 1) * gap) / 2
+    keys = [rect(left + column * (key + gap), y0 + gap * 1.6 + row * (key + gap),
+                 left + column * (key + gap) + key, y0 + gap * 1.6 + row * (key + gap) + key, radius=key * 0.2)
+            for row in range(2) for column in range(columns)]
+    bar = rect(c - size * 0.12, y0 + h - gap * 1.6 - key * 0.8, c + size * 0.12, y0 + h - gap * 1.6, radius=key * 0.2)
+    return [body, *keys, bar]

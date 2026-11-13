@@ -230,14 +230,15 @@ def _on_the_pulse(pulses: list[float], notes: list[tuple[float, float, int]]) ->
     return pulses
 
 
-def _steady(pulses: list[float]) -> list[float] | None:
-    """One tempo fitted through the pulses, if they keep one."""
+def _steady(pulses: list[float], tolerance: float = STEADY) -> list[float] | None:
+    """One tempo fitted through the pulses, if they keep one: if their
+    intervals vary by less than ``tolerance`` (relative)."""
     gaps = sorted(later - earlier for earlier, later in zip(pulses, pulses[1:]))
     if len(gaps) < 4:
         return None
     middle = gaps[len(gaps) // 2]
     deviation = sorted(abs(gap - middle) for gap in gaps)[len(gaps) // 2]
-    if deviation > STEADY * middle:
+    if deviation > tolerance * middle:
         return None
     kept = list(enumerate(pulses))
     for _ in range(3):  # least squares, dropping pulses far off the line
@@ -343,10 +344,12 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
     return group, span // group, (span - places[0]) % span, mended
 
 
-def find_beats(midi: MidiFile, meter: int | None = None) -> tuple[MidiFile, Timing] | None:
+def find_beats(midi: MidiFile, meter: int | None = None,
+               steady: float = STEADY) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
-    per bar."""
+    per bar; ``steady`` is how much the pulse may wobble and still be taken
+    for one tempo."""
     seconds = _seconds_of(midi)
     pitched = [note for note in midi.notes if note.channel != 9]
     if len(pitched) < 8:
@@ -364,7 +367,7 @@ def find_beats(midi: MidiFile, meter: int | None = None) -> tuple[MidiFile, Timi
     if len(pulses) < 8:
         return None
     pulses = _on_the_pulse(pulses, notes)
-    fitted = _steady(pulses)
+    fitted = _steady(pulses, steady)
     steady = fitted is not None
     pulses = fitted or pulses
     group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not steady)

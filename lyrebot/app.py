@@ -19,7 +19,9 @@ from . import icons
 from .arrange import ArrangeError, arrange_file
 from .collate import pinyin_key
 from .keyboard import Keyboard, foreground_title_and_pid
+from .listen import QUIET, listen
 from .midi import MidiError
+from .notate import notate
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score
@@ -34,6 +36,7 @@ MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
+PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
 NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
             "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
             "下载地址和放法见 README 的「从录音生成曲谱」。")
@@ -143,13 +146,14 @@ def pending_audio(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], n
     return found
 
 
-def recording_name(title: str) -> str:
-    """The name a recording of ``title`` is saved under: 曲名-录音, or the
-    time of day when no title is given."""
+def recording_name(title: str, suffix: str = RECORDING_SUFFIX) -> str:
+    """The name a recording of ``title`` is saved under: 曲名-录音 (or with
+    another ``suffix``), or the time of day when no title is given."""
     title = title.strip()
     if not title:
-        return "录音 " + time.strftime("%m%d-%H%M")  # Windows strftime cannot take Chinese in the format
-    return title if title.endswith(RECORDING_SUFFIX) else title + RECORDING_SUFFIX
+        # Windows strftime cannot take Chinese in the format.
+        return suffix.lstrip("-") + " " + time.strftime("%m%d-%H%M")
+    return title if title.endswith(suffix) else title + suffix
 
 
 def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
@@ -259,6 +263,8 @@ class App:
         self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
         self.worker: threading.Thread | None = None  # playing or recording
         self.recording = False
+        self.listening = False
+        self.written: tuple[Path, str] | None = None  # a score just written from the keys played
         self.transcriber: threading.Thread | None = None
         self.stop_transcribing = threading.Event()
         self.cancel = threading.Event()
@@ -352,6 +358,8 @@ class App:
         self.button.pack(side="right", padx=(0, px(6)))
         self.record_button = IconButton(controls, self.record_images, self.record)
         self.record_button.pack(side="right", padx=(0, px(6)))
+        self.keys_button = IconButton(controls, self.keys_images, self.listen)
+        self.keys_button.pack(side="right", padx=(0, px(2)))
 
         self.refresh()
         if self.songs:
@@ -383,6 +391,12 @@ class App:
         self.record_images = {"normal": image(small, [dot(ORANGE)]),
                               "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5)), dot(ORANGE_DEEP)]),
                               "disabled": image(small, [dot(PEACH)])}
+        def keys(color: str, back: str) -> list:
+            body, *holes = icons.keyboard(small)
+            return [(color, body)] + [(back, hole) for hole in holes]
+        self.keys_images = {"normal": image(small, keys(INK, PAPER)),
+                            "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + keys(INK, HOVER)),
+                            "disabled": image(small, keys(FAINT, PAPER))}
         square = lambda color: (color, icons.stop(small))  # noqa: E731
         self.recording_images = {"normal": image(small, [(HIGHLIGHT, icons.circle(s, s, s - 0.5)), square(ORANGE)]),
                                  "hover": image(small, [(PEACH, icons.circle(s, s, s - 0.5)), square(ORANGE_DEEP)]),
@@ -461,7 +475,8 @@ class App:
             self.told_empty = True
             self.title_label.configure(text="还没有曲谱")
             self.time_label.configure(text="")
-            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们），也可以点 ● 录一段音乐")
+            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们），"
+                     "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")
 
     def selected(self) -> Path | None:
         chosen = self.tree.selection()
@@ -589,14 +604,14 @@ class App:
         self.worker = threading.Thread(target=self.run_recording, args=(self.midi_dir / f"{name}.wav",), daemon=True)
         self.worker.start()
 
-    def ask_name(self) -> str | None:
-        prompt = f"要录的是哪首曲子？曲谱会叫「曲名{RECORDING_SUFFIX}」（不填就按时间起名）："
+    def ask_name(self, title: str = "录音", suffix: str = RECORDING_SUFFIX, verb: str = "录") -> str | None:
+        prompt = f"要{verb}的是哪首曲子？曲谱会叫「曲名{suffix}」（不填就按时间起名）："
         answer = ""
         while True:
-            answer = simpledialog.askstring("录音", prompt, initialvalue=answer, parent=self.root)
+            answer = simpledialog.askstring(title, prompt, initialvalue=answer, parent=self.root)
             if answer is None:
                 return None
-            name = recording_name(answer)
+            name = recording_name(answer, suffix)
             problem = name_problem(name, self.scores_dir, self.midi_dir)
             if problem is None:
                 return name
@@ -616,6 +631,46 @@ class App:
         except Exception as error:  # report anything to the user rather than dying silently
             partial.unlink(missing_ok=True)
             post(("record failed", str(error)))
+        finally:
+            post(("done", None))
+
+    # ---- writing down the keys played ----
+    def listen(self) -> None:
+        """Listen to the lyre keys pressed in the game and write them down as a score."""
+        if self.listening:
+            self.stop()
+            return
+        if self.worker or time.monotonic() < self.quiet_until:
+            return
+        name = self.ask_name("记录演奏", PLAYING_SUFFIX, "弹")
+        if name is None:
+            return
+        self.cancel = threading.Event()
+        self.listening = True
+        self.set_playing(False, listening=True)
+        self.title_label.configure(text=name)
+        self.time_label.configure(text="")
+        self.set_fraction(0.0)
+        self.root.title(f"{name} · 记录演奏 · LyreBot")
+        self.say("切换到游戏弹琴，弹完按 F8 或回来点 ■ 结束")
+        self.worker = threading.Thread(target=self.run_listening, args=(self.scores_dir / f"{name}.txt",),
+                                       daemon=True)
+        self.worker.start()
+
+    def run_listening(self, target: Path) -> None:
+        post = self.updates.put
+        try:
+            presses = listen(self.cancel, lambda state, seconds, count: post(("listening", (state, seconds, count))))
+            if not presses:
+                post(("status", "已取消" if self.cancel.is_set() else "一直没有弹琴，没有记下什么"))
+                return
+            post(("status", f"记下了 {len(presses)} 个音，正在写成曲谱…"))
+            notation = notate(presses, target.stem)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(notation.text, encoding="utf-8", newline="\n")
+            post(("notated", (target, notation.faithful)))
+        except Exception as error:  # report anything to the user rather than dying silently
+            post(("listen failed", str(error)))
         finally:
             post(("done", None))
 
@@ -706,8 +761,8 @@ class App:
         width = self.bar.winfo_width()
         self.start(fraction=min(max(event.x / width, 0.0), 0.999) if width > 0 else 0.0)
 
-    def set_playing(self, playing: bool, recording: bool = False) -> None:
-        busy = playing or recording
+    def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
+        busy = playing or recording or listening
         self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
         self.next_button.set(enabled=not busy)
         self.speed_choice.set_enabled(not busy)
@@ -716,6 +771,7 @@ class App:
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,
                                enabled=recording or (not busy and self.transcriber is None))
+        self.keys_button.set(self.recording_images if listening else self.keys_images, enabled=listening or not busy)
         if not busy:
             self.root.title(self.base_title)
 
@@ -760,6 +816,10 @@ class App:
         finally:
             post(("done", None))
 
+    def notated(self, path: Path, faithful: float) -> None:
+        self.say(f"已写成曲谱 {path.name}")
+        self.written = (path, f"刚从演奏记录好，{faithful:.0%} 的按键照原样弹回")
+
     def stop(self) -> None:
         self.cancel.set()
 
@@ -797,13 +857,29 @@ class App:
                     self.start_transcription(path)
             elif kind == "record failed":
                 self.say(f"录音失败：{value}", warn=True)
+            elif kind == "listening":
+                state, seconds, count = value
+                if state == "listening":
+                    self.time_label.configure(text=clock(seconds))
+                    self.say(f"已记下 {count} 个音 · 按 F8 结束，{QUIET:g} 秒不弹也会自动结束")
+            elif kind == "notated":
+                self.notated(*value)
+            elif kind == "listen failed":
+                self.say(f"记录失败：{value}", warn=True)
             elif kind == "transcribed":
                 self.transcribed(*value)
             elif kind == "done":
                 self.worker = None
                 self.recording = False
+                self.listening = False
                 self.quiet_until = time.monotonic() + COOLDOWN
                 self.set_playing(False)
+                if self.written:  # select the new score once the list may refresh again
+                    path, note = self.written
+                    self.written = None
+                    self.refresh()
+                    self.notice = (path, note)
+                    self.select(path)
         if self.closing and not self.worker and not self.transcriber:
             self.root.destroy()
             return
