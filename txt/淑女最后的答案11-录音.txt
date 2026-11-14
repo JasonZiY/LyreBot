@@ -1,0 +1,57 @@
+# 由 MIDI 自动编配：淑女最后的答案11-录音.mid
+# 原曲的音阶相当于 D 大调 / B 小调，整体降 2 个半音，86% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 88 拍（四分音符），速度有起伏，逐拍跟随，3/4 拍
+speed=94.2
+0-.q.t.e.|0-.v.z.b.  # 改动 ♯5→t
+speed=87.9
+r.g.w.q.j.g.|b.a.d.vf.z.n.  # 改动 ♯5→g ♯1→w 伴奏♯5→b 伴奏♯1→z 伴奏♭7→n
+h.g.~d.*q.*t.|.m-~*v.*z.  # 改动 ♭7→h ♯5→g ♯5→t
+speed=89.5
+e.r-q.u.t.|b.b.a.a.vs.x.  # 改动 伴奏♯5→b 伴奏♯1→a
+speed=90.6
+y.t.e.*t.~q.*|m-g-~*v.*  # 改动 ♭7→y ♯5→t
+t.e.r-r.e.|z.b.b.a.f.v.  # 改动 ♯5→t 伴奏♯5→b
+speed=86.6
+q.w.t.y.e.r.|z.m.f.j-v.  # 改动 ♯1→w ♯5→t 伴奏♯1→z 伴奏♯4→v
+speed=78.9
+g.q.d.g.~a.~|x.n.a.a-.  # 改动 ♯5→g ♯5→g 伴奏♭7→n 伴奏♯1→a
+speed=98.4
+f---|v---
+speed=89.7
+-.b.d.m.|-.zc.b.x.
+a.d.g.f.w.w.|.b.a.xa.m.bm.
+s.g-g.e.j.|0-.c.z.b.
+q.d.h.g.r.s.|m.a.d.vd.x.m.
+g.w.r.t.w.h.|0-.c.n.f.  # 改动 ♯4→r ♭7→h 伴奏♭7→n 伴奏♯4→f
+j.t.w.q.e.t.|g.s.d.na.dj.a.  # 改动 ♭7→j
+q.e.~h.*r.*q.|g.j.~a.*x.*n.
+h.y.r.q.u.w.|d.f.a.d.bf.fh.
+r.*j.~w.*g-|j.*s.~bf.*bm-
+speed=84.8
+h.e.q.w.f.h.|vd.x.c.n.m.s.  # 改动 ♯1→q
+g.w.w--|cs-a--
+f.q.h.j.s.f.|xa.n.c.v.b.m.  # 改动 ♭7→h 伴奏♯5→b
+d.j.j--|zm-n--
+speed=89.6
+h.e.q.w.f.h.|vf.x.n.m.s-  # 改动 ♯1→q
+g.w.j.q.*d.*g~|cs.z.b.ag.0-
+.f.q.h.w.q.|0.a.z.v.a.m.  # 改动 ♯4→f ♭3→w 伴奏♯4→v
+*y{11/16}t{11/16}w.*r.~g*|{13/16}cmd--{3/16}  # 改动 ♯5→t ♯5→g
+.s.~f.*g.*e.|.vbm-~*zd.*b.
+j.q.d.h.g.f.|x.c.b.a.za.n.
+speed=76.7
+.a.m-g.e.|vn-xb.b.z.b.
+speed=87.9
+j.q-y.t.r.|x.c.bd.n.z.f.
+q.e.~w.*h.*g.|v.sd.~baf.*m.*zd.
+e.j.q-q.u.|b.x.c.bd.a.d.
+speed=82
+t.y.e.r.q.w.|n.c.a.g-xa.  # 改动 ♯1→q 伴奏♯1→a
+speed=76.9
+f.h.s.d-.|n.v.z.vbm.~b.~  # 改动 ♯4→f 伴奏♯4→v
+speed=96.3
+a---|zc---
+speed=86.5
+-.0-.|-.0-.
