@@ -16,6 +16,7 @@ except ImportError:
     from test_transcribe import fake_tools
 
 SONGS = [Path("a.txt"), Path("b.txt"), Path("c.txt")]
+_TK = None  # the one Tk interpreter the window tests share
 
 
 class NextSong(unittest.TestCase):
@@ -44,20 +45,28 @@ class Folders(unittest.TestCase):
         self.scores.mkdir()
 
     def window(self):
-        """A hidden Tk root, closed after the test with its timers cancelled.
+        """A hidden window for the app, closed after the test with its timers cancelled.
 
-        Tk's event loop is shared by every root in the thread, so a timer left
-        behind would fire during a later test's update() and complain.  Its
-        images are freed on the spot: left to the garbage collector, they can
-        be freed in a later test's worker thread, where each one waits a second
-        for a main loop that isn't running (a 20 s join then times out).
+        Every test's window sits on one Tk interpreter, made once: creating
+        and destroying a Tk root per test now and then leaves Tcl unable to
+        start the next one ("invalid command name tcl_findLibrary"), and the
+        test would quietly be skipped.  Timers are shared by the interpreter,
+        so one left behind would fire during a later test's update() and
+        complain.  The window's images are freed on the spot: left to the
+        garbage collector, they can be freed in a later test's worker thread,
+        where each one waits a second for a main loop that isn't running (a
+        20 s join then times out).
         """
         import gc
         import tkinter as tk
-        try:
-            root = tk.Tk()
-        except tk.TclError as error:
-            self.skipTest(f"no display: {error}")
+        global _TK
+        if _TK is None:
+            try:
+                _TK = tk.Tk()
+            except tk.TclError as error:
+                self.skipTest(f"no display: {error}")
+            _TK.withdraw()
+        root = tk.Toplevel(_TK)
 
         def close():
             for job in root.tk.splitlist(root.tk.call("after", "info")):
