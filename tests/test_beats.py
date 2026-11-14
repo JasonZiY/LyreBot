@@ -5,7 +5,7 @@ import unittest
 
 from lyrebot import beats
 from lyrebot.beats import onset_times
-from lyrebot.arrange import arrange, played_in_time
+from lyrebot.arrange import arrange, beat_readings, played_in_time
 from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
@@ -169,6 +169,58 @@ class SteadyStretches(unittest.TestCase):
         self.assertEqual(beats.find_beats(midi, playback=True)[1], beats.find_beats(midi)[1])
 
 
+def loose_groove(jitter, seed, bars=40, bpm=150.0):
+    """A steady 4/4 groove at ``bpm`` played with ``jitter`` seconds of slop."""
+    rng = random.Random(seed)
+    played = []
+    for bar in range(bars):
+        for beat in range(4):
+            at = 0.5 + (bar * 4 + beat) * 60 / bpm
+            on, off = at + rng.gauss(0, jitter), at + 30 / bpm + rng.gauss(0, jitter)
+            played += [(on, on + 0.3, 72 + (0, 4, 7, 4)[beat]), (off, off + 0.2, 67)]
+        down = 0.5 + bar * 4 * 60 / bpm + rng.gauss(0, jitter)
+        played.append((down, down + 4 * 60 / bpm, 36))
+    return parse_midi(smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])]))
+
+
+class OneTempo(unittest.TestCase):
+    def test_steady_playing_the_tracker_follows_keeps_its_tempo(self):
+        """Played with 25 ms of slop, a steady groove makes the tracker's
+        pulses wobble too much to pass for one tempo; the one tempo its notes
+        fall on is found to a twentieth of a beat a minute."""
+        midi = loose_groove(0.025, 1)
+        followed = beats.find_beats(midi, playback=True)[1]
+        self.assertFalse(followed.steady)
+        self.assertEqual(followed.stretches, 0)
+        steady = beats.find_beats(midi, playback=True, one_tempo=True)[1]
+        self.assertTrue(steady.steady)
+        self.assertAlmostEqual(steady.bpm, 75, delta=0.05)  # the beat read is a half note of 150
+        self.assertEqual(len(beat_readings(midi)), 2)
+
+    def test_a_slipped_pulse_still_gives_the_tempo(self):
+        rng = random.Random(3)
+        onsets = [0.4 + 0.3 * index for index in range(200)]
+        pulses = [time + rng.choice((-0.02, 0.0, 0.02)) for time in onsets]
+        del pulses[120]  # the tracker lost one
+        fitted = beats._one_tempo(pulses, onsets, [1.0] * len(onsets))
+        self.assertIsNotNone(fitted)
+        self.assertAlmostEqual(fitted[1] - fitted[0], 0.3, delta=0.0003)
+        self.assertEqual(len(fitted), 200)
+        self.assertLess(max(min(abs(time - pulse) for pulse in fitted) for time in onsets), 0.005)
+
+    def test_two_tempos_are_not_one(self):
+        onsets = [0.3 * index for index in range(100)]
+        onsets += [onsets[-1] + 0.26 * index for index in range(1, 101)]
+        self.assertIsNone(beats._one_tempo(onsets, onsets, [1.0] * len(onsets)))
+
+    def test_steady_stretches_are_not_read_again(self):
+        """A piece fitted as steady stretches keeps one tempo nearly
+        throughout already; between them (a pause, a ritardando) it is
+        better followed than written in a tempo it does not keep."""
+        midi, _ = groove(pause_at=20, pause=0.5)
+        self.assertEqual(len(beat_readings(midi)), 1)
+
+
 class BeatLengths(unittest.TestCase):
     def test_a_beat_read_at_half_its_length_is_read_again(self):
         """华灯星聚 alternates triplets and eighths, and its beat is first read
@@ -181,6 +233,9 @@ class BeatLengths(unittest.TestCase):
         self.assertAlmostEqual(result.timing.bpm, 177, delta=1)
         self.assertEqual(result.timing.signature, "6/8")
         self.assertGreater(played_in_time(result.text, onsets), 0.95)
+        # At 177 the tracker's pulses wobble too much for one tempo, but the notes keep one.
+        self.assertTrue(result.timing.steady)
+        self.assertEqual(result.text.count("\nspeed="), 1)
 
     def test_a_beat_that_plays_back_well_is_kept(self):
         """A score of the beat found that plays back well is not read again,

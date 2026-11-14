@@ -17,8 +17,10 @@ how people arrange for the lyre by hand:
    accompaniment as a bass line).  A recording keeps the notes its
    accompaniment really played, so the result sounds like what was recorded.
 6. Snap onsets to the beat and write one line per bar.  A recording's beat
-   is a guess: when its score plays the recording back short, the beat is
-   read again at twice and half its length.
+   is a guess, so it is read in one tempo as well as followed beat by beat
+   where the notes keep one, and at twice and half its length when its
+   score plays the recording back short; the score that plays it back best
+   is kept.
 """
 
 from __future__ import annotations
@@ -71,7 +73,7 @@ DRIFT = 0.04  # seconds the written speeds may let the score run ahead of or beh
 OTHER_LEVELS = (2, 0.5)  # other lengths of the beat found to read a recording at, as multiples of it ...
 SHORT = 0.9  # ... when the score of the beat found plays less than this share of the notes in time
 IN_TIME = 0.05  # seconds within which a recording's note played back by its score counts as in time
-CLOSER = 0.005  # how much more of a recording the beat of another length must play in time to be kept
+CLOSER = 0.005  # how much more of a recording another reading of its beat must play in time to be kept
 BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
@@ -1061,27 +1063,47 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     choices = dict(title=title, melody=melody, drop=drop, transpose=transpose, fill=fill,
                    accompaniment=accompaniment)
     if beats == "notes" or (beats == "auto" and needs_beats(midi, grid)):
-        # The beat found may be half or twice the music's own.  Then its score plays the recording back
-        # short, and a beat twice or half as long is tried as well, the one that plays more of the notes
-        # when they were played being kept.  Only then: a shorter beat always fits a little closer, its
-        # grid being finer, without being the beat.
-        found = find_beats(midi, meter, playback=True)
-        if found:
+        # Each reading of the beat is written out, and the score that plays the most notes back when they
+        # were played is kept, the first on a tie.  The beat found may be half or twice the music's own.
+        # Then its score plays the recording back short, and a beat twice or half as long is read as
+        # well.  Only then: a shorter beat always fits a little closer, its grid being finer, without
+        # being the beat.
+        readings = beat_readings(midi, meter)
+        if readings:
             onsets = onset_times(midi)
-            best = _scored(_arrange(*found, **choices), onsets)
-            for level in OTHER_LEVELS:
-                bpm = found[1].bpm / level
-                if best[0] >= SHORT or not SLOWEST <= bpm <= FASTEST:
-                    continue
-                other = find_beats(midi, meter, playback=True, period=60.0 / bpm)
-                if other:
-                    scored = _scored(_arrange(*other, **choices), onsets)
-                    if scored[0] > best[0] + CLOSER:
+            bpm = readings[-1][1].bpm
+            best: tuple[float, Arrangement] | None = None
+            for level in (None, *OTHER_LEVELS):
+                if level is not None:
+                    if best[0] >= SHORT or not SLOWEST <= bpm / level <= FASTEST:
+                        continue
+                    readings = beat_readings(midi, meter, 60.0 * level / bpm)
+                for reading in readings:
+                    scored = _scored(_arrange(*reading, **choices), onsets)
+                    if best is None or scored[0] > best[0] + CLOSER:
                         best = scored
             return best[1]
     elif meter:
         midi = replace(midi, time_signatures=((0, meter, 4),))
     return _arrange(midi, None, **choices)
+
+
+def beat_readings(midi: MidiFile, meter: int | None = None,
+                  period: float | None = None) -> list[tuple[MidiFile, Timing]]:
+    """The file rewritten against the beat found in its notes (or the one
+    ``period`` seconds long): in the one tempo its notes keep, when its
+    pulse was followed beat by beat all the same (as it may be by the
+    tracker's doing), and then as followed.  A pulse fitted in steady
+    stretches is not read again: it keeps one tempo nearly throughout
+    already, and the rest (a ritardando) reads better followed."""
+    found = find_beats(midi, meter, playback=True, period=period)
+    if not found:
+        return []
+    if not found[1].steady and not found[1].stretches:
+        steady = find_beats(midi, meter, playback=True, period=period, one_tempo=True)
+        if steady and steady[1].steady:
+            return [steady, found]
+    return [found]
 
 
 def _scored(result: Arrangement, onsets: list[float]) -> tuple[float, Arrangement]:

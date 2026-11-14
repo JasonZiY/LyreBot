@@ -13,6 +13,8 @@ music's own beat from the notes alone:
    against the local tempo the first found, so tempo changes are followed.
    When the pulse turns out steady, one tempo is fitted through it instead;
    for playing back, so is each of a few steady stretches it may keep.
+   Asked for, a wobbling pulse is also fitted with the one tempo the onsets
+   keep, if they keep one.
 3. Meter: how the eighths group, two to a beat (2/4, 3/4, 4/4) or three
    (6/8, 12/8), and how many beats make a bar, from where bass notes, long
    notes and chord changes come round again.
@@ -35,6 +37,10 @@ TIGHTNESS = 100.0  # how strongly the pulse keeps its tempo
 STEADY = 0.04  # pulse intervals varying less than this (relative) count as one tempo
 STRETCH = 48  # pulses (eighths, six bars of 4/4) a steady stretch must last
 STRETCHED = 0.9  # share of the pulses steady stretches must cover to be used instead of following each pulse
+ONE_TEMPO = 0.04  # how far (relative) the one tempo of a wobbling pulse is looked for from a line through it
+HARMONICS = (1, 2, 3, 4)  # quarters, eighths, triplets and sixteenths: how a steady piece divides its beat
+ON_GRID = 0.25  # of an eighth: how near the eighths of that tempo a pulse that keeps it lies ...
+KEPT = 0.8  # ... and the share of the pulses that must, for the notes to keep that tempo
 MEND = 6.0  # what adding or dropping a pulse costs, in standardized accents
 PPQ = 960
 
@@ -252,8 +258,19 @@ def _steady(pulses: list[float], tolerance: float = STEADY) -> list[float] | Non
     deviation = sorted(abs(gap - middle) for gap in gaps)[len(gaps) // 2]
     if deviation > tolerance * middle:
         return None
+    start, slope = _line(pulses)
+    # A ritardando or a pause leaves a stretch of pulses off the line: then the tempo is not one.
+    residuals = sorted(abs(start + slope * index - time) for index, time in enumerate(pulses))
+    if residuals[int(0.97 * (len(residuals) - 1))] > 0.15 * slope:
+        return None
+    return [start + slope * index for index in range(len(pulses))]
+
+
+def _line(pulses: list[float]) -> tuple[float, float]:
+    """The time of the first pulse and the pulse length of the one tempo that
+    fits the pulses best, by least squares, leaving out pulses far off it."""
     kept = list(enumerate(pulses))
-    for _ in range(3):  # least squares, dropping pulses far off the line
+    for _ in range(3):
         count = len(kept)
         mean_index = sum(index for index, _ in kept) / count
         mean_time = sum(time for _, time in kept) / count
@@ -261,11 +278,68 @@ def _steady(pulses: list[float], tolerance: float = STEADY) -> list[float] | Non
                  / sum((index - mean_index) ** 2 for index, _ in kept))
         start = mean_time - slope * mean_index
         kept = [(index, time) for index, time in kept if abs(start + slope * index - time) < 0.15 * slope] or kept
-    # A ritardando or a pause leaves a stretch of pulses off the line: then the tempo is not one.
-    residuals = sorted(abs(start + slope * index - time) for index, time in enumerate(pulses))
-    if residuals[int(0.97 * (len(residuals) - 1))] > 0.15 * slope:
+    return start, slope
+
+
+def _one_tempo(pulses: list[float], times: list[float], weights: list[float]) -> list[float] | None:
+    """Pulses of the one tempo whose beat the onsets fall on most nearly,
+    over the span the tracked ``pulses`` cover; or None unless most of the
+    tracked pulses (``KEPT``) lie within ``ON_GRID`` of its eighths.
+
+    The tracker's pulses wobble by a frame or so of its envelope, which at a
+    fast tempo is more than a pulse of one tempo may wobble, and a pulse it
+    slips or loses leaves the line through the rest a little off; so a piece
+    that keeps one tempo may be followed beat by beat all the same.  The
+    tempo is found from the onsets instead, near the line's: the one whose
+    quarters, eighths, triplets and sixteenths (``HARMONICS``) they line up
+    with best.  A slipped pulse still lies on its eighths, one along; where
+    the playing sways or changes tempo, a third or more of the pulses drift
+    off them.  Even where the tempo holds, a few in ten may stray for some
+    bars, where duplets cross a beat of triplets.
+    """
+    _, slope = _line(pulses)
+    span = max(times[-1] - times[0], slope)
+    # Relative steps: coarse ones over which the eighths drift a quarter of one across the piece, then
+    # fine ones around the best of those.
+    coarse = slope / (4 * span)
+    count = round(ONE_TEMPO / coarse)
+    candidates = [2 * slope * (1 + index * coarse) for index in range(-count, count + 1)]
+    quarter = max(candidates, key=lambda length: _coherence(times, weights, length, HARMONICS[:2]))
+    fine = [quarter * (1 + index * coarse / 8) for index in range(-12, 13)]
+    quarter = max(fine, key=lambda length: _coherence(times, weights, length, HARMONICS))
+    eighth = quarter / 2
+    sums = _sums(times, weights, eighth, (1, 2))
+
+    def fit(at: float) -> float:
+        return sum(real * math.cos(2 * math.pi * harmonic * at / eighth)
+                   + imaginary * math.sin(2 * math.pi * harmonic * at / eighth)
+                   for harmonic, (real, imaginary) in zip((1, 2), sums))
+
+    phase = max((eighth * step / 64 for step in range(64)), key=fit)
+    on = sum(1 for time in pulses if abs(((time - phase) / eighth + 0.5) % 1 - 0.5) <= ON_GRID)
+    if on < KEPT * len(pulses):
         return None
-    return [start + slope * index for index in range(len(pulses))]
+    first = round((pulses[0] - phase) / eighth)
+    last = round((pulses[-1] - phase) / eighth)
+    return [phase + index * eighth for index in range(first, last + 1)]
+
+
+def _sums(times: list[float], weights: list[float], length: float,
+          harmonics: tuple[int, ...]) -> list[tuple[float, float]]:
+    """For each harmonic, the weighted sum of the onsets as points on a
+    circle that goes round that many times every ``length`` seconds."""
+    sums = [(0.0, 0.0)] * len(harmonics)
+    for time, weight in zip(times, weights):
+        angle = 2 * math.pi * time / length
+        sums = [(real + weight * math.cos(harmonic * angle), imaginary + weight * math.sin(harmonic * angle))
+                for harmonic, (real, imaginary) in zip(harmonics, sums)]
+    return sums
+
+
+def _coherence(times: list[float], weights: list[float], quarter: float, harmonics: tuple[int, ...]) -> float:
+    """How nearly the onsets fall on a grid of this quarter note divided by
+    each of ``harmonics``."""
+    return sum(real * real + imaginary * imaginary for real, imaginary in _sums(times, weights, quarter, harmonics))
 
 
 def _longest_steady(pulses: list[float], start: int, tolerance: float) -> int:
@@ -412,12 +486,14 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
 
 
 def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
-               playback: bool = False, period: float | None = None) -> tuple[MidiFile, Timing] | None:
+               playback: bool = False, period: float | None = None,
+               one_tempo: bool = False) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
     per bar; ``steady`` is how much the pulse may wobble and still be taken
-    for one tempo.  ``period`` (seconds) sets the quarter note to track
-    instead of the one the notes suggest.
+    for one tempo, and ``one_tempo`` takes it for one however it wobbles if
+    the notes keep one (see ``_one_tempo``).  ``period`` (seconds) sets the
+    quarter note to track instead of the one the notes suggest.
 
     With ``playback`` the beat only has to play the notes back as they were
     played: a pulse that is not one tempo but a few steady stretches is
@@ -444,6 +520,8 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
         return None
     pulses = _on_the_pulse(pulses, notes)
     fitted = _steady(pulses, steady)
+    if fitted is None and one_tempo:
+        fitted = _one_tempo(pulses, times, weights)
     is_steady = fitted is not None
     pieces = 0
     if not is_steady and playback:
