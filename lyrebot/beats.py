@@ -11,7 +11,8 @@ music's own beat from the notes alone:
 2. Pulse: the eighth notes of that beat, followed by dynamic programming over
    an onset envelope (Ellis 2007), twice: the second pass measures each step
    against the local tempo the first found, so tempo changes are followed.
-   When the pulse turns out steady, one tempo is fitted through it instead.
+   When the pulse turns out steady, one tempo is fitted through it instead;
+   for playing back, so is each of a few steady stretches it may keep.
 3. Meter: how the eighths group, two to a beat (2/4, 3/4, 4/4) or three
    (6/8, 12/8), and how many beats make a bar, from where bass notes, long
    notes and chord changes come round again.
@@ -32,6 +33,8 @@ SLOWEST, FASTEST = 40.0, 220.0  # BPM of the quarter-note beat
 PREFERRED = 100.0  # BPM the tempo choice leans towards
 TIGHTNESS = 100.0  # how strongly the pulse keeps its tempo
 STEADY = 0.04  # pulse intervals varying less than this (relative) count as one tempo
+STRETCH = 48  # pulses (eighths, six bars of 4/4) a steady stretch must last
+STRETCHED = 0.9  # share of the pulses steady stretches must cover to be used instead of following each pulse
 MEND = 6.0  # what adding or dropping a pulse costs, in standardized accents
 PPQ = 960
 
@@ -43,6 +46,7 @@ class Timing:
     steady: bool
     numerator: int
     denominator: int
+    stretches: int = 0  # when not steady as a whole: the steady stretches it was fitted as, 0 if followed
 
     @property
     def signature(self) -> str:
@@ -256,6 +260,61 @@ def _steady(pulses: list[float], tolerance: float = STEADY) -> list[float] | Non
     return [start + slope * index for index in range(len(pulses))]
 
 
+def _longest_steady(pulses: list[float], start: int, tolerance: float) -> int:
+    """The furthest ``end`` for which ``pulses[start:end]`` keep one tempo,
+    or ``start`` when not even the first ``STRETCH`` of them do."""
+    count = len(pulses)
+
+    def fits(end: int) -> bool:
+        return _steady(pulses[start:end], tolerance) is not None
+
+    end = start + STRETCH
+    if end > count or not fits(end):
+        return start
+    step = STRETCH
+    while end < count and fits(min(count, end + step)):
+        end, step = min(count, end + step), 2 * step
+    low, high = end, min(count, end + step)  # low fits; high, if beyond it, does not
+    while high - low > 1:
+        middle = (low + high) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle
+    return low
+
+
+def _steady_stretches(pulses: list[float], tolerance: float = STEADY) -> tuple[list[float], int] | None:
+    """The pulses refitted as steady stretches, each with a tempo of its own,
+    and how many there are; or None unless such stretches cover nearly all
+    the pulses (``STRETCHED``).
+
+    A piece in two tempos, or one that holds still for a moment, is not
+    steady as a whole, and followed pulse by pulse its tempo would jitter
+    where the playing keeps time.  Each stretch grows from where the last
+    ended for as long as one tempo still fits it, and must last ``STRETCH``
+    pulses; pulses between stretches (a ritardando, a pause, playing that
+    keeps no tempo) stay as they were followed.
+    """
+    count = len(pulses)
+    refitted: list[float] = []
+    covered = stretches = 0
+    start = 0
+    while start < count:
+        end = _longest_steady(pulses, start, tolerance)
+        if end - start >= STRETCH:
+            refitted += _steady(pulses[start:end], tolerance) or pulses[start:end]
+            covered += end - start
+            stretches += 1
+            start = end
+        else:
+            refitted.append(pulses[start])
+            start += 1
+    if not stretches or covered < STRETCHED * count:
+        return None
+    return refitted, stretches
+
+
 def _standard(values: list[float]) -> list[float]:
     mean = sum(values) / len(values)
     spread = math.sqrt(sum((value - mean) ** 2 for value in values) / len(values)) or 1.0
@@ -344,12 +403,20 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
     return group, span // group, (span - places[0]) % span, mended
 
 
-def find_beats(midi: MidiFile, meter: int | None = None,
-               steady: float = STEADY) -> tuple[MidiFile, Timing] | None:
+def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
+               playback: bool = False) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
     per bar; ``steady`` is how much the pulse may wobble and still be taken
-    for one tempo."""
+    for one tempo.
+
+    With ``playback`` the beat only has to play the notes back as they were
+    played: a pulse that is not one tempo but a few steady stretches is
+    fitted as those instead of followed, and no pulse is ever added or
+    dropped to square the bars.  Mending the bars that way turns a pulse the
+    tracker slipped into a bar of a wrong tempo, which is heard; a bar line
+    in the wrong place is not.
+    """
     seconds = _seconds_of(midi)
     pitched = [note for note in midi.notes if note.channel != 9]
     if len(pitched) < 8:
@@ -368,9 +435,12 @@ def find_beats(midi: MidiFile, meter: int | None = None,
         return None
     pulses = _on_the_pulse(pulses, notes)
     fitted = _steady(pulses, steady)
-    steady = fitted is not None
+    is_steady = fitted is not None
+    pieces = 0
+    if not is_steady and playback:
+        fitted, pieces = _steady_stretches(pulses, steady) or (None, 0)
     pulses = fitted or pulses
-    group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not steady)
+    group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not (is_steady or playback))
 
     first_gap, last_gap = pulses[1] - pulses[0], pulses[-1] - pulses[-2]
 
@@ -402,6 +472,6 @@ def find_beats(midi: MidiFile, meter: int | None = None,
     rewritten.sort(key=lambda note: (note.start, note.pitch, note.track, note.channel))
     signature = (group * per_bar, 8) if group == 3 else (per_bar, 4)
     gaps = sorted(later - earlier for earlier, later in zip(pulses, pulses[1:]))
-    timing = Timing(30.0 / gaps[len(gaps) // 2], steady, *signature)
+    timing = Timing(30.0 / gaps[len(gaps) // 2], is_steady, *signature, stretches=pieces)
     return (MidiFile(PPQ, tuple(rewritten), tuple(tempos), ((0, *signature),), midi.track_names, midi.programs),
             timing)

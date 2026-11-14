@@ -971,7 +971,12 @@ def _numbers(parts: list[Part]) -> str:
 
 
 def describe_timing(timing: Timing) -> str:
-    pace = "速度平稳" if timing.steady else "速度有起伏，逐拍跟随"
+    if timing.steady:
+        pace = "速度平稳"
+    elif timing.stretches:
+        pace = f"速度分 {timing.stretches} 段各自平稳，段与段之间逐拍跟随"
+    else:
+        pace = "速度有起伏，逐拍跟随"
     return f"节拍是从音符推断的：约每分钟 {timing.bpm:.0f} 拍（四分音符），{pace}，{timing.signature} 拍"
 
 
@@ -1048,7 +1053,7 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     grid = _grid(midi)
     timing: Timing | None = None
     if beats == "notes" or (beats == "auto" and needs_beats(midi, grid)):
-        found = find_beats(midi, meter)
+        found = find_beats(midi, meter, playback=True)
         if found:
             midi, timing = found
             grid = _grid(midi)

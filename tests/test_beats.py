@@ -1,4 +1,5 @@
 from collections import Counter
+import math
 import random
 import unittest
 
@@ -102,6 +103,54 @@ class FindingTheBeat(unittest.TestCase):
 
     def test_too_few_notes(self):
         self.assertIsNone(beats.find_beats(parse_midi(song((0, [(0, 1, 60), (1, 2, 62)])))))
+
+
+def groove(bars=40, bpm=90.0, pause_at=None, pause=0.0, drift=0.0, period=20.0):
+    """A clean 4/4 groove (a tune in quarters, eighths between, a bass note
+    per bar) as a transcription writes it, with a pause before bar
+    ``pause_at`` or a tempo swaying ``drift`` (relative) every ``period``
+    seconds; and the times of its onsets."""
+    def when(beat):
+        time = 0.5 + beat * 60 / bpm
+        time += drift * period / (2 * math.pi) * math.sin(2 * math.pi * time / period)
+        return time + (pause if pause_at is not None and beat >= pause_at * 4 else 0.0)
+    played = []
+    for bar in range(bars):
+        for beat in range(4):
+            at = bar * 4 + beat
+            played.append((when(at), when(at) + 0.3, 72 + (0, 4, 7, 4)[beat]))
+            played.append((when(at + 0.5), when(at + 0.5) + 0.2, 67))
+        played.append((when(bar * 4), when(bar * 4 + 4), 36))
+    midi = parse_midi(smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])]))
+    return midi, sorted(start for start, _, _ in played)
+
+
+class SteadyStretches(unittest.TestCase):
+    def played_back(self, retimed, times):
+        """How far, at most, the rewritten notes fall from when they were played."""
+        seconds = beats._seconds_of(retimed)
+        back = sorted(seconds(note.start) for note in retimed.notes)
+        return max(abs(a - back[0] + times[0] - b) for a, b in zip(back, times))
+
+    def test_a_steady_piece_that_stops_once_keeps_its_tempo_on_either_side(self):
+        midi, times = groove(pause_at=20, pause=0.5)
+        self.assertFalse(beats.find_beats(midi)[1].steady)  # as a whole it is not one tempo
+        retimed, timing = beats.find_beats(midi, playback=True)
+        self.assertEqual(timing.stretches, 2)
+        self.assertAlmostEqual(timing.bpm, 90, delta=1)
+        self.assertLessEqual(len({tempo for _, tempo in retimed.tempos}), 3)  # 90, and what the stop takes
+        self.assertLess(self.played_back(retimed, times), 0.02)
+
+    def test_a_swaying_tempo_is_still_followed_beat_by_beat(self):
+        midi, times = groove(drift=0.06)
+        retimed, timing = beats.find_beats(midi, playback=True)
+        self.assertFalse(timing.steady)
+        self.assertEqual(timing.stretches, 0)
+        self.assertLess(self.played_back(retimed, times), 0.02)
+
+    def test_one_tempo_is_still_one_tempo(self):
+        midi, _ = groove()
+        self.assertEqual(beats.find_beats(midi, playback=True)[1], beats.find_beats(midi)[1])
 
 
 class WhenToFindIt(unittest.TestCase):
