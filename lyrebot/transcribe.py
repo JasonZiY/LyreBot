@@ -22,6 +22,10 @@ AUDIO_SUFFIXES = (".wav", ".mp3", ".flac", ".m4a", ".ogg")
 CLI = "audiocpp_cli.exe"
 MEMORY_LIMIT = 6 * 1024 ** 3  # bytes; MuScriptor needs about 3.5 GB for a song
 TIMEOUT = 1800.0  # seconds; on the CPU a minute of audio takes about half a minute
+# Every note is heard as a piano.  Left free, MuScriptor spreads one piano over guessed instruments (a
+# trumpet, a saxophone, "program 106"), and the arranger looks for the tune in one of them; the lyre
+# plays every note the same way, so the instrument only ever got in the way.
+INSTRUMENTS = "acoustic_piano"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -91,7 +95,8 @@ def transcribe(audio: Path, target: Path, tools: Tools, cancel: threading.Event 
         for command, backend in tools.attempts:
             try:
                 _run([*command, "--task", "midi", "--family", "muscriptor", "--model", str(tools.model),
-                      "--backend", backend, "--audio", str(wav), "--out", str(out)], work, cancel, "转录")
+                      "--backend", backend, "--audio", str(wav), "--out", str(out),
+                      "--request-option", f"instruments={INSTRUMENTS}"], work, cancel, "转录")
             except TranscribeError as failure:
                 if cancel.is_set():
                     raise

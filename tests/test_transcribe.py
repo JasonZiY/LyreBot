@@ -17,6 +17,7 @@ args = sys.argv[1:]
 out, backend = args[args.index("--out") + 1], args[args.index("--backend") + 1]
 mode = (here / "mode.txt").read_text().strip() if (here / "mode.txt").exists() else "ok"
 (here / "calls.txt").open("a").write(backend + "\\n")
+(here / "options.txt").write_text(" ".join(args[i + 1] for i, a in enumerate(args) if a == "--request-option"))
 if mode == "slow":
     time.sleep(30)
 if mode == "broken" or (mode == "no gpu" and backend == "vulkan"):
@@ -98,6 +99,7 @@ class Transcribing(unittest.TestCase):
         self.assertEqual(self.target.read_bytes(), b"MThd fake midi")
         self.assertEqual(self.calls(), ["vulkan"])
         self.assertEqual(list(self.target.parent.iterdir()), [self.target])
+        self.assertEqual((self.folder / "options.txt").read_text(), "instruments=acoustic_piano")
 
     def test_falls_back_to_the_processor(self):
         self.mode("no gpu")
