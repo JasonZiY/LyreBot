@@ -192,7 +192,7 @@ tools/
 
 ### 速度和效果
 
-用显卡转一首 100 秒的曲子，Small 大约 5 秒，medium 大约 18 秒；Small 只用处理器时大约要音频长度的一半。转录时 Small 占用约 3.5 GB 内存，medium 约 4.7 GB，超过 6 GB 或 30 分钟会自动停止。
+用显卡转一首 100 秒的曲子，Small 大约 5 秒，medium 大约 18 秒；只用处理器时，Small 大约要音频长度的一半，medium 大约 1.6 倍（游戏开着、转录程序优先级最低时测的）。转录时 Small 占用约 3.5 GB 内存，medium 约 4.7 GB，超过 6 GB 或 30 分钟会自动停止。
 
 MuScriptor 会按乐器分开记谱，编配时就能直接挑出旋律所在的乐器。拿《林中晨歌》的游戏原曲（长笛加钢琴，100 秒）来测，节拍认出是 6/8 拍、每分钟约 79 拍，调也认对了，前 16 小节和手写谱几乎一样。整首算下来，不计八度时找回了 77% 的旋律音，编配出的旋律音有 82% 是对的；有几段整体低了一个八度，第 19 到 24 小节有十来个音转错。
 
@@ -225,6 +225,8 @@ lyrebot/timeline.py  拍数 → 秒 → 按下/松开事件
 lyrebot/player.py    按时钟演奏，检查 F8 和前台窗口
 lyrebot/keyboard.py  Windows SendInput，物理扫描码
 lyrebot/app.py       界面
+lyrebot/icons.py     按钮图标，用纯 Python 抗锯齿绘制
+lyrebot/collate.py   中文名按拼音排序，和 Windows 资源管理器一致
 lyrebot/midi.py      读取 MIDI 文件，只用标准库
 lyrebot/arrange.py   把 MIDI 编配成诗琴曲谱
 lyrebot/beats.py     从音符推断节拍、拍号和小节线
