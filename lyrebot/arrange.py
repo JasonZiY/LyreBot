@@ -16,7 +16,9 @@ how people arrange for the lyre by hand:
    chords on the low and middle rows (or keep the lowest line of the source
    accompaniment as a bass line).  A recording keeps the notes its
    accompaniment really played, so the result sounds like what was recorded.
-6. Snap onsets to the beat and write one line per bar.
+6. Snap onsets to the beat and write one line per bar.  A recording's beat
+   is a guess: when its score plays the recording back short, the beat is
+   read again at twice and half its length.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ import re
 import sys
 from typing import Iterable
 
-from .beats import Timing, find_beats
+from .beats import FASTEST, SLOWEST, Timing, find_beats, onset_times
 from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
 from .score import ScoreError, parse_score
 
@@ -66,6 +68,10 @@ MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, 
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 FAR, FAR_HELD = 7, Fraction(4)  # ... except over notes a fifth or more away: then up to its length, at most 4 beats
 DRIFT = 0.04  # seconds the written speeds may let the score run ahead of or behind the source
+OTHER_LEVELS = (2, 0.5)  # other lengths of the beat found to read a recording at, as multiples of it ...
+SHORT = 0.9  # ... when the score of the beat found plays less than this share of the notes in time
+IN_TIME = 0.05  # seconds within which a recording's note played back by its score counts as in time
+CLOSER = 0.005  # how much more of a recording the beat of another length must play in time to be kept
 BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
@@ -1052,14 +1058,72 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     if meter is not None and not 1 <= meter <= 12:
         raise ArrangeError("每小节的拍数应在 1 到 12 之间")
     grid = _grid(midi)
-    timing: Timing | None = None
+    choices = dict(title=title, melody=melody, drop=drop, transpose=transpose, fill=fill,
+                   accompaniment=accompaniment)
     if beats == "notes" or (beats == "auto" and needs_beats(midi, grid)):
+        # The beat found may be half or twice the music's own.  Then its score plays the recording back
+        # short, and a beat twice or half as long is tried as well, the one that plays more of the notes
+        # when they were played being kept.  Only then: a shorter beat always fits a little closer, its
+        # grid being finer, without being the beat.
         found = find_beats(midi, meter, playback=True)
         if found:
-            midi, timing = found
-            grid = _grid(midi)
+            onsets = onset_times(midi)
+            best = _scored(_arrange(*found, **choices), onsets)
+            for level in OTHER_LEVELS:
+                bpm = found[1].bpm / level
+                if best[0] >= SHORT or not SLOWEST <= bpm <= FASTEST:
+                    continue
+                other = find_beats(midi, meter, playback=True, period=60.0 / bpm)
+                if other:
+                    scored = _scored(_arrange(*other, **choices), onsets)
+                    if scored[0] > best[0] + CLOSER:
+                        best = scored
+            return best[1]
     elif meter:
         midi = replace(midi, time_signatures=((0, meter, 4),))
+    return _arrange(midi, None, **choices)
+
+
+def _scored(result: Arrangement, onsets: list[float]) -> tuple[float, Arrangement]:
+    return played_in_time(result.text, onsets), result
+
+
+def played_in_time(text: str, onsets: list[float]) -> float:
+    """The share of ``onsets`` (seconds) that the score plays within
+    ``IN_TIME``, each matched to one onset of the score, with the score's
+    start lined up on them as well as it goes."""
+    score = parse_score(text)
+    clock = score.tempo_map()
+    played = sorted({round(clock.seconds(event.start), 4) for event in score.events if event.strikes})
+    if not onsets or not played:
+        return 0.0
+
+    def errors(offset: float, count: int | None = None) -> list[float]:
+        found = []
+        index = 0
+        for onset in onsets[:count]:
+            at = onset + offset
+            while index < len(played) and played[index] < at - IN_TIME:
+                index += 1
+            if index < len(played) and played[index] <= at + IN_TIME:
+                found.append(played[index] - at)
+                index += 1
+        return found
+
+    # The offset that lines up the most of the first notes, then refined on all of them.
+    offsets = {round(strike - onset, 3) for onset in onsets[:8] for strike in played[:16]}
+    offset = max(sorted(offsets), key=lambda candidate: len(errors(candidate, 60)))
+    found = errors(offset)
+    if found:
+        found = errors(offset + sorted(found)[len(found) // 2])
+    return len(found) / len(onsets)
+
+
+def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Iterable[int],
+             drop: Iterable[int], transpose: int | None, fill: bool, accompaniment: str) -> Arrangement:
+    """The arrangement of a file whose beat is settled: ``timing`` tells how
+    it was found, when it was."""
+    grid = _grid(midi)
     if accompaniment == "auto":
         accompaniment = "keep" if timing else "chords"
     parts = split_parts(midi, grid)

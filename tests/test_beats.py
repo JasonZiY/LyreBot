@@ -4,7 +4,8 @@ import random
 import unittest
 
 from lyrebot import beats
-from lyrebot.arrange import arrange
+from lyrebot.beats import onset_times
+from lyrebot.arrange import arrange, played_in_time
 from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
@@ -166,6 +167,35 @@ class SteadyStretches(unittest.TestCase):
     def test_one_tempo_is_still_one_tempo(self):
         midi, _ = groove()
         self.assertEqual(beats.find_beats(midi, playback=True)[1], beats.find_beats(midi)[1])
+
+
+class BeatLengths(unittest.TestCase):
+    def test_a_beat_read_at_half_its_length_is_read_again(self):
+        """华灯星聚 alternates triplets and eighths, and its beat is first read
+        at half its length, where its score plays back short; read again at
+        its dotted quarter it plays back nearly every note in time."""
+        midi = performed(load_score(find_score(MUSIC, "华灯星聚")), "华灯星聚")
+        onsets = onset_times(midi)
+        result = arrange(midi)
+        self.assertAlmostEqual(beats.find_beats(midi, playback=True)[1].bpm, 88.5, delta=1)
+        self.assertAlmostEqual(result.timing.bpm, 177, delta=1)
+        self.assertEqual(result.timing.signature, "6/8")
+        self.assertGreater(played_in_time(result.text, onsets), 0.95)
+
+    def test_a_beat_that_plays_back_well_is_kept(self):
+        """A score of the beat found that plays back well is not read again,
+        though a shorter beat would fit a little closer still."""
+        score = load_score(find_score(MUSIC, "望月者的心愿"))
+        result = arrange(performed(score, "望月者的心愿"))
+        self.assertAlmostEqual(result.timing.bpm, 99, delta=1)
+
+
+class PlayedInTime(unittest.TestCase):
+    def test_counts_the_notes_played_back_in_time(self):
+        score = "speed=60\na-s-d-f-|z----\n"
+        self.assertEqual(played_in_time(score, [2.0, 3.0, 4.0, 5.0]), 1.0)  # lined up whenever it starts
+        self.assertEqual(played_in_time(score, [2.0, 3.04, 4.0, 5.2]), 0.75)
+        self.assertEqual(played_in_time(score, [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5]), 0.5)
 
 
 class WhenToFindIt(unittest.TestCase):

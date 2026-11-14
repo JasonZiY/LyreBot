@@ -89,6 +89,14 @@ def _onsets(notes: list[tuple[float, float, int]]) -> tuple[list[float], list[fl
     return times, [math.log1p(weight) for weight in weights]
 
 
+def onset_times(midi: MidiFile) -> list[float]:
+    """When, in seconds, the file's pitched notes start, notes within 30 ms
+    taken as one onset."""
+    seconds = _seconds_of(midi)
+    notes = [(seconds(note.start), seconds(note.start), note.pitch) for note in midi.notes if note.channel != 9]
+    return _onsets(notes)[0] if notes else []
+
+
 def _duple_fit(times: list[float], weights: list[float], period: float) -> float:
     """How much of the music moves in plain subdivisions of this beat.
 

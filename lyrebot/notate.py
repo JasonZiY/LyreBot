@@ -18,7 +18,8 @@ keys at the same moments; voices and the written tempo are only a means.
    few ways, more or less ready to call it steady, and the reading that
    plays back most faithfully is kept; if that is still short, speeds may
    also change inside a bar, and the beat is also read at three quarters
-   and one and a half times its length (triplets make either look like it).
+   and one and a half times its length (triplets make either look like it),
+   and at half and twice its length.
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ REACH = 2.0  # beats either side of a beat whose onsets set its time
 ONE_SIDED = 2.0  # how much better a one-sided fit must be to win over a centred one
 REFINE = 0.035  # seconds an onset may be written off from where it was pressed before it moves
 SUBDIVISIONS = (1, 2, 4, 3, 6, 8, 12, 16, 24)  # of a beat, coarsest first
-TRIPLET_LEVELS = (0.75, 1.5)  # other lengths of the beat found to try, when it plays back short
+OTHER_LEVELS = (0.75, 1.5, 0.5, 2)  # other lengths of the beat found to try, when it plays back short
 SOURCE_TICKS = 1000  # per quarter note at 120 BPM: half a millisecond
 TITLE = "# 由键盘演奏记录"
 
@@ -229,7 +230,9 @@ def notate(presses: Iterable[tuple[float, str]], title: str = "") -> Notation:
     faithfully is kept (the strict one on a tie: its tempo follows the playing).
     If that is still short, the beat is also read at three quarters and at
     one and a half times its length: playing full of triplets passes for a
-    beat a third too slow or too fast as readily as for the right one.
+    beat a third too slow or too fast as readily as for the right one.  So
+    is it at half and twice its length, which a tempo that keeps changing
+    (as a recording's score may) can pass for.
     """
     presses = sorted((float(at), key) for at, key in presses if key in KEYS)
     if not presses:
@@ -247,7 +250,7 @@ def notate(presses: Iterable[tuple[float, str]], title: str = "") -> Notation:
     read(None)
     if best.faithful < SPLIT_BELOW and best.timing:
         found = 60.0 / best.timing.bpm
-        for ratio in TRIPLET_LEVELS:
+        for ratio in OTHER_LEVELS:
             read(found * ratio)
     return best
 
