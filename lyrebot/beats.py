@@ -404,11 +404,12 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
 
 
 def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
-               playback: bool = False) -> tuple[MidiFile, Timing] | None:
+               playback: bool = False, period: float | None = None) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
     per bar; ``steady`` is how much the pulse may wobble and still be taken
-    for one tempo.
+    for one tempo.  ``period`` (seconds) sets the quarter note to track
+    instead of the one the notes suggest.
 
     With ``playback`` the beat only has to play the notes back as they were
     played: a pulse that is not one tempo but a few steady stretches is
@@ -423,7 +424,7 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
         return None
     notes = sorted((seconds(note.start), seconds(max(note.end, note.start)), note.pitch) for note in pitched)
     times, weights = _onsets(notes)
-    period = _tempo(times, weights)
+    period = period or _tempo(times, weights)
     if period is None:
         return None
     length = notes[-1][1] + period

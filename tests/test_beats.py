@@ -95,6 +95,21 @@ class FindingTheBeat(unittest.TestCase):
         bass = sorted(note.start for note in retimed.notes if note.pitch == 36)
         self.assertEqual({tick % (4 * beats.PPQ) for tick in bass}, {0})  # every bass note on a downbeat
 
+    def test_a_given_beat_is_tracked(self):
+        """A tune in eighth-note triplets at 100 BPM reads as well as 6/8 at
+        75; a period given is tracked instead of the one the notes suggest."""
+        played = []
+        for bar in range(16):
+            for beat in range(4):
+                at = 0.5 + (bar * 4 + beat) * 0.6
+                played += [(at + k * 0.2, at + k * 0.2 + 0.15, 72 + (0, 4, 7)[k] + beat % 2 * 2) for k in range(3)]
+            played.append((0.5 + bar * 2.4, 0.5 + bar * 2.4 + 2.4, 36))
+        midi = parse_midi(smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])]))
+        self.assertAlmostEqual(beats.find_beats(midi)[1].bpm, 75, delta=1)
+        given = beats.find_beats(midi, period=0.6)[1]
+        self.assertAlmostEqual(given.bpm, 100, delta=1)
+        self.assertEqual(given.signature, "4/4")
+
     def test_waltz_and_six_eight(self):
         for name, wanted in (("风息的离别诗", "3/4"), ("夜诞的花冠", "6/8")):
             with self.subTest(name):

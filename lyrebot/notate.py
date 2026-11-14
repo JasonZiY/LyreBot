@@ -17,7 +17,8 @@ keys at the same moments; voices and the written tempo are only a means.
 6. The score is played back against the presses.  The beat is read in a
    few ways, more or less ready to call it steady, and the reading that
    plays back most faithfully is kept; if that is still short, speeds may
-   also change inside a bar.
+   also change inside a bar, and the beat is also read at three quarters
+   and one and a half times its length (triplets make either look like it).
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ REACH = 2.0  # beats either side of a beat whose onsets set its time
 ONE_SIDED = 2.0  # how much better a one-sided fit must be to win over a centred one
 REFINE = 0.035  # seconds an onset may be written off from where it was pressed before it moves
 SUBDIVISIONS = (1, 2, 4, 3, 6, 8, 12, 16, 24)  # of a beat, coarsest first
+TRIPLET_LEVELS = (0.75, 1.5)  # other lengths of the beat found to try, when it plays back short
 SOURCE_TICKS = 1000  # per quarter note at 120 BPM: half a millisecond
 TITLE = "# 由键盘演奏记录"
 
@@ -78,10 +80,11 @@ def _clusters(presses: list[tuple[float, str]]) -> list[list[tuple[float, str]]]
     return clusters
 
 
-def _positions(clusters: list[list[tuple[float, str]]],
-               steady: float) -> tuple[MidiFile, list[Fraction], Timing | None]:
+def _positions(clusters: list[list[tuple[float, str]]], steady: float,
+               period: float | None = None) -> tuple[MidiFile, list[Fraction], Timing | None]:
     """The beat position of every onset, and the MIDI file whose tempo map and
-    bars they are measured against."""
+    bars they are measured against.  ``period`` (seconds) sets the beat to
+    track instead of the one the onsets suggest."""
     starts = [cluster[0][0] for cluster in clusters]
     notes = []
     for index, cluster in enumerate(clusters):
@@ -91,7 +94,7 @@ def _positions(clusters: list[list[tuple[float, str]]],
                               PITCH_OF[key], 64, index, 0))
     notes.sort(key=lambda note: (note.start, note.pitch, note.track))
     source = MidiFile(SOURCE_TICKS, tuple(notes), ((0, 500_000),), (), (), {})
-    found = find_beats(source, steady=steady)
+    found = find_beats(source, steady=steady, period=period)
     if found:
         midi, timing = found
         where: dict[int, Fraction] = {}
@@ -224,16 +227,28 @@ def notate(presses: Iterable[tuple[float, str]], title: str = "") -> Notation:
     The beat can be read as one steady tempo more or less readily; both
     readings are written out and the one that plays the presses back more
     faithfully is kept (the strict one on a tie: its tempo follows the playing).
+    If that is still short, the beat is also read at three quarters and at
+    one and a half times its length: playing full of triplets passes for a
+    beat a third too slow or too fast as readily as for the right one.
     """
     presses = sorted((float(at), key) for at, key in presses if key in KEYS)
     if not presses:
         raise NotateError("没有记下诗琴的按键")
     clusters = _clusters(presses)
     best: Notation | None = None
-    for steady in (beats.STEADY, STEADY, 0.0):
-        found = _write(presses, clusters, title, steady)
-        if best is None or found.faithful > best.faithful + 0.005:
-            best = found
+
+    def read(period: float | None) -> None:
+        nonlocal best
+        for steady in (beats.STEADY, STEADY, 0.0):
+            found = _write(presses, clusters, title, steady, period)
+            if best is None or found.faithful > best.faithful + 0.005:
+                best = found
+
+    read(None)
+    if best.faithful < SPLIT_BELOW and best.timing:
+        found = 60.0 / best.timing.bpm
+        for ratio in TRIPLET_LEVELS:
+            read(found * ratio)
     return best
 
 
@@ -279,8 +294,8 @@ def faithfulness(text: str, presses: list[tuple[float, str]]) -> float:
 
 
 def _write(presses: list[tuple[float, str]], clusters: list[list[tuple[float, str]]], title: str,
-           steady: float) -> Notation:
-    midi, positions, timing = _positions(clusters, steady)
+           steady: float, period: float | None = None) -> Notation:
+    midi, positions, timing = _positions(clusters, steady, period)
     starts_at = [cluster[0][0] for cluster in clusters]
     if timing:
         grid = Grid(sorted(positions), Fraction(1, midi.ticks_per_beat))
