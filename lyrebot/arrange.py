@@ -1084,6 +1084,11 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
     bars = _bars(midi, end)
     _describe(usable, bars)
     chosen = [part for part in usable if part.number in wanted] or [pick_melody(usable)]
+    if timing and not wanted:
+        # A transcription's instruments are the model's guesses, and one tune is often heard partly as
+        # one and partly as another (林中晨歌's flute, partly as guitar): there, the melody is the top
+        # line of every part but the bass.
+        chosen += [part for part in usable if part not in chosen and not OTHER_WORDS.search(part.name)]
     for part in usable:
         part.role = "旋律" if part in chosen else "伴奏"
 

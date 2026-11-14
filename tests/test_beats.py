@@ -9,9 +9,9 @@ from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
-    from .test_arrange import MUSIC, PITCH_OF, notes, signature, smf, song, tempo, written_scores
+    from .test_arrange import MUSIC, PITCH_OF, name as track_name, notes, signature, smf, song, tempo, written_scores
 except ImportError:
-    from test_arrange import MUSIC, PITCH_OF, notes, signature, smf, song, tempo, written_scores
+    from test_arrange import MUSIC, PITCH_OF, name as track_name, notes, signature, smf, song, tempo, written_scores
 
 
 def bar_starts(score):
@@ -179,6 +179,29 @@ class WhenToFindIt(unittest.TestCase):
         kept = {PITCH_OF[key] % 12 for event in parse_score(result.text).events if event.part == 1
                 for key in event.keys}
         self.assertLessEqual(kept, source)
+
+    def test_a_tune_split_between_two_guessed_instruments_stays_one_melody(self):
+        """A transcription hears one tune partly as a flute and partly as a
+        guitar; the melody is still the whole tune, and the bass stays under it."""
+        tune = [72 + (0, 2, 4, 5, 7, 5, 4, 2)[index % 8] + 12 * (index % 16 >= 8) for index in range(48)]
+        beat = 60 / 84
+        flute = [(index, pitch) for index, pitch in enumerate(tune) if index // 4 % 2 == 0]
+        guitar = [(index, pitch) for index, pitch in enumerate(tune) if index // 4 % 2 == 1]
+
+        def track(label, channel, items, length=0.6):
+            return [(0, 0, track_name(label))] + notes(channel, [(round((0.3 + at * beat) * 960),
+                                                            round((0.3 + at * beat + length * beat) * 960), pitch)
+                                                           for at, pitch in items])
+        bass = [(index * 2, 48 + (0, 7, 5, 7)[index % 4]) for index in range(24)]
+        midi = parse_midi(smf([[], track("flutes", 0, flute), track("acoustic guitar", 1, guitar),
+                               track("electric bass", 2, bass, 1.8)]))
+        result = arrange(midi)
+        self.assertIsNotNone(result.timing)
+        self.assertEqual({part.name: part.role for part in result.parts},
+                         {"flutes": "旋律", "acoustic guitar": "旋律", "electric bass": "伴奏"})
+        melody = [max(PITCH_OF[key] for key in event.keys) % 12
+                  for event in parse_score(result.text).events if event.part == 0 and event.strikes]
+        self.assertGreaterEqual(common_length([pitch % 12 for pitch in tune], melody), 0.95 * len(tune))
 
     def test_the_bar_can_be_fixed_by_hand(self):
         result = arrange(performed(self.score, "c"), meter=4)
