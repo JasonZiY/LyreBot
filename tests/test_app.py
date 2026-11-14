@@ -6,7 +6,7 @@ import time
 import unittest
 
 from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio, song_list,
-                         pending_midi, recording_name)
+                         pending_midi, recording_name, score_name)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_arrange import song
@@ -80,7 +80,18 @@ class Folders(unittest.TestCase):
         self.add_midi("旧歌.MIDI")
         (self.scores / "旧歌.txt").write_text("speed=60\na-\n", encoding="utf-8")
         (self.midi / "说明.txt").write_text("not a MIDI file", encoding="utf-8")
+        self.add_midi("老歌.mid")
+        (self.scores / "老歌-MIDI.txt").write_text("speed=60\na-\n", encoding="utf-8")
         self.assertEqual(pending_midi(self.midi, self.scores, {}), [new])
+
+    def test_a_midi_file_makes_a_midi_score_and_a_recording_keeps_its_name(self):
+        self.assertEqual(score_name(self.add_midi("飞鼠进行曲.mid")), "飞鼠进行曲-MIDI")
+        self.assertEqual(score_name(self.add_midi("Literature-MIDI.mid")), "Literature-MIDI")
+        self.assertEqual(score_name(self.add_midi("飞鼠进行曲-录音.mid")), "飞鼠进行曲-录音")  # its audio is gone
+        self.add_audio("录音 0101-1200.wav")
+        self.assertEqual(score_name(self.add_midi("录音 0101-1200.mid")), "录音 0101-1200")
+        self.add_audio("别人的歌.MP3")
+        self.assertEqual(score_name(self.add_midi("别人的歌.mid")), "别人的歌")  # transcribed from that MP3
 
     def test_files_still_copying_and_known_failures_wait(self):
         fresh = self.add_midi("fresh.mid", age=0)
@@ -283,6 +294,7 @@ class Folders(unittest.TestCase):
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")
         self.assertEqual(midi_for(self.scores / "literature.txt", self.midi), source)
+        self.assertEqual(midi_for(self.scores / "Literature-MIDI.txt", self.midi), source)
         self.assertIsNone(midi_for(self.scores / "别的.txt", self.midi))
         self.assertIsNone(midi_for(self.scores / "a.txt", self.root / "missing"))
 
@@ -296,7 +308,7 @@ class Folders(unittest.TestCase):
         app.arrange_next()  # the broken file sorts first and fails
         self.assertIn("无法编配", app.status_label.cget("text"))
         app.arrange_next()
-        target = self.scores / "曲子.txt"
+        target = self.scores / "曲子-MIDI.txt"
         self.assertTrue(target.exists())
         self.assertEqual(app.selected(), target)
         root.update()  # the selection event that follows must not wipe the note
@@ -307,7 +319,7 @@ class Folders(unittest.TestCase):
         app.select(target)  # the note was for that moment only
         self.assertNotIn("编配好", app.status_label.cget("text"))
         app.arrange_next()  # nothing left: the failure is not retried, the score is not redone
-        self.assertEqual(sorted(path.name for path in self.scores.iterdir()), ["另一首.txt", "曲子.txt"])
+        self.assertEqual(sorted(path.name for path in self.scores.iterdir()), ["另一首.txt", "曲子-MIDI.txt"])
 
         from unittest import mock
         arranged = target.read_text(encoding="utf-8")

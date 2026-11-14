@@ -38,6 +38,7 @@ BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
 FOLDER = "folder:"  # the list's id for a folder row; songs have their index as id
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
+MIDI_FILE_SUFFIX = "-MIDI"  # and the score arranged from a MIDI file of it, 飞鼠进行曲.mid, as 飞鼠进行曲-MIDI
 NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
             "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
             "下载地址和放法见 README 的「从录音生成曲谱」。")
@@ -150,9 +151,24 @@ def arranged_name(score: Path) -> str | None:
     return first[len(ARRANGED):].strip().casefold() or None
 
 
+def score_name(midi: Path) -> str:
+    """The name of the score arranged from ``midi``.
+
+    A transcribed recording keeps its own name, already 曲名-录音: it has
+    audio of the same name beside it, or ends in -录音.  Any other MIDI file
+    was put in the folder as it is, so its score is called 曲名-MIDI.
+    """
+    stem = midi.stem
+    if stem.casefold().endswith((RECORDING_SUFFIX, MIDI_FILE_SUFFIX.casefold())):
+        return stem
+    if any(path.stem.casefold() == stem.casefold() for path in audio_files(midi.parent)):
+        return stem
+    return stem + MIDI_FILE_SUFFIX
+
+
 def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], now: float | None = None) -> list[Path]:
-    """MIDI files that have no score yet: none of the same name, and none
-    arranged from them and renamed since.
+    """MIDI files that have no score yet: none of the same name or of the
+    name it would get, and none arranged from them and renamed since.
 
     A score that already exists is never replaced, so edits to it are safe.
     Files still being copied (changed in the last ``SETTLE`` seconds) and files
@@ -163,7 +179,7 @@ def pending_midi(midi_dir: Path, scores_dir: Path, failed: dict[Path, float], no
     names = score_names(scores_dir)
     found = []
     for path in midi_files(midi_dir):
-        if path.stem.casefold() in names or path.name.casefold() in arranged:
+        if path.stem.casefold() in names or score_name(path).casefold() in names or path.name.casefold() in arranged:
             continue
         try:
             stamp = path.stat().st_mtime
@@ -222,14 +238,14 @@ def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
 
 def midi_for(score: Path, midi_dir: Path) -> Path | None:
     """The MIDI file a score was arranged from: the one its first line names,
-    or else the one of the same name."""
+    or else the one whose score would have this name."""
     files = midi_files(midi_dir)
     named = arranged_name(score)
     for path in files:
         if path.name.casefold() == named:
             return path
     for path in files:
-        if path.stem.casefold() == score.stem.casefold():
+        if score.stem.casefold() in (path.stem.casefold(), score_name(path).casefold()):
             return path
     return None
 
@@ -646,7 +662,7 @@ class App:
             self.root.after(50, self.arrange_next)
 
     def arrange_one(self, source: Path, done: str = "刚从 MIDI 编配好") -> None:
-        target = self.scores_dir / f"{source.stem}.txt"
+        target = self.scores_dir / f"{score_name(source)}.txt"
         self.say(f"正在编配 {source.name}…")
         self.root.update_idletasks()
         try:
