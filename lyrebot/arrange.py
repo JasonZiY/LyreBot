@@ -179,12 +179,13 @@ class Grid:
         written = [_written(onset, tick) for onset in onsets]
         self.exact = bool(onsets) and sum(1 for place in written if place is not None) >= 0.9 * len(onsets)
         # A beat mixing unrelated subdivisions (a flourish placed by hand, a
-        # glissando) is free time: all of it goes to the nearest 32nd.
+        # glissando) is free time: all of it goes to the nearest 32nd.  Sixteenth
+        # triplets beside 32nds (24 steps) are still written exactly.
         subdivisions: dict[int, int] = defaultdict(lambda: 1)
         for onset, place in zip(onsets, written):
             beat = math.floor(place if place is not None else onset)
             subdivisions[beat] = math.lcm(subdivisions[beat], place.denominator if place is not None else 8)
-        self.free = {beat for beat, steps in subdivisions.items() if steps not in WRITTEN or steps > 16}
+        self.free = {beat for beat, steps in subdivisions.items() if steps not in WRITTEN or steps > 24}
         by_beat: dict[int, list[Fraction]] = defaultdict(list)
         for onset in onsets:
             beat = math.floor(onset + Fraction(1, 8))
