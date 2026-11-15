@@ -1,0 +1,83 @@
+# 由 MIDI 自动编配：织于雾中的吟咏-录音.mid
+# 原曲中途转调，各段分别移调，94% 的音落在白键上
+# 第 1–34 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 第 35–52 小节相当于 E 大调 / C♯ 小调（4 个升号），降 4 个半音移成 C 大调 / A 小调
+# 第 53–74 小节相当于 A 大调 / F♯ 小调（3 个升号），升 3 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 135 拍（四分音符），速度平稳，4/4 拍
+speed=135
+0.g.h.q.e.h.e.q.|0----
+f.g.h.q.e.h.e.q.|0----
+f.g.h.q.e.h.e.q.|0----
+f.g.h.q.e.h.e.q.|0----
+f.g.h.q.e.h.e.q.|va-f-a.f.a.m.
+s.g.h.j.w.j.w.j.|b.s-m-s.j.s.
+a.g.h.q.e.g.h.q.|bn-a-g.a.n.g.
+a.g.h.q.t.q.t.q.|z.m-g-m.g.m.
+f.g.h.q.e.h.e.q.|va-f-a.f.a.m.
+s.g.h.j.w.j.w.j.|b.s-m-s.j.s.
+a.g.h.q.e-e.q.|n-d.a.s.g.s.d.
+0-h.q.t.q.t.q.|ah.g-d.a.g.d.g.  # 改动 ♯1→q ♯1→q 伴奏♯1→a
+f.g.h.q.r-r.w.|s-n-f.h.f.s.
+d.g.h.j.e.j.e.w.|c.b.b.s.d.g.s.g.  # 改动 ♯5→g 伴奏♯5→b 伴奏♯5→b 伴奏♯5→g 伴奏♯5→g
+d.h.j.q.d.n.d.a.|n-n-0--
+d.h.j.q.e.h.e.w.|n.d-a-d.a.d.
+f.g.h.q.e.h.e.w.|va-f-a.f.a.j.
+s.g.h.j.w.j.w.j.|b.s-m-s.j.s.
+d.h.w.e.w.h.w.h.|n-s-h.s-n.
+d.h.w.e.q.h-h.|n.d-h-d.n.d.  # 改动 ♯1→q
+d.h.q.e.q.h.q-|n-d-h.d-h.  # 改动 ♯1→q ♯1→q ♯1→q
+d.h.q.e.q.h.q.h.|.d-h--.  # 改动 ♯1→q ♯1→q ♯1→q
+h.q.w.r.h.w.h.g.|n-s-.s-.  # 改动 伴奏♭7→n
+g.q.w.e.t-g-|z.a-g-a-a.
+h.q.w.r.y-y.r.|xd-n-d.na.d.f.
+q.q.w.r.q.r.q.r.|v.n-d-n.d.n.
+h.q.w.r.h.w.h.g.|n-s-.s-.  # 改动 伴奏♭7→n
+g.q.w.e.t-g-|z.a-g-a-a.
+h.q.w.r.y-y.r.|xf-n.f.g.a.g.h.
+h.q.w.r.q.r.0-|v.a-h.v.a.h.f.  # 改动 ♯4→r 伴奏♯4→v 伴奏♯4→f
+y.h.w.r.h.w.h.g.|bg-s-.s.0-  # 改动 ♭7→y ♭7→h ♭7→h ♭7→h
+h.q.w.t.y.q.t.y.|n.a-g-a.g-  # 改动 ♯1→q ♯1→q 伴奏♯1→a 伴奏♯1→a
+h.w.e.r.h.w.h.f.|x-s.0-s.0-
+h.q.w.r.y.w.f.h.|n.0-f-n-n.  # 改动 ♯1→q
+m.s.f.g.j.g.j.g.|x-b-m.b-m.  # 转调到 E 大调 / C♯ 小调，从这里起降 4 个半音
+m.s.f.g.j.g.j.g.|x.b-m.m.b.m.b.
+a.f.g.f.a.b.q.g.|z-b-0-.a.
+.d.g.d.q.g.a.g.|z.b-a-b-b.
+d-d-q-q.j.|va.b.n.a.d.bd.d.a.
+.s-j-s.j.s.|b.b.n.a.s.m.s.m.
+g-a-g.a.h.g.|n.b.n.z.d.b.d.a.
+.a-g-a.g.a.|z.b.n.a.d-d.z.
+q-d-q-q.j.|vd.b.n.a.d.bd.d.a.
+.s-j-s.j-|b.b.n.a.s.m.s.ms.
+q-d.q.w.g.w.e.|nad.b.n.a.ms.b.s.a.
+-r.e-b.d-|.bg.d.a.z-c.bn.  # 改动 伴奏♯1→z
+f-0-f-f.s.|xns.v.n.a.v.n.v.x.
+.b-s.c.b.s.b.|c.0-m.0-c.x.  # 改动 ♯5→b ♯5→b ♯5→b
+d-n-d.n.d.a.|cn.n-z.c-c.z.
+a.n-a.d-a.b.|v-.z.c.cn.z.z.  # 改动 伴奏♯4→v
+a-c.z.a-a.m.|cv.b.0-c.b.c.z.
+.x.n.m.0-m.x.|b-.z.x.x.x-
+d.c.n.m.d.n.s.d.|cm--.c-c.  # 转调到 A 大调 / F♯ 小调，从这里起升 3 个半音
+.b.n.d-g.e-|cm.c-m.b.d.d.d.  # 改动 ♯5→b ♯5→n ♯5→g 伴奏♯5→b
+e-h-e.h.e.w.|vdh.b.n.a.d.n.d.ms.
+.g.h.w-w.t.w.|b.b.n.ms.a.s.g.m.
+j--q.w.e.q.|nmd.b-m.a.s.d.a.
+.d-j-d.w.j.|n.b.n.m.s.m.s.m.
+e-h-e.h.e.w.|vdh.b.n.a.d.n.d.ms.
+.g-w-q.t.q.|b.b.n.ms.a.s.g.m.
+q-h-w.g.w.e.|na.b.n.a.ms.b.s.d.
+.q-w.t.r.e-|z.ba.d.z.ng.d.a-  # 改动 ♯1→w 伴奏♯1→z 伴奏♯1→a
+w-w-y.t.r.e.|xf.n.s.f.h.g.f.d.
+.g-d.e.g.j.w.|c.m.s.m.d.m.s.m.  # 改动 ♯5→g ♯5→g
+q.d.s.j.d.s.h.d.|na.c.z.nm.c.x.n.c.
+.n.m.a.d.n.d.a.|v-c.z.c-c.z.  # 改动 伴奏♯4→v
+a-n-d.s.a.m.|v.b-z.c.x.z-
+m.b-m-m.s.m.|b.0--.x-
+n-s.d.s.n.s.a.|c-x.c.x-x.z.  # 改动 ♯1→a 伴奏♯1→z
+.s-a.s.a.s.a.|cn.n.z.cn.n.n.n.n.  # 改动 ♯1→s ♯1→a ♯1→s ♯1→a ♯1→s ♯1→a 伴奏♯1→z
+f.g.h.q.e.h.e.q.|.v---.
+f.g.h.q.e.h.e.q.|----
+f.g.h.q.e.h.e.q.|----
+f-h.q.e.h.e.q.|----

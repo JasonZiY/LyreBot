@@ -52,7 +52,9 @@ KEY_OF = {LOW + 12 * row + step: ROWS[row][degree]
           for row in range(3) for degree, step in enumerate(WHITE)}
 
 NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
-TONIC_NAMES = ("C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
+TONIC_NAMES = ("C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")  # major keys, as usually signed
+MINOR_NAMES = ("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "B♭", "B")  # their relative minors, alike
+SHARPS = (0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5)  # each major key's signature: sharps, or flats below zero
 ACCIDENTALS = {1: "♯1", 3: "♭3", 6: "♯4", 8: "♯5", 10: "♭7"}  # in jianpu, after transposing to C
 FAMILIES = ("钢琴", "色彩打击", "风琴", "吉他", "贝斯", "弦乐", "合奏", "铜管",
             "簧管", "笛", "合成主音", "合成音色", "合成效果", "民族", "打击", "音效")
@@ -65,7 +67,7 @@ OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝�
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
 SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
-KEY_CHANGE = 1.0  # what changing key part way costs, in average bars of notes left on black keys
+KEY_CHANGE = 0.8  # what changing key part way costs, in average bars of notes left on black keys
 MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, not a modulation
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 FAR, FAR_HELD = 7, Fraction(4)  # ... except over notes a fifth or more away: then up to its length, at most 4 beats
@@ -992,7 +994,19 @@ def describe_timing(timing: Timing) -> str:
 def key_name(shift: int) -> str:
     """The scale a transposition brings to C major / A minor."""
     tonic = (-shift) % 12
-    return f"{TONIC_NAMES[tonic]} 大调 / {TONIC_NAMES[(tonic + 9) % 12]} 小调"
+    return f"{TONIC_NAMES[tonic]} 大调 / {MINOR_NAMES[(tonic + 9) % 12]} 小调"
+
+
+def key_signature(shift: int) -> str:
+    """The key signature of the scale a transposition brings to C major, in words."""
+    sharps = SHARPS[(-shift) % 12]
+    return f"{abs(sharps)} 个{'升' if sharps > 0 else '降'}号" if sharps else "没有升降号"
+
+
+def key_text(shift: int) -> str:
+    """相当于 … : the key, its signature, and how it is moved onto the white keys."""
+    moved = f"{moved_text(shift)}移成 C 大调 / A 小调" if shift else "不用移调"
+    return f"{key_name(shift)}（{key_signature(shift)}），{moved}"
 
 
 def moved_text(shift: int) -> str:
@@ -1004,13 +1018,10 @@ def _header(title: str, parts: list[Part], keys: list[tuple[int, int, KeyRegion]
     """``keys`` holds (first bar, last bar, key) with bars numbered as written."""
     lines = [f"{ARRANGED}{title}" if title else ARRANGED.rstrip("：")]
     if len(keys) == 1:
-        shift = keys[0][2].shift
-        moved = f"整体{moved_text(shift)}" if shift else "不用移调"
-        lines.append(f"# 原曲的音阶相当于 {key_name(shift)}，{moved}，{share:.0%} 的音落在白键上")
+        lines.append(f"# 原曲的音阶相当于 {key_text(keys[0][2].shift)}，{share:.0%} 的音落在白键上")
     else:
         lines.append(f"# 原曲中途转调，各段分别移调，{share:.0%} 的音落在白键上")
-        lines += [f"# 第 {first}–{last} 小节相当于 {key_name(key.shift)}，{moved_text(key.shift)}"
-                  for first, last, key in keys]
+        lines += [f"# 第 {first}–{last} 小节相当于 {key_text(key.shift)}" for first, last, key in keys]
     roles: dict[str, list[Part]] = defaultdict(list)
     for part in parts:
         roles[part.role].append(part)
@@ -1259,7 +1270,8 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
     key_bars = [max(bisect_right(starts, key.start) - 1 - first_bar, 0) + 1 for key in keys]
     key_spans = [(first, last, key) for first, last, key
                  in zip(key_bars, [bar - 1 for bar in key_bars[1:]] + [written], keys)]
-    modulations = {first_bar + first - 1: f"转调，从这里起{moved_text(key.shift)}" for first, _, key in key_spans[1:]}
+    modulations = {first_bar + first - 1: f"转调到 {key_name(key.shift)}，从这里起{moved_text(key.shift)}"
+                   for first, _, key in key_spans[1:]}
 
     numerator, denominator = 4, 4
     for tick, top_number, bottom_number in midi.time_signatures:

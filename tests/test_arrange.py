@@ -385,10 +385,23 @@ class Arranging(unittest.TestCase):
         self.assertEqual((result.changes, result.white_share), ([], 1.0))
         bars = bars_of(result.text)
         self.assertEqual(bars[:8], bars[8:])  # both halves land on the same white keys
-        self.assertIn("# 第 1–8 小节相当于 G 大调 / E 小调，升 5 个半音", result.text)
-        self.assertIn("# 第 9–16 小节相当于 B♭ 大调 / G 小调，升 2 个半音", result.text)
+        self.assertIn("# 第 1–8 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调", result.text)
+        self.assertIn("# 第 9–16 小节相当于 B♭ 大调 / G 小调（2 个降号），升 2 个半音移成 C 大调 / A 小调", result.text)
         ninth = [line for line in result.text.splitlines() if not line.startswith(("#", "speed="))][8]
-        self.assertIn("# 转调，从这里起升 2 个半音", ninth)
+        self.assertIn("# 转调到 B♭ 大调 / G 小调，从这里起升 2 个半音", ninth)
+
+    def test_a_recording_that_changes_key_twice_is_moved_in_three_parts(self):
+        """织于雾中的吟咏, recorded: E minor, E major from bar 35, F♯ minor from bar 53.  The
+        last change shows only in D against D♯, so moving it on its own saves less than one
+        average bar of black keys (0.97): the price of a change must stay below that."""
+        from lyrebot.midi import load_midi
+        source = MUSIC.parent / "midi" / "织于雾中的吟咏-录音.mid"
+        if not source.exists():
+            self.skipTest("the recording's MIDI file is not here")
+        text = arrange(load_midi(source)).text
+        self.assertIn("# 第 1–34 小节相当于 G 大调 / E 小调（1 个升号）", text)
+        self.assertIn("# 第 35–52 小节相当于 E 大调 / C♯ 小调（4 个升号）", text)
+        self.assertIn("# 第 53–74 小节相当于 A 大调 / F♯ 小调（3 个升号）", text)
 
     def test_a_few_bars_leaning_to_the_dominant_keep_the_key(self):
         tune = [(i, i + 1, 72 + (0, 2, 4, 5, 7, 5, 4, 2)[i % 8]) for i in range(16)]
