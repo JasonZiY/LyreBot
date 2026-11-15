@@ -29,18 +29,18 @@ d.h.w.e.w.h.w.h.|n-s-h.s-n.
 d.h.w.e.q.h-h.|n.d-h-d.n.d.  # 改动 ♯1→q
 d.h.q.e.q.h.q-|n-d-h.d-h.  # 改动 ♯1→q ♯1→q ♯1→q
 d.h.q.e.q.h.q.h.|.d-h--.  # 改动 ♯1→q ♯1→q ♯1→q
-h.q.w.r.h.w.h.g.|n-s-.s-.  # 改动 伴奏♭7→n
-g.q.w.e.t-g-|z.a-g-a-a.
-h.q.w.r.y-y.r.|xd-n-d.na.d.f.
-q.q.w.r.q.r.q.r.|v.n-d-n.d.n.
-h.q.w.r.h.w.h.g.|n-s-.s-.  # 改动 伴奏♭7→n
-g.q.w.e.t-g-|z.a-g-a-a.
+n.a.s.f.h.s.h.g.|0-x-n.x.n.b.
+b.a.s.d.g-g-|z.z-b-a.b.a.
+n.a.s.f.h-h.f.|xc-n-d.na.d.v.
+a.a.s.f.q.f.q.f.|v.n-c-n.d.n.
+h.q.w.r.y.w.y.t.|n-s-h.s.h.g.  # 改动 伴奏♭7→n
+g.q.w.e.t-t-|z.a-g-a.g.a.
 h.q.w.r.y-y.r.|xf-n.f.g.a.g.h.
 h.q.w.r.q.r.0-|v.a-h.v.a.h.f.  # 改动 ♯4→r 伴奏♯4→v 伴奏♯4→f
-y.h.w.r.h.w.h.g.|bg-s-.s.0-  # 改动 ♭7→y ♭7→h ♭7→h ♭7→h
+y.h.w.r.y-y.t.|bg-s-h.s.h.g.  # 改动 ♭7→y ♭7→h ♭7→y ♭7→y 伴奏♭7→h 伴奏♭7→h
 h.q.w.t.y.q.t.y.|n.a-g-a.g-  # 改动 ♯1→q ♯1→q 伴奏♯1→a 伴奏♯1→a
-h.w.e.r.h.w.h.f.|x-s.0-s.0-
-h.q.w.r.y.w.f.h.|n.0-f-n-n.  # 改动 ♯1→q
+h.w.e.r.y.w.y.r.|x-s-h.s.h.f.
+h.q.w.r.y.w.r.h.|n.0-f-n.f.n.  # 改动 ♯1→q
 m.s.f.g.j.g.j.g.|x-b-m.b-m.  # 转调到 E 大调 / C♯ 小调，从这里起降 4 个半音
 m.s.f.g.j.g.j.g.|x.b-m.m.b.m.b.
 a.f.g.f.a.b.q.g.|z-b-0-.a.
