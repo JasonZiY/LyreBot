@@ -6,7 +6,7 @@ build/
 *.spec
 score/
 midi/*
-!midi/.gitkeep
+!midi/README.md
 !midi/*.mid
 tools/
 jianpu/*
