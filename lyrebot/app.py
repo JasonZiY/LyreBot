@@ -18,6 +18,7 @@ from typing import Callable
 from . import icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .collate import pinyin_key
+from .jianpu import export as export_jianpu
 from .keyboard import Keyboard, foreground_title_and_pid
 from .listen import QUIET, listen
 from .midi import MidiError
@@ -31,6 +32,7 @@ from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
 MIDI_DIR = PROJECT / "midi"
+JIANPU_DIR = PROJECT / "jianpu"
 TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
@@ -325,10 +327,11 @@ class Choice(tk.Label):
 
 class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
-                 tool_dirs: list[Path] | None = None):
+                 tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR):
         self.root = root
         self.scores_dir = scores_dir
         self.midi_dir = midi_dir
+        self.jianpu_dir = jianpu_dir
         self.tool_dirs = TOOL_DIRS if tool_dirs is None else tool_dirs
         self.failed_midi: dict[Path, float] = {}  # MIDI files that could not be arranged, by change time
         self.failed_audio: dict[Path, float] = {}  # audio files that could not be transcribed, likewise
@@ -404,6 +407,7 @@ class App:
         self.menu.add_command(label="打开 MIDI 和录音文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
         self.menu.add_separator()
         self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
+        self.menu.add_command(label="导出简谱", command=self.export_jianpu)
         self.tree.bind("<Button-3>", self.context_menu)
 
         tk.Frame(root, bg=LINE, height=1).pack(fill="x", padx=px(14), pady=(px(6), 0))
@@ -647,7 +651,26 @@ class App:
         chosen = self.selected()
         can = not self.worker and chosen is not None and midi_for(chosen, self.midi_dir) is not None
         self.menu.entryconfigure(3, state="normal" if can else "disabled")
+        self.menu.entryconfigure(4, state="normal" if chosen is not None else "disabled")
         self.menu.tk_popup(event.x_root, event.y_root)
+
+    def export_jianpu(self) -> Path | None:
+        """Write the selected score as 简谱 into the jianpu folder and open it."""
+        score = self.selected()
+        if score is None:
+            return None
+        target = self.jianpu_dir / f"{score.stem}.html"
+        try:
+            export_jianpu(score, target)
+        except (OSError, ScoreError) as error:
+            messagebox.showerror("无法导出简谱", f"{score.name}：{error}", parent=self.root)
+            return None
+        self.say(f"简谱已存进 jianpu 文件夹：{target.name}，在浏览器里可以打印成 PDF")
+        self.open_file(target)
+        return target
+
+    def open_file(self, path: Path) -> None:
+        os.startfile(path)  # type: ignore[attr-defined]
 
     # ---- MIDI ----
     def arrange_next(self) -> None:

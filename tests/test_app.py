@@ -300,6 +300,21 @@ class Folders(unittest.TestCase):
         app.refresh()  # the list is rebuilt; the folder stays closed
         self.assertFalse(tree.item(FOLDER + "ost", "open"))
 
+    def test_the_menu_exports_a_score_as_jianpu(self):
+        from unittest import mock
+        from lyrebot.app import App
+        (self.scores / "小曲.txt").write_text("speed=90\na-s-d-f-|z----\n", encoding="utf-8")
+        root = self.window()
+        app = App(root, self.scores, self.midi, jianpu_dir=self.root / "jianpu")
+        self.assertEqual(app.menu.entrycget(4, "label"), "导出简谱")
+        app.select(self.scores / "小曲.txt")
+        with mock.patch.object(app, "open_file") as opened:
+            target = app.export_jianpu()
+        self.assertEqual(target, self.root / "jianpu" / "小曲.html")
+        self.assertIn("<title>小曲 · 诗琴简谱</title>", target.read_text(encoding="utf-8"))
+        opened.assert_called_once_with(target)
+        self.assertIn("简谱已存进 jianpu 文件夹", app.status_label.cget("text"))
+
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")
         self.assertEqual(midi_for(self.scores / "literature.txt", self.midi), source)

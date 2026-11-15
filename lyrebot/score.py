@@ -44,6 +44,8 @@ class Event:
     strikes: tuple[Strike, ...]  # empty for a rest
     part: int
     line: int
+    graces: int = 0  # how many of the strikes are grace notes before the main one
+    rolled: bool = False  # the main keys are rolled (their strikes after the graces)
 
     @property
     def keys(self) -> tuple[str, ...]:
@@ -105,6 +107,7 @@ class Score:
     tempo: tuple[TempoMark, ...]
     measures: int
     parts: int
+    bars: tuple[Fraction, ...] = ()  # where each measure (line) starts
 
     @property
     def bpm(self) -> float:
@@ -187,7 +190,7 @@ class _Part:
             raise self.error("^ 琶音后面应是至少两个音的和弦")
         return keys
 
-    def event(self) -> tuple[Fraction, tuple[Strike, ...]]:
+    def event(self) -> tuple[Fraction, tuple[Strike, ...], tuple[int, bool]]:
         graces: list[tuple[str, ...]] = []
         held: tuple[str, ...] = ()  # keys struck plainly at the start of a roll
         roll = False
@@ -224,7 +227,7 @@ class _Part:
             strikes += [Strike((key,), main + index * self.roll_ms) for index, key in enumerate(keys)]
         elif keys:
             strikes.append(Strike(keys, main))
-        return duration, tuple(strikes)
+        return duration, tuple(strikes), (len(graces), roll)
 
     def tie(self) -> Fraction:
         """Read ``+<duration>``: extend the previous note without a new press."""
@@ -234,9 +237,11 @@ class _Part:
             raise self.error("+ 后面要写延长的时值，例如 +-")
         return extra
 
-    def items(self, closing: str) -> tuple[list[tuple[Fraction, Fraction, tuple[Strike, ...]]], Fraction]:
-        """Events relative to the start, and their written total length."""
-        found: list[tuple[Fraction, Fraction, tuple[Strike, ...]]] = []
+    def items(self, closing: str) -> tuple[list[tuple[Fraction, Fraction, tuple[Strike, ...], tuple[int, bool]]],
+                                           Fraction]:
+        """Events relative to the start (with how many grace notes lead each
+        and whether it is rolled), and their written total length."""
+        found: list[tuple[Fraction, Fraction, tuple[Strike, ...], tuple[int, bool]]] = []
         offset = Fraction(0)
         while self.peek() != closing:
             if not self.peek():
@@ -251,7 +256,7 @@ class _Part:
                 if total is None:
                     raise self.error("括号组后面要写时值，表示整组一共占多少拍")
                 scale = total / written
-                found += [(offset + at * scale, length * scale, strikes) for at, length, strikes in inner]
+                found += [(offset + at * scale, length * scale, strikes, kind) for at, length, strikes, kind in inner]
                 offset += total
             elif self.peek() == ")":
                 raise self.error("多余的右括号 )")
@@ -259,12 +264,12 @@ class _Part:
                 extra = self.tie()
                 if not found:
                     raise self.error("+ 前面没有可延长的音")
-                at, length, strikes = found[-1]
-                found[-1] = (at, length + extra, strikes)
+                at, length, strikes, kind = found[-1]
+                found[-1] = (at, length + extra, strikes, kind)
                 offset += extra
             else:
-                length, strikes = self.event()
-                found.append((offset, length, strikes))
+                length, strikes, kind = self.event()
+                found.append((offset, length, strikes, kind))
                 offset += length
         return found, offset
 
@@ -303,6 +308,7 @@ def parse_score(text: str) -> Score:
     last_in_part: list[int | None] = []
     parts = 0
     measures = 0
+    bars: list[Fraction] = []
     position = Fraction(0)
     roll_ms, grace_ms = DEFAULT_ROLL_MS, DEFAULT_GRACE_MS
 
@@ -351,20 +357,21 @@ def parse_score(text: str) -> Score:
                 events[index] = replace(events[index], duration=events[index].duration + lead)
                 length += lead
             found, written = reader.items("")
-            for at, duration, strikes in found:
-                events.append(Event(position + length + at, duration, strikes, part, number))
+            for at, duration, strikes, (graces, rolled) in found:
+                events.append(Event(position + length + at, duration, strikes, part, number, graces, rolled))
                 last_in_part[part] = len(events) - 1
             lengths.append(length + written)
         if any(length != lengths[0] for length in lengths):
             detail = "，".join(f"声部 {index + 1} 是 {_beats(length)} 拍" for index, length in enumerate(lengths))
             raise ScoreError(f"{_where(number, None)}：各声部长度不一致（{detail}）")
+        bars.append(position)
         position += lengths[0]
         measures += 1
 
     if not measures:
         raise ScoreError("曲谱里没有小节")
     events.sort(key=lambda event: (event.start, event.part))
-    score = Score(tuple(events), position, tuple(marks), measures, parts)
+    score = Score(tuple(events), position, tuple(marks), measures, parts, tuple(bars))
     if score.duration_seconds > MAX_SECONDS:
         raise ScoreError("曲谱时长超过 24 小时")
     return score
