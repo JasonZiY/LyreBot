@@ -9,3 +9,5 @@ midi/*
 !midi/.gitkeep
 !midi/*.mid
 tools/
+jianpu/*
+!jianpu/README.md
