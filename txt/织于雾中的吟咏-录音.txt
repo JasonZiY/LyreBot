@@ -7,7 +7,7 @@
 # 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
 # 节拍是从音符推断的：约每分钟 135 拍（四分音符），速度平稳，4/4 拍
 speed=135
-0.g.h.q.e.h.e.q.|0----
+f.g.h.q.e.h.e.q.|0----
 f.g.h.q.e.h.e.q.|0----
 f.g.h.q.e.h.e.q.|0----
 f.g.h.q.e.h.e.q.|0----
@@ -60,7 +60,7 @@ a.n-a.d-a.b.|v-.z.c.cn.z.z.  # 改动 伴奏♯4→v
 a-c.z.a-a.m.|cv.b.0-c.b.c.z.
 .x.n.m.0-m.x.|b-.z.x.x.x-
 d.c.n.m.d.n.s.d.|cm--.c-c.  # 转调到 A 大调 / F♯ 小调，从这里起升 3 个半音
-.b.n.d-g.e-|cm.c-m.b.d.d.d.  # 改动 ♯5→b ♯5→n ♯5→g 伴奏♯5→b
+.b.b.d-g.e-|cm.c-m.b.d.d.d.  # 改动 ♯5→b ♯5→b ♯5→g 伴奏♯5→b
 e-h-e.h.e.w.|vdh.b.n.a.d.n.d.ms.
 .g.h.w-w.t.w.|b.b.n.ms.a.s.g.m.
 j--q.w.e.q.|nmd.b-m.a.s.d.a.
@@ -76,7 +76,7 @@ q.d.s.j.d.s.h.d.|na.c.z.nm.c.x.n.c.
 a-n-d.s.a.m.|v.b-z.c.x.z-
 m.b-m-m.s.m.|b.0--.x-
 n-s.d.s.n.s.a.|c-x.c.x-x.z.  # 改动 ♯1→a 伴奏♯1→z
-.s-a.s.a.s.a.|cn.n.z.cn.n.n.n.n.  # 改动 ♯1→s ♯1→a ♯1→s ♯1→a ♯1→s ♯1→a 伴奏♯1→z
+.a-a.a.a.a.a.|cn.n.z.cn.n.n.n.n.  # 改动 ♯1→a ♯1→a ♯1→a ♯1→a ♯1→a ♯1→a 伴奏♯1→z
 f.g.h.q.e.h.e.q.|.v---.
 f.g.h.q.e.h.e.q.|----
 f.g.h.q.e.h.e.q.|----

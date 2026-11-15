@@ -27,7 +27,7 @@ a.d.g.f.w.w.|.b.a.xa.m.bm.
 s.g-g.e.j.|0-.c.z.b.
 q.d.h.g.r.s.|m.a.d.vd.x.m.
 g.w.r.t.w.h.|0-.c.n.f.  # 改动 ♯4→r ♭7→h 伴奏♭7→n 伴奏♯4→f
-j.t.w.q.e.t.|g.s.d.na.dj.a.  # 改动 ♭7→j
+h.t.w.q.e.t.|b.s.d.na.dj.a.  # 改动 ♭7→h
 q.e.~h.*r.*q.|g.j.~a.*x.*n.
 h.y.r.q.u.w.|d.f.a.d.bf.fh.
 r.*j.~w.*g-|j.*s.~bf.*bm-

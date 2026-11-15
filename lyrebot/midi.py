@@ -170,3 +170,78 @@ def load_midi(path: str | Path) -> MidiFile:
     if len(data) > MAX_MIDI_BYTES:
         raise MidiError("MIDI 文件太大（上限 16 MiB）")
     return parse_midi(data)
+
+
+def _varlen_bytes(value: int) -> bytes:
+    groups = [value & 0x7F]
+    value >>= 7
+    while value:
+        groups.append(0x80 | (value & 0x7F))
+        value >>= 7
+    return bytes(reversed(groups))
+
+
+def _ticks_after(seconds: float, midi: MidiFile) -> int:
+    """How many ticks from the start ``seconds`` takes, by the file's tempo map."""
+    tempos = [(tick, tempo) for tick, tempo in midi.tempos if tick > 0]
+    tempo = next((tempo for tick, tempo in midi.tempos if tick == 0), DEFAULT_TEMPO)
+    tick, left = 0, seconds * 1_000_000
+    for change, following in tempos:
+        span = (change - tick) * tempo / midi.ticks_per_beat
+        if span >= left:
+            break
+        tick, left, tempo = change, left - span, following
+    return tick + round(left * midi.ticks_per_beat / tempo)
+
+
+def _moved_track(chunk: bytes, ticks: int) -> bytes:
+    """A track's events, each ``ticks`` earlier (none before the start), bytes otherwise as they were."""
+    events: list[tuple[int, bytes]] = []
+    pos, at, status = 0, 0, None
+    while pos < len(chunk):
+        delta, pos = _varlen(chunk, pos)
+        at += delta
+        if pos >= len(chunk):
+            raise MidiError("MIDI 文件不完整")
+        begin, byte = pos, chunk[pos]
+        if byte == 0xFF:
+            length, pos = _varlen(chunk, pos + 2)
+            pos += length
+        elif byte in (0xF0, 0xF7):
+            length, pos = _varlen(chunk, pos + 1)
+            pos += length
+        else:
+            if byte & 0x80:
+                status, pos = byte, pos + 1
+            elif status is None:
+                raise MidiError("MIDI 文件里有无效的事件")
+            pos += 1 if 0xC0 <= status < 0xE0 else 2
+        if pos > len(chunk):
+            raise MidiError("MIDI 文件不完整")
+        events.append((at, chunk[begin:pos]))
+    moved, last = bytearray(), 0
+    for at, body in events:
+        when = max(0, at - ticks)
+        moved += _varlen_bytes(when - last) + body
+        last = when
+    return bytes(moved)
+
+
+def moved_earlier(data: bytes, seconds: float) -> bytes:
+    """The MIDI file with every event ``seconds`` earlier; what would fall before
+    the start falls on it.  Used to take back silence put in front of a
+    recording before it was transcribed."""
+    midi = parse_midi(data)
+    ticks = _ticks_after(seconds, midi)
+    header = int.from_bytes(data[4:8], "big")
+    moved = bytearray(data[:8 + header])
+    pos = 8 + header
+    while pos + 8 <= len(data):
+        kind = data[pos:pos + 4]
+        size = int.from_bytes(data[pos + 4:pos + 8], "big")
+        chunk = data[pos + 8:pos + 8 + size]
+        if kind == b"MTrk":
+            chunk = _moved_track(chunk, ticks)
+        moved += kind + len(chunk).to_bytes(4, "big") + chunk
+        pos += 8 + size
+    return bytes(moved)

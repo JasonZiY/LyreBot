@@ -160,6 +160,8 @@ class Pieces(unittest.TestCase):
         self.assertEqual(snap_line([69, 68, 69]), [69, 67, 69])  # A G♯ A -> A G A
         self.assertEqual(snap_line([72, 70, 69]), [72, 71, 69])  # C B♭ A -> C B A
         self.assertEqual(snap_line([64, 66, 67]), [64, 65, 67])  # E F♯ G -> E F G
+        self.assertEqual(snap_line([69, 73, 73, 73, 73]), [69, 72, 72, 72, 72])  # A C♯ C♯ C♯ C♯: one key, not C D C D
+        self.assertEqual(snap_line([73, 73, 72]), [74, 74, 72])  # the run looks past itself: C♯ C♯ C -> D D C
 
     def test_played_onsets_snap_to_sixteenths_or_triplets(self):
         grid = Grid([F(0), F(49, 100), F(103, 100), F(134, 100), F(167, 100)], F(1, 480))

@@ -18,6 +18,7 @@ out, backend = args[args.index("--out") + 1], args[args.index("--backend") + 1]
 mode = (here / "mode.txt").read_text().strip() if (here / "mode.txt").exists() else "ok"
 (here / "calls.txt").open("a").write(backend + "\\n")
 (here / "options.txt").write_text(" ".join(args[i + 1] for i, a in enumerate(args) if a == "--request-option"))
+(here / "heard.txt").write_text(str(pathlib.Path(args[args.index("--audio") + 1]).stat().st_size))
 if mode == "slow":
     time.sleep(30)
 if mode == "broken" or (mode == "no gpu" and backend == "vulkan"):
@@ -124,6 +125,41 @@ class Transcribing(unittest.TestCase):
         self.assertEqual(str(caught.exception), "已取消")
         self.assertLess(time.monotonic() - started, 5)
         self.assertFalse(self.target.exists())
+
+    def test_the_audio_gets_a_lead_in_that_the_midi_gives_back(self):
+        """MuScriptor misses a note already sounding when the audio begins, and a recording
+        begins with its first note: the model hears half a second of silence first, and the
+        notes come back that much earlier."""
+        import wave
+        from lyrebot.midi import parse_midi
+        from lyrebot.transcribe import LEAD_IN
+        try:
+            from .test_arrange import song
+        except ImportError:
+            from test_arrange import song
+        with wave.open(str(self.audio), "wb") as audio:
+            audio.setnchannels(2)
+            audio.setsampwidth(2)
+            audio.setframerate(8000)
+            audio.writeframes(b"\x01\x00" * 2 * 800)
+        played = song((0, [(1, 2, 60), (2, 3, 64)]), bpm=120)  # a beat is half a second
+        (self.folder / "answer.mid").write_bytes(played)
+        transcribe(self.audio, self.target, self.tools)
+        silence = round(8000 * LEAD_IN) * 4
+        self.assertEqual(int((self.folder / "heard.txt").read_text()), self.audio.stat().st_size + silence)
+        before, after = parse_midi(played), parse_midi(self.target.read_bytes())
+        self.assertEqual([(note.start - after.ticks_per_beat, note.pitch) for note in before.notes],
+                         [(note.start, note.pitch) for note in after.notes])
+        with wave.open(str(self.folder / "check.wav"), "wb") as check:  # what was heard is a valid WAV
+            check.setnchannels(1)
+            check.setsampwidth(1)
+            check.setframerate(1000)
+            check.writeframes(b"\x90" * 10)
+        from lyrebot.transcribe import with_lead_in
+        self.assertTrue(with_lead_in(self.folder / "check.wav", self.folder / "padded.wav", 0.01))
+        with wave.open(str(self.folder / "padded.wav"), "rb") as padded:
+            self.assertEqual(padded.readframes(100), b"\x80" * 10 + b"\x90" * 10)  # 8-bit silence is 128
+        self.assertFalse(with_lead_in(self.folder / "answer.mid", self.folder / "no.wav", 0.5))
 
     def test_other_formats_need_ffmpeg(self):
         mp3 = self.folder / "歌.mp3"

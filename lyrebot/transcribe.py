@@ -18,6 +18,8 @@ import threading
 import time
 from typing import Iterable
 
+from .midi import MidiError, moved_earlier
+
 AUDIO_SUFFIXES = (".wav", ".mp3", ".flac", ".m4a", ".ogg")
 CLI = "audiocpp_cli.exe"
 MEMORY_LIMIT = 6 * 1024 ** 3  # bytes; MuScriptor needs about 3.5 GB for a song
@@ -27,6 +29,10 @@ TIMEOUT = 1800.0  # seconds; on the CPU a minute of audio takes about half a min
 # plays every note the same way, so the instrument only ever got in the way.
 INSTRUMENTS = "acoustic_piano"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# Seconds of silence put in front of the audio, and taken out of the MIDI again.  A recording starts the
+# moment there is sound, and MuScriptor does not hear a note that is already sounding when its audio
+# begins: 织于雾中的吟咏 lost its first note so.
+LEAD_IN = 0.5
 
 
 class TranscribeError(Exception):
@@ -90,12 +96,15 @@ def transcribe(audio: Path, target: Path, tools: Tools, cancel: threading.Event 
             wav = work / "audio.wav"
             _run([tools.ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-i", str(audio), "-c:a", "pcm_s16le",
                   str(wav)], work, cancel, "格式转换")
+        padded = work / "lead-in.wav"
+        lead = LEAD_IN if with_lead_in(wav, padded, LEAD_IN) else 0.0
+        heard = padded if lead else wav
         out = work / "out.mid"
         error = "没有可用的转录程序"
         for command, backend in tools.attempts:
             try:
                 _run([*command, "--task", "midi", "--family", "muscriptor", "--model", str(tools.model),
-                      "--backend", backend, "--audio", str(wav), "--out", str(out),
+                      "--backend", backend, "--audio", str(heard), "--out", str(out),
                       "--request-option", f"instruments={INSTRUMENTS}"], work, cancel, "转录")
             except TranscribeError as failure:
                 if cancel.is_set():
@@ -103,12 +112,62 @@ def transcribe(audio: Path, target: Path, tools: Tools, cancel: threading.Event 
                 error = str(failure)
                 continue
             if out.is_file() and out.stat().st_size > 0:
+                data = out.read_bytes()
+                if lead:
+                    try:
+                        data = moved_earlier(data, lead)
+                    except MidiError:
+                        pass  # left as it is, it only starts half a second late
                 partial = target.with_name(target.name + ".part")
-                shutil.copyfile(out, partial)
+                partial.write_bytes(data)
                 os.replace(partial, target)
                 return
             error = "转录程序没有输出 MIDI"
         raise TranscribeError(error)
+
+
+def with_lead_in(source: Path, target: Path, seconds: float) -> bool:
+    """Copy the WAV file ``source`` to ``target`` with ``seconds`` of silence in
+    front, or return False if it cannot be read as one."""
+    with source.open("rb") as wav:
+        riff = wav.read(12)
+        if riff[:4] != b"RIFF" or riff[8:12] != b"WAVE":
+            return False
+        chunks, fmt = [], b""
+        while True:
+            head = wav.read(8)
+            if len(head) < 8:
+                return False
+            kind, size = head[:4], int.from_bytes(head[4:], "little")
+            if kind == b"data":
+                break
+            body = wav.read(size + (size & 1))
+            if kind == b"fmt ":
+                fmt = body
+            chunks.append(head + body)
+        if len(fmt) < 16:
+            return False
+        rate, align, bits = (int.from_bytes(fmt[4:8], "little"), int.from_bytes(fmt[12:14], "little"),
+                             int.from_bytes(fmt[14:16], "little"))
+        if not rate or not align:
+            return False
+        remaining = source.stat().st_size - wav.tell()
+        size = min(size, remaining) if size else remaining
+        silence = (b"\x80" if bits == 8 else b"\x00") * (align * round(rate * seconds))
+        total = len(silence) + size
+        with target.open("wb") as out:
+            out.write(b"RIFF" + (4 + sum(map(len, chunks)) + 8 + total + (total & 1)).to_bytes(4, "little") + b"WAVE")
+            for chunk in chunks:
+                out.write(chunk)
+            out.write(b"data" + total.to_bytes(4, "little") + silence)
+            while size:
+                block = wav.read(min(size, 1 << 20))
+                if not block:
+                    break
+                out.write(block)
+                size -= len(block)
+            out.write(b"\x00" * (total & 1))
+    return True
 
 
 def _run(command: list[str], work: Path, cancel: threading.Event, what: str) -> None:

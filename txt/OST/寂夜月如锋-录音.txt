@@ -6,7 +6,7 @@
 # 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
 # 节拍是从音符推断的：约每分钟 125 拍（四分音符），速度平稳，4/4 拍
 speed=125
-0~w~e~y~w~e~t~w~e~y~w~e~h~j~q~w~|0----
+t~w~e~y~w~e~t~w~e~y~w~e~h~j~q~w~|0----
 t~w~e~y~w~e~t~w~e~y~w~e~h~j~q~w~|0----
 t~w~e~y~w~e~t~w~e~y~w~e~h~j~q~w~|nh.nh.nh.nh.nh.nh.n.nh.
 t~w~e~y~w~e~t~w~e~y~w~e~h~j~q~w~|nh.nh.nh.nh.d.nh.n.nh.

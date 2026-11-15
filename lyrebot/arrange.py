@@ -635,13 +635,19 @@ def snap_line(pitches: list[int]) -> list[int]:
     Prefer the neighbour that does not repeat the next note, then the one that
     does not repeat the previous note, so the line keeps moving: G♯ before A
     becomes G, B♭ before A becomes B.  Otherwise take the lower neighbour.
+    A note struck again at once stays on the key it went to, and the choice
+    looks past such repeats: A♯ six times over is one key six times, not two
+    keys taking turns.
     """
     snapped: list[int] = []
     for index, pitch in enumerate(pitches):
         if pitch % 12 in WHITE:
             snapped.append(pitch)
             continue
-        following = pitches[index + 1] if index + 1 < len(pitches) else None
+        if index and pitches[index - 1] == pitch:
+            snapped.append(snapped[-1])
+            continue
+        following = next((other for other in pitches[index + 1:] if other != pitch), None)
         previous = snapped[-1] if snapped else None
         snapped.append(min((pitch - 1, pitch + 1),
                            key=lambda option: (option == following, option == previous, option > pitch)))
@@ -984,6 +990,8 @@ def _numbers(parts: list[Part]) -> str:
 def describe_timing(timing: Timing) -> str:
     if timing.steady:
         pace = "速度平稳"
+    elif timing.stretches == 1:  # nine tenths or more of it in one tempo
+        pace = "速度大体平稳，只在个别地方逐拍跟随"
     elif timing.stretches:
         pace = f"速度分 {timing.stretches} 段各自平稳，段与段之间逐拍跟随"
     else:
