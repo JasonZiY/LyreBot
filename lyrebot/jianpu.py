@@ -622,21 +622,34 @@ class Canvas:
     def add(self, item: str) -> None:
         self.items.append(item)
 
+    # Each page sets the usual digit's font, size, anchor and colour once (see ROOT); an item names only
+    # what differs, which keeps a long song's page a third of the size.
     def text(self, x: float, y: float, value: str, size: float, anchor: str = "middle", family: str = FONT,
              weight: str = "bold", fill: str = "#111", style: str = "") -> None:
-        extra = f' font-style="{style}"' if style else ""
-        self.add(f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" text-anchor="{anchor}" font-family="{family}" '
-                 f'font-weight="{weight}" fill="{fill}"{extra}>{escape(value)}</text>')
+        extra = "".join(f' {name}="{value}"' for name, value, usual in (
+            ("font-size", f"{size:g}", "21"), ("text-anchor", anchor, "middle"), ("font-family", family, FONT),
+            ("font-weight", weight, "bold"), ("fill", fill, "#111"), ("font-style", style, "")) if value != usual)
+        self.add(f'<text x="{_n(x)}" y="{_n(y)}"{extra}>{escape(value)}</text>')
 
     def line(self, x1: float, y1: float, x2: float, y2: float, width: float = 1.3, stroke: str = "#111") -> None:
-        self.add(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{stroke}" '
-                 f'stroke-width="{width}"/>')
+        self.add(f'<line x1="{_n(x1)}" y1="{_n(y1)}" x2="{_n(x2)}" y2="{_n(y2)}" stroke="{stroke}" '
+                 f'stroke-width="{width:g}"/>')
 
     def dot(self, x: float, y: float, r: float = 1.9, fill: str = "#111") -> None:
-        self.add(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{fill}"/>')
+        colour = f' fill="{fill}"' if fill != "#111" else ""
+        self.add(f'<circle cx="{_n(x)}" cy="{_n(y)}" r="{r:.2g}"{colour}/>')
 
     def path(self, d: str, width: float = 1.1, stroke: str = "#111") -> None:
-        self.add(f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{width}" stroke-linecap="round"/>')
+        self.add(f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{width:g}"/>')
+
+
+def _n(value: float) -> str:
+    """A coordinate to a tenth, without a trailing .0."""
+    return f"{value:.1f}".removesuffix(".0")
+
+
+ROOT = (f'font-family="{FONT}" font-size="21" font-weight="bold" text-anchor="middle" fill="#111" '
+        'stroke-linecap="round"')
 
 
 def _key(canvas: Canvas, x: float, baseline: float, key: str, size: float = 21, colour: str = "#111",
@@ -846,7 +859,7 @@ def render_pages(sheet: Sheet) -> list[str]:
         page.text(RIGHT, PAGE_H - 40, f"第 {number} 页 / 共 {count} 页", 12, anchor="end", family=CJK,
                   weight="normal", fill="#777")
         svgs.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {PAGE_W} {PAGE_H}" '
-                    f'width="{PAGE_W}" height="{PAGE_H}">'
+                    f'width="{PAGE_W}" height="{PAGE_H}" {ROOT}>'
                     f'<rect width="{PAGE_W}" height="{PAGE_H}" fill="#fff"/>{"".join(page.items)}</svg>')
     return svgs
 
