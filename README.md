@@ -174,27 +174,22 @@ python -m lyrebot.arrange 歌曲.mid --list
 
 ### 准备转录工具
 
-转录要用到 [audio.cpp](https://github.com/0xShug0/audio.cpp)（Apache-2.0 许可证）和 MuScriptor 模型，LyreBot 没有自带。
+转录要用到 [audio.cpp](https://github.com/0xShug0/audio.cpp)（Apache-2.0 许可证）和 MuScriptor 模型，LyreBot 没有自带。三个文件一共约 1.3 GB，都不用登录就能下载。一步一步的装法、怎么检查装好了、常见的报错，见 [从录音生成曲谱-安装说明.md](从录音生成曲谱-安装说明.md)。
 
-1. 在 audio.cpp 的 [Releases](https://github.com/0xShug0/audio.cpp/releases) 页面下载 Windows 版。`audio-版本号-bin-windows-x64-vulkan.zip` 用显卡计算，`…-cpu.zip` 只用处理器；老电脑上 cpu 版闪退时，换成 `…-cpu-portable.zip`。显卡版不一定能改用处理器计算，所以两个都放进去最稳，显卡用不了时会自动改用处理器版。
-2. 在 [audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf) 下载 `MuScriptor-Small-GGUF` 里的 `muscriptor-small-f32.gguf`（约 400 MB）。这个模型采用 CC BY-NC 4.0 许可证，只能用于非商业用途。
-3. （可选，转得更准）大一号的 MuScriptor Medium 没有现成的 GGUF，要自己转换。先登录 HuggingFace，同意 [MuScriptor/muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) 的使用条件，再下载 `config.json` 和 `model.safetensors`（约 1.2 GB），放进同一个文件夹，然后用 audio.cpp 自带的转换程序转成 GGUF，几秒钟就好：
-
-   ```text
-   audiocpp-vulkan\audiocpp_gguf.exe --input 下载的文件夹\model.safetensors --root 下载的文件夹 --family muscriptor --model-spec audiocpp-vulkan\model_specs\muscriptor.json --output models\muscriptor-medium-f32.gguf --type orig
-   ```
-
-4. 把它们放进 LyreBot 文件夹里的 `tools` 文件夹（已在 `.gitignore` 里），也可以放进与 LyreBot 文件夹并排的 `LyreBot-tools` 文件夹：
+1. 下载 audio.cpp 的 Windows 版。显卡版 [audio-v0.9.3-bin-windows-x64-vulkan.zip](https://github.com/0xShug0/audio.cpp/releases/download/v0.9.3/audio-v0.9.3-bin-windows-x64-vulkan.zip) 用显卡计算，处理器版 [audio-v0.9.3-bin-windows-x64-cpu.zip](https://github.com/0xShug0/audio.cpp/releases/download/v0.9.3/audio-v0.9.3-bin-windows-x64-cpu.zip) 只用处理器；老电脑上处理器版闪退时，换成同一页的 `…-cpu-portable.zip`。显卡版不一定能改用处理器计算，所以两个都放进去最稳，显卡用不了时会自动改用处理器版。v0.9.3 是测试过的版本，[Releases](https://github.com/0xShug0/audio.cpp/releases) 页面上更新的版本没有测过。
+2. 在 Hugging Face 的 [audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/MuScriptor-Small-GGUF) 下载 [muscriptor-medium-f32.gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/MuScriptor-Small-GGUF/muscriptor-medium-f32.gguf)（约 1.2 GB）。那个文件夹虽然叫 `MuScriptor-Small-GGUF`，里面放着 Small、Medium、Large 三个模型。内存只有 8 GB 的电脑可以改下 `muscriptor-small-f32.gguf`（约 400 MB），快一倍多，但没那么准。不要下 Large（5.5 GB）：转录时它要的内存超过 6 GB，每次都会被停掉。这些模型采用 CC BY-NC 4.0 许可证，只能用于非商业用途。
+3. 把它们放进 LyreBot 文件夹里的 `tools` 文件夹（已在 `.gitignore` 里），也可以放进与 LyreBot 文件夹并排的 `LyreBot-tools` 文件夹。两个 zip 里的文件没有外层文件夹，分别解压进 `audiocpp-vulkan` 和 `audiocpp-cpu`：
 
    ```text
    tools/
-     audiocpp-vulkan/audiocpp_cli.exe   （zip 解压出来的整个文件夹）
+     audiocpp-vulkan/audiocpp_cli.exe   （和 zip 里的其他文件放在一起）
      audiocpp-cpu/audiocpp_cli.exe
-     models/muscriptor-small-f32.gguf
-     models/muscriptor-medium-f32.gguf  （可选）
+     models/muscriptor-medium-f32.gguf
    ```
 
-文件夹名里带 `vulkan` 的当作显卡版，带 `cpu` 的当作处理器版，模型放在 `tools` 里任何位置都能找到。找到好几个 MuScriptor 模型时，用文件最大的那个：Medium 优先于 Small，f32 优先于 f16。
+`audiocpp_cli.exe` 要在 `tools` 下面正好一层的文件夹里，文件夹名里带 `vulkan` 的当作显卡版，带 `cpu` 的当作处理器版。模型放在 `tools` 里任何位置都能找到，文件名里要带 `muscriptor`。找到好几个 MuScriptor 模型时，用文件最大的那个：Medium 优先于 Small，f32 优先于 f16，所以 Large 也在的话会用上 Large。
+
+1.16.0 版测 Medium 时用的是自己转换的 GGUF：从 [MuScriptor/muscriptor-medium](https://huggingface.co/MuScriptor/muscriptor-medium) 下载 `model.safetensors`（要登录并同意使用条件），再用 audio.cpp 自带的 `audiocpp_gguf.exe --family muscriptor --type orig` 转换。拿一段 30 秒的录音比过，audio.cpp-gguf 上现成的那份转出来的 MIDI 和它逐字节相同，用哪份都行。
 
 ### 速度和效果
 
