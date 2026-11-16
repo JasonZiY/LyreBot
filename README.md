@@ -233,7 +233,7 @@ MuScriptor 会按乐器分开记谱，但乐器是它猜的，同一条旋律常
 命令行也可以导出，可以一次给多个曲谱：
 
 ```text
-python -m lyrebot.jianpu txt/OST/柔灯港夜.txt
+python -m lyrebot.jianpu txt/OST/柔灯轻漾时.txt
 ```
 
 ## 开发
