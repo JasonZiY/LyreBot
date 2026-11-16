@@ -62,6 +62,5 @@ q~w~h-q~h~h-q~h~d.|naf~naf~naf.naf.naf~b~b.nsf~nsf~nsf~bsf~xvn.
 ~g~h~w~a---|xvn.nsf.z.xcb~xcb~xcb~xcb~xcb.xcb.xcb.
 .r~r~r~r~r.r.r.d~g~h~q~|z.ba~ba~ba~ba~ba.ba.ba.z~b~z~z~
 e----|z----
-.~q.g~q~e.q~g~q.e~q~g~|----
-~q~e~q.g~q~e.q~g~q.e~q~g~|----
-~q~e~q.g~q~e.q~g-.|----
+speed=115.4
+.~0---~|----
