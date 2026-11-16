@@ -5,8 +5,8 @@ import struct
 import unittest
 
 from lyrebot.arrange import (
-    ArrangeError, Grid, Tone, accompany, arrange, choose_shift, detect_chords, duration_text, mountain,
-    outer_line, snap_line, voicing,
+    ArrangeError, Grid, Tone, accompany, arrange, choose_shift, detect_chords, duration_text, grace_text,
+    mountain, ornaments, outer_line, snap_line, voicing,
 )
 from lyrebot.midi import MidiError, parse_midi
 from lyrebot.score import load_score, parse_score, score_files
@@ -162,6 +162,32 @@ class Pieces(unittest.TestCase):
         self.assertEqual(snap_line([64, 66, 67]), [64, 65, 67])  # E F♯ G -> E F G
         self.assertEqual(snap_line([69, 73, 73, 73, 73]), [69, 72, 72, 72, 72])  # A C♯ C♯ C♯ C♯: one key, not C D C D
         self.assertEqual(snap_line([73, 73, 72]), [74, 74, 72])  # the run looks past itself: C♯ C♯ C -> D D C
+
+    def test_a_quick_mordent_becomes_one_note_with_grace_notes(self):
+        """At 120 BPM a recorded mordent D E D comes 0.12 beat (60 ms) apart, quicker than a
+        sixteenth: it becomes the last D, struck where the first one was, with D and E before it.
+        Notes a sixteenth apart, and notes struck together, stay as they are."""
+        def heard(beat, pitch, length=F(1, 4)):
+            beat = F(beat)
+            return Tone(F(round(beat * 4), 4), F(round(beat * 4), 4) + length, pitch, 1, heard=beat)
+
+        mordent = [heard("0.48", 86), heard("0.60", 88), heard("0.74", 86, F(1, 4))]
+        others = [heard("0.48", 62), heard("0.48", 55), heard("1", 84),  # a chord under it, then C
+                  heard("2", 76), heard("2.25", 74),  # a sixteenth apart: written as they are
+                  heard("2.98", 72), heard("3", 74),  # 10 ms apart: struck together
+                  # A quick G E D heard nearly as a chord, then E on the beat.  Moved back as the end of
+                  # an ornament E D E, that E would sit under the G and leave the tune: it stays.
+                  heard("3.98", 79), heard("3.98", 76), heard("4.10", 74), heard("4.24", 76)]
+        found = ornaments(mordent + others, lambda beat: float(beat) / 2)
+        self.assertEqual(sorted((t.start, t.pitch, t.graces) for t in found if t.graces), [(F(1, 2), 86, (0, 2))])
+        self.assertEqual(sorted(found, key=lambda t: (t.heard, t.pitch)),
+                         sorted([t for t in found if t.graces] + others, key=lambda t: (t.heard, t.pitch)))
+
+    def test_grace_notes_go_on_white_keys_before_their_note(self):
+        self.assertEqual(grace_text(74, (0, 2)), "w'e'")  # D and E before D: a mordent
+        self.assertEqual(grace_text(69, (-1,)), "g'")  # G♯ before A moves down to G, away from the A
+        self.assertEqual(grace_text(64, (2,)), "g'")  # F♯ before E moves up to G
+        self.assertEqual(grace_text(83, (1,)), "")  # a C above the lyre's top B is left out
 
     def test_played_onsets_snap_to_sixteenths_or_triplets(self):
         grid = Grid([F(0), F(49, 100), F(103, 100), F(134, 100), F(167, 100)], F(1, 480))

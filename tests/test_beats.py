@@ -10,9 +10,9 @@ from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
-    from .test_arrange import MUSIC, PITCH_OF, name as track_name, notes, signature, smf, song, tempo, written_scores
+    from .test_arrange import MUSIC, PITCH_OF, bars_of, name as track_name, notes, signature, smf, song, tempo, written_scores
 except ImportError:
-    from test_arrange import MUSIC, PITCH_OF, name as track_name, notes, signature, smf, song, tempo, written_scores
+    from test_arrange import MUSIC, PITCH_OF, bars_of, name as track_name, notes, signature, smf, song, tempo, written_scores
 
 
 def bar_starts(score):
@@ -251,6 +251,22 @@ class PlayedInTime(unittest.TestCase):
         self.assertEqual(played_in_time(score, [2.0, 3.0, 4.0, 5.0]), 1.0)  # lined up whenever it starts
         self.assertEqual(played_in_time(score, [2.0, 3.04, 4.0, 5.2]), 0.75)
         self.assertEqual(played_in_time(score, [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5]), 0.5)
+
+    def test_grace_notes_count_where_they_sound(self):
+        self.assertEqual(played_in_time("speed=60\na-s'd'f-|z--\n", [2.0, 3.0, 3.06, 3.12]), 1.0)
+
+
+class Ornaments(unittest.TestCase):
+    def test_a_recorded_mordent_comes_back_as_grace_notes(self):
+        """A mordent played D E D, 60 ms apart, in a tune of eighths.  Snapped to sixteenths, two of
+        its notes would land together and it would come back as a slow pair of sixteenths, with a
+        stray D in the left hand; it comes back as grace notes, and the tune keeps its eighths."""
+        text = "speed=100\n" + "q.w'e'w.q.t.e.w.q-|z-b-z-b-\n" * 4 + "e.w.q.w'e'w.e-q-|x-b-z-b-\n" * 4
+        midi = performed(parse_score(text), "mordent", jitter=0.006, one_part=True)
+        result = arrange(midi)
+        self.assertEqual(result.text.count("w'e'w"), 8)
+        self.assertFalse([bar for bar in bars_of(result.text) if "~" in bar])
+        self.assertGreater(played_in_time(result.text, onset_times(midi)), 0.97)
 
 
 class WhenToFindIt(unittest.TestCase):

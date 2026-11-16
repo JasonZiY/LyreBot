@@ -20,7 +20,8 @@ how people arrange for the lyre by hand:
    is a guess, so it is read in one tempo as well as followed beat by beat
    where the notes keep one, and at twice and half its length when its
    score plays the recording back short; the score that plays it back best
-   is kept.
+   is kept.  A recording's quick ornaments (mordents, grace notes), too
+   fast for the beat's grid, become grace notes.
 """
 
 from __future__ import annotations
@@ -34,11 +35,12 @@ import math
 from pathlib import Path
 import re
 import sys
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .beats import FASTEST, SLOWEST, Timing, find_beats, onset_times
 from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
 from .score import ScoreError, parse_score
+from .timeline import compile_timeline
 
 SCORES_DIR = Path(__file__).resolve().parent.parent / "txt"
 ARRANGED = "# 由 MIDI 自动编配："  # a score's first line, followed by the MIDI file's name
@@ -78,6 +80,9 @@ IN_TIME = 0.05  # seconds within which a recording's note played back by its sco
 CLOSER = 0.005  # how much more of a recording another reading of its beat must play in time to be kept
 BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
+GRACE_GAP = (0.03, 0.1)  # seconds between neighbouring notes of an ornament: not struck together, yet quick ...
+GRACE_BEATS = Fraction(7, 40)  # ... and under 0.7 of a sixteenth, quicker than the grid can write
+GRACE_STEP = 2  # semitones at most between neighbouring notes of an ornament
 WRITTEN = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 24)  # subdivisions a written score may use
 CLEARLY = Fraction(3, 5)  # a beat's notes clearly fit one grid when they miss it by this share of the other's miss
 TERNARY = 3  # a performance with this many times more clear triplet beats than sixteenth beats moves in triplets
@@ -94,6 +99,8 @@ class Tone:
     end: Fraction
     pitch: int
     part: int
+    graces: tuple[int, ...] = ()  # grace notes struck just before it, in semitones from it
+    heard: Fraction | None = field(default=None, compare=False)  # where the source has it, before snapping
 
 
 @dataclass
@@ -276,25 +283,112 @@ class _Clock:
 
 # --- Parts and lines --------------------------------------------------------
 
-def split_parts(midi: MidiFile, grid: Grid) -> list[Part]:
-    groups: dict[tuple[int, int], dict[tuple[Fraction, int], Tone]] = defaultdict(dict)
+def split_parts(midi: MidiFile, grid: Grid, seconds: Callable[[Fraction], float] | None = None) -> list[Part]:
+    """The notes of each track and channel, snapped to ``grid``.  Given the
+    file's ``seconds`` at a beat (for a recording), quick ornaments become
+    grace notes (see ``ornaments``)."""
+    played: dict[tuple[int, int], list[Tone]] = defaultdict(list)
     numbers: dict[tuple[int, int], int] = {}
     for key in sorted({(note.track, note.channel) for note in midi.notes}):
         numbers[key] = len(numbers) + 1
     for note in midi.notes:
         key = (note.track, note.channel)
-        start = grid.onset(Fraction(note.start, midi.ticks_per_beat))
-        end = grid.end(Fraction(note.end, midi.ticks_per_beat))
-        tone = Tone(start, end, note.pitch, numbers[key])
-        known = groups[key].get((start, note.pitch))
-        if known is None or known.end < end:  # the same note twice: keep the longer
-            groups[key][(start, note.pitch)] = tone
+        heard = Fraction(note.start, midi.ticks_per_beat)
+        played[key].append(Tone(grid.onset(heard), grid.end(Fraction(note.end, midi.ticks_per_beat)),
+                                note.pitch, numbers[key], heard=heard))
+    groups: dict[tuple[int, int], dict[tuple[Fraction, int], Tone]] = defaultdict(dict)
+    for key, tones in played.items():
+        for tone in ornaments(tones, seconds) if seconds else tones:
+            known = groups[key].get((tone.start, tone.pitch))
+            if known is None or known.end < tone.end:  # the same note twice: keep the longer
+                groups[key][(tone.start, tone.pitch)] = tone
     parts = []
     for (track, channel), number in numbers.items():
         name = midi.track_names[track] if track < len(midi.track_names) else ""
         tones = sorted(groups[(track, channel)].values(), key=lambda tone: (tone.start, tone.pitch))
         parts.append(Part(number, track, channel, name, midi.programs.get((track, channel), 0), tones))
     return parts
+
+
+def ornaments(tones: list[Tone], seconds: Callable[[Fraction], float]) -> list[Tone]:
+    """A recording's quick ornaments (a mordent, a trill, a grace note) as grace notes.
+
+    A pianist plays a mordent's three notes some 60 ms apart, quicker than
+    the sixteenths the beat is written in.  Snapped to them, two of the three
+    land together and make a chord, and the ornament comes out as a slow
+    pair of sixteenths, often without the note it decorates.  So a run of
+    notes, each a step (one or two semitones) from the one before and
+    ``GRACE_GAP`` seconds and under ``GRACE_BEATS`` after it, becomes one
+    note: the run's last, struck where its first one is, with the others as
+    its grace notes.  Graces sound milliseconds apart, as the hand plays
+    them, at any tempo.
+
+    A run is left as it was when moving its last note to where the run
+    starts would put that note under a higher one struck there, while
+    nothing higher is struck where it was: it would leave the melody.  (A
+    quick run heard as a chord, G E D together, then E on the beat: the E is
+    the tune's, not an ornament of the chord.)
+    """
+    ordered = sorted(tones, key=lambda tone: (tone.heard, tone.pitch))
+    times = [seconds(tone.heard) for tone in ordered]
+    struck: dict[Fraction, list[int]] = defaultdict(list)
+    for index, tone in enumerate(ordered):
+        struck[tone.start].append(index)
+
+    def keeps_its_place(run: list[int]) -> bool:
+        def highest(start: Fraction) -> int:
+            return max((ordered[index].pitch for index in struck[start] if index not in run), default=-1)
+        pitch = ordered[run[-1]].pitch
+        return not highest(ordered[run[-1]].start) < pitch < highest(ordered[run[0]].start)
+
+    taken = [False] * len(ordered)
+    found: list[Tone] = []
+    for first in range(len(ordered)):
+        if taken[first]:
+            continue
+        run = [first]
+        while True:
+            last, following = run[-1], None
+            for index in range(last + 1, len(ordered)):
+                gap = times[index] - times[last]
+                if gap > GRACE_GAP[1]:
+                    break
+                step = abs(ordered[index].pitch - ordered[last].pitch)
+                if (not taken[index] and gap >= GRACE_GAP[0] and 1 <= step <= GRACE_STEP
+                        and ordered[index].heard - ordered[last].heard < GRACE_BEATS
+                        and (following is None or step < abs(ordered[following].pitch - ordered[last].pitch))):
+                    following = index
+            if following is None:
+                break
+            run.append(following)
+        if len(run) > 1 and not keeps_its_place(run):
+            run = [first]  # its other notes may still start runs of their own
+        for index in run:
+            taken[index] = True
+        head, main = ordered[run[0]], ordered[run[-1]]
+        if len(run) == 1:
+            found.append(head)
+        else:
+            found.append(Tone(head.start, max(main.end, head.start), main.pitch, main.part,
+                              tuple(ordered[index].pitch - main.pitch for index in run[:-1]), head.heard))
+    return found
+
+
+def grace_text(main: int, graces: tuple[int, ...], low: int = LOW, high: int = HIGH) -> str:
+    """Score text for grace notes (``graces``, in semitones from the main
+    note) before a main note on the white key ``main``: "w'e'" before "w".
+    A grace on a black key moves to the white key further from the main
+    note; one off the lyre, or on the key struck right after it, is left out."""
+    pitches: list[int] = []
+    following = main
+    for offset in reversed(graces):
+        pitch = main + offset
+        if pitch % 12 not in WHITE:
+            pitch += 1 if offset > 0 else -1
+        if low <= pitch <= high and pitch != following:
+            pitches.append(pitch)
+            following = pitch
+    return "".join(KEY_OF[pitch] + "'" for pitch in reversed(pitches))
 
 
 def _describe(parts: list[Part], bars: list[tuple[Fraction, Fraction]]) -> None:
@@ -825,7 +919,14 @@ def keep_accompaniment(others: list[Tone], melody: list[tuple[Fraction, int]]) -
         if len(keys) > CHORD_NOTES:
             keys = keys[:1] + keys[1 - CHORD_NOTES:]
         if keys:
-            line.append((start, end, "".join(KEY_OF[pitch] for pitch in keys)))
+            graces = ""
+            graced = [tone for tone in tones if tone.graces]
+            if graced:  # a grace note before the chord, as the left hand played it
+                tone = max(graced, key=lambda tone: tone.pitch)
+                main = under_melody(start, _fold(tone.pitch + octave, LOW, BASS_HIGH))
+                if main in keys:
+                    graces = grace_text(main, tone.graces, LOW, BASS_HIGH)
+            line.append((start, end, graces + "".join(KEY_OF[pitch] for pitch in keys)))
             if lone is not None:
                 changes.append(Change(start, 1, lone, keys[0]))
     return line, changes
@@ -1132,10 +1233,9 @@ def _scored(result: Arrangement, onsets: list[float]) -> tuple[float, Arrangemen
 def played_in_time(text: str, onsets: list[float]) -> float:
     """The share of ``onsets`` (seconds) that the score plays within
     ``IN_TIME``, each matched to one onset of the score, with the score's
-    start lined up on them as well as it goes."""
-    score = parse_score(text)
-    clock = score.tempo_map()
-    played = sorted({round(clock.seconds(event.start), 4) for event in score.events if event.strikes})
+    start lined up on them as well as it goes.  Grace notes count where
+    they sound, just before their note."""
+    played = sorted({round(event.at, 4) for event in compile_timeline(parse_score(text)).events if event.down})
     if not onsets or not played:
         return 0.0
 
@@ -1165,9 +1265,10 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
     """The arrangement of a file whose beat is settled: ``timing`` tells how
     it was found, when it was."""
     grid = _grid(midi)
+    clock = _Clock(midi)
     if accompaniment == "auto":
         accompaniment = "keep" if timing else "chords"
-    parts = split_parts(midi, grid)
+    parts = split_parts(midi, grid, clock.seconds if timing else None)
     if not parts:
         raise ArrangeError("MIDI 文件里没有音符")
 
@@ -1232,7 +1333,6 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
     melody_notes.sort(key=lambda item: item[0].start)
     bass_notes = [(tone, _fold(tone.pitch + bass_octave, LOW, BASS_HIGH)) for tone in bass]
 
-    clock = _Clock(midi)
     total = bars[-1][0] + bars[-1][1]
     starts = [start for start, _ in bars]
     spans: list[ChordSpan] = []
@@ -1245,7 +1345,8 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
         snapped = snap_line(pitches)
         changes += [Change(tone.start, voice, before, after)
                     for tone, before, after in zip(tones, pitches, snapped) if before != after]
-        lines.append([(tone.start, tone.end, KEY_OF[pitch]) for tone, pitch in zip(tones, snapped)])
+        lines.append([(tone.start, tone.end, grace_text(pitch, tone.graces) + KEY_OF[pitch])
+                      for tone, pitch in zip(tones, snapped)])
         tune = [(tone.start, pitch) for tone, pitch in zip(tones, snapped)]
         if voice == 0 and accompaniment == "chords":
             spans = detect_chords(top, others, bass, bars)
