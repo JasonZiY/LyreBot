@@ -388,7 +388,11 @@ class Folders(unittest.TestCase):
         from unittest import mock
         from lyrebot.app import App
         root = self.window()
-        app = App(root, self.scores, self.midi)
+        pages = self.root / "jianpu_output"
+        pages.mkdir()
+        (pages / "冰湖-录音.html").write_text("<html></html>", encoding="utf-8")
+        (pages / "林中晨歌.html").write_text("<html></html>", encoding="utf-8")
+        app = App(root, self.scores, self.midi, jianpu_dir=pages)
         self.assertEqual(app.menu.entrycget(6, "label"), "删除")
         app.select(recorded)
         gone = []
@@ -401,13 +405,15 @@ class Folders(unittest.TestCase):
             app.delete()  # declined: nothing goes
             self.assertEqual(gone, [])
             question = asked.call_args.args[1]
-            for shown in (r"txt\ost\冰湖-录音.txt", r"midi\冰湖-录音.mid", r"midi\冰湖-录音.wav"):
+            for shown in (r"txt\ost\冰湖-录音.txt", r"midi\冰湖-录音.mid", r"midi\冰湖-录音.wav",
+                          r"jianpu_output\冰湖-录音.html"):
                 self.assertIn(shown.replace("\\", os.sep), question)
             self.assertNotIn(".part", question)
             asked.return_value = True
             following = app.songs[app.songs.index(recorded) + 1]
             app.delete()
-        self.assertEqual(gone, ["冰湖-录音.wav", "冰湖-录音.mid", "冰湖-录音.txt"])  # the score last
+        self.assertEqual(gone, ["冰湖-录音.html", "冰湖-录音.wav", "冰湖-录音.mid", "冰湖-录音.txt"])  # the score last
+        self.assertTrue((pages / "林中晨歌.html").exists())  # another song's page stays
         self.assertNotIn(recorded, app.songs)
         self.assertEqual(app.selected(), following)
         root.update()

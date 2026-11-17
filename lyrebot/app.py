@@ -716,11 +716,13 @@ class App:
             return str(path)
 
     def delete(self) -> None:
-        """Move the selected score to the Recycle Bin, with the MIDI file and recording it was made from."""
+        """Move the selected score to the Recycle Bin, with the MIDI file and recording it was made
+        from and the 简谱 exported from it."""
         score = self.selected()
         if score is None or self.worker:
             return
-        files = [path for path in song_files(score, self.midi_dir) if path.exists()]
+        page = self.jianpu_dir / f"{score.stem}.html"
+        files = [path for path in (*song_files(score, self.midi_dir), page) if path.exists()]
         if score not in files:  # already gone
             self.refresh()
             return
