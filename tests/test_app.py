@@ -6,7 +6,7 @@ import time
 import unittest
 
 from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio, song_list,
-                         pending_midi, recording_name, score_name)
+                         pending_midi, recording_name, score_name, song_files)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_arrange import song
@@ -355,6 +355,75 @@ class Folders(unittest.TestCase):
             app.rearrange()
         self.assertEqual(target.read_text(encoding="utf-8"), arranged)
         self.assertIn("已重新编配", app.status_label.cget("text"))
+
+    def test_deleting_a_score_takes_what_it_was_made_from(self):
+        """A score goes with the MIDI file and recording it was made from, and
+        nothing else: left behind, they would make it again."""
+        (self.scores / "ost").mkdir()
+        hand = self.scores / "ost" / "林中晨歌.txt"
+        played = self.scores / "春日影-演奏.txt"
+        midi_score = self.scores / "Literature-MIDI.txt"
+        recorded = self.scores / "ost" / "冰湖-录音.txt"
+        dropped = self.scores / "别人的歌.txt"  # transcribed from an MP3 put in the midi folder, so no suffix
+        renamed = self.scores / "冰湖 新版-录音.txt"
+        hand.write_text("speed=60\na-\n", encoding="utf-8")
+        played.write_text("# 由键盘演奏记录：春日影-演奏\nspeed=60\na-\n", encoding="utf-8")
+        midi_score.write_text("# 由 MIDI 自动编配：Literature.mid\nspeed=60\na-\n", encoding="utf-8")
+        recorded.write_text("speed=60\na-\n", encoding="utf-8")  # its first line taken out
+        dropped.write_text("# 由 MIDI 自动编配：别人的歌.mid\nspeed=60\na-\n", encoding="utf-8")
+        renamed.write_text("# 由 MIDI 自动编配：录音 0101-1200.mid\nspeed=60\na-\n", encoding="utf-8")
+        for name in ("林中晨歌.mid", "Literature.mid", "冰湖-录音.mid", "别人的歌.mid"):
+            self.add_midi(name)
+        for name in ("林中晨歌.wav", "冰湖-录音.wav", "别人的歌.MP3", "录音 0101-1200.wav"):
+            self.add_audio(name)
+        self.add_audio("冰湖-录音.wav.part")  # still being recorded: not audio yet
+        midi = self.midi
+        self.assertEqual(song_files(hand, midi), [hand])  # a hand-written score keeps its sources
+        self.assertEqual(song_files(played, midi), [played])
+        self.assertEqual(song_files(midi_score, midi), [midi_score, midi / "Literature.mid"])
+        self.assertEqual(song_files(recorded, midi), [recorded, midi / "冰湖-录音.mid", midi / "冰湖-录音.wav"])
+        self.assertEqual(song_files(dropped, midi), [dropped, midi / "别人的歌.mid", midi / "别人的歌.MP3"])
+        self.assertEqual(song_files(renamed, midi), [renamed, midi / "录音 0101-1200.wav"])  # its MIDI is gone
+
+        from unittest import mock
+        from lyrebot.app import App
+        root = self.window()
+        app = App(root, self.scores, self.midi)
+        self.assertEqual(app.menu.entrycget(6, "label"), "删除")
+        app.select(recorded)
+        gone = []
+
+        def recycle(path):
+            gone.append(path.name)
+            path.unlink()
+        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=False) as asked, \
+                mock.patch("lyrebot.app.to_recycle_bin", side_effect=recycle):
+            app.delete()  # declined: nothing goes
+            self.assertEqual(gone, [])
+            question = asked.call_args.args[1]
+            for shown in (r"txt\ost\冰湖-录音.txt", r"midi\冰湖-录音.mid", r"midi\冰湖-录音.wav"):
+                self.assertIn(shown.replace("\\", os.sep), question)
+            self.assertNotIn(".part", question)
+            asked.return_value = True
+            following = app.songs[app.songs.index(recorded) + 1]
+            app.delete()
+        self.assertEqual(gone, ["冰湖-录音.wav", "冰湖-录音.mid", "冰湖-录音.txt"])  # the score last
+        self.assertNotIn(recorded, app.songs)
+        self.assertEqual(app.selected(), following)
+        root.update()
+        self.assertIn("已把「冰湖-录音」移到回收站", app.status_label.cget("text"))
+        app.arrange_next()
+        app.transcribe_next()
+        self.assertFalse(recorded.exists())  # nothing left to make it again
+
+        app.select(hand)
+        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=True), \
+                mock.patch("lyrebot.app.messagebox.showerror") as told, \
+                mock.patch("lyrebot.app.to_recycle_bin", side_effect=OSError("文件正被占用")):
+            app.delete()
+        self.assertIn("文件正被占用", told.call_args.args[1])
+        self.assertTrue(hand.exists())
+        self.assertEqual(app.selected(), hand)
 
 
 if __name__ == "__main__":

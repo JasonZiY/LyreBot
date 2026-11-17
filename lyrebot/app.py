@@ -88,6 +88,38 @@ def relaunch_as_admin() -> bool:
     return int(result) > 32
 
 
+FO_DELETE = 3
+FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI, FOF_WANTNUKEWARNING = 0x4, 0x10, 0x40, 0x400, 0x4000
+
+
+class FileOperation(ctypes.Structure):
+    """Windows' SHFILEOPSTRUCTW, which is packed tight on 32-bit Windows."""
+    _pack_ = 1 if ctypes.sizeof(ctypes.c_void_p) == 4 else 8
+    _fields_ = [("hwnd", ctypes.c_void_p), ("wFunc", ctypes.c_uint), ("pFrom", ctypes.c_void_p),
+                ("pTo", ctypes.c_void_p), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", ctypes.c_int),
+                ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", ctypes.c_void_p)]
+
+
+def to_recycle_bin(path: Path) -> None:
+    """Move a file to the Recycle Bin, where it can be restored from; OSError if it was not moved.
+
+    Where it cannot be recycled (the bin turned off, a network drive), Windows
+    asks before deleting it for good.
+    """
+    names = ctypes.create_unicode_buffer(str(path.resolve()) + "\0")  # a list of names, ended by an empty one
+    operation = FileOperation(wFunc=FO_DELETE, pFrom=ctypes.addressof(names),
+                              fFlags=FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI
+                              | FOF_WANTNUKEWARNING)
+    try:
+        result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(operation))
+    except AttributeError:
+        raise OSError("没有回收站可用") from None
+    if result:
+        raise OSError(f"没能移到回收站（错误 {result:#x}）")
+    if operation.fAnyOperationsAborted or path.exists():
+        raise OSError("没有删除")
+
+
 def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None:
     if not songs:
         return None
@@ -252,6 +284,24 @@ def midi_for(score: Path, midi_dir: Path) -> Path | None:
     return None
 
 
+def song_files(score: Path, midi_dir: Path) -> list[Path]:
+    """The files deleting ``score`` takes with it, the score first: the MIDI
+    file and recording it was made from, which would otherwise make it again.
+
+    A score written by hand or from the keys played (曲名, 曲名-演奏) goes
+    alone.  One arranged from a MIDI file names it on its first line, or, if
+    that line was taken out, ends in -MIDI or -录音; its recording is audio
+    of the MIDI file's name.
+    """
+    named = arranged_name(score)
+    if named is None and not score.stem.casefold().endswith((RECORDING_SUFFIX, MIDI_FILE_SUFFIX.casefold())):
+        return [score]
+    source = midi_for(score, midi_dir)
+    stem = (source.stem if source else named.rsplit(".", 1)[0] if named else score.stem).casefold()
+    audio = [path for path in audio_files(midi_dir) if path.stem.casefold() == stem]
+    return [score, *([source] if source else []), *audio]
+
+
 class IconButton(tk.Label):
     """A flat image button: fires on release inside it, and does nothing while disabled."""
 
@@ -408,7 +458,10 @@ class App:
         self.menu.add_separator()
         self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
         self.menu.add_command(label="导出简谱", command=self.export_jianpu)
+        self.menu.add_separator()
+        self.menu.add_command(label="删除", accelerator="Delete", command=self.delete)
         self.tree.bind("<Button-3>", self.context_menu)
+        self.tree.bind("<Delete>", lambda _: self.locked() or self.delete())
 
         tk.Frame(root, bg=LINE, height=1).pack(fill="x", padx=px(14), pady=(px(6), 0))
 
@@ -652,7 +705,48 @@ class App:
         can = not self.worker and chosen is not None and midi_for(chosen, self.midi_dir) is not None
         self.menu.entryconfigure(3, state="normal" if can else "disabled")
         self.menu.entryconfigure(4, state="normal" if chosen is not None else "disabled")
+        self.menu.entryconfigure(6, state="normal" if chosen is not None and not self.worker else "disabled")
         self.menu.tk_popup(event.x_root, event.y_root)
+
+    def shown(self, path: Path) -> str:
+        """A file's name as the user sees it, from the LyreBot folder: txt\\OST\\曲名.txt."""
+        try:
+            return str(path.relative_to(self.scores_dir.parent))
+        except ValueError:
+            return str(path)
+
+    def delete(self) -> None:
+        """Move the selected score to the Recycle Bin, with the MIDI file and recording it was made from."""
+        score = self.selected()
+        if score is None or self.worker:
+            return
+        files = [path for path in song_files(score, self.midi_dir) if path.exists()]
+        if score not in files:  # already gone
+            self.refresh()
+            return
+        listed = "\n".join(self.shown(path) for path in files)
+        question = f"删除「{score.stem}」？\n\n这些文件会移到回收站，需要时可以从回收站还原：\n\n{listed}"
+        if not messagebox.askyesno("删除", question, icon="warning", default="no", parent=self.root):
+            return
+        index = self.songs.index(score) if score in self.songs else 0
+        rest = [path for path in self.songs if path != score]
+        # The score goes last: left without its MIDI file and recording it stays as it is,
+        # but they, left without it, would make it again.
+        for path in reversed(files):
+            try:
+                to_recycle_bin(path)
+            except OSError as error:
+                messagebox.showerror("无法删除", f"{self.shown(path)}：{error}", parent=self.root)
+                self.refresh()
+                return
+            self.cache.pop(path, None)
+            self.failed_midi.pop(path, None)
+            self.failed_audio.pop(path, None)
+        self.refresh()
+        if rest:
+            after = rest[min(index, len(rest) - 1)]
+            self.notice = (after, f"已把「{score.stem}」移到回收站")
+            self.select(after)
 
     def export_jianpu(self) -> Path | None:
         """Write the selected score as 简谱 into the jianpu_output folder and open it."""
