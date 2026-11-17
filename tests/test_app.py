@@ -305,15 +305,15 @@ class Folders(unittest.TestCase):
         from lyrebot.app import App
         (self.scores / "小曲.txt").write_text("speed=90\na-s-d-f-|z----\n", encoding="utf-8")
         root = self.window()
-        app = App(root, self.scores, self.midi, jianpu_dir=self.root / "jianpu")
+        app = App(root, self.scores, self.midi, jianpu_dir=self.root / "jianpu_output")
         self.assertEqual(app.menu.entrycget(4, "label"), "导出简谱")
         app.select(self.scores / "小曲.txt")
         with mock.patch.object(app, "open_file") as opened:
             target = app.export_jianpu()
-        self.assertEqual(target, self.root / "jianpu" / "小曲.html")
+        self.assertEqual(target, self.root / "jianpu_output" / "小曲.html")
         self.assertIn("<title>小曲 · 诗琴简谱</title>", target.read_text(encoding="utf-8"))
         opened.assert_called_once_with(target)
-        self.assertIn("简谱已存进 jianpu 文件夹", app.status_label.cget("text"))
+        self.assertIn("简谱已存进 jianpu_output 文件夹", app.status_label.cget("text"))
 
     def test_a_score_finds_its_midi_by_name(self):
         source = self.add_midi("Literature.mid")

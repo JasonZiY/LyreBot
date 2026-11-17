@@ -919,13 +919,13 @@ def main(argv: list[str] | None = None) -> int:
             reconfigure(errors="replace")
     parser = argparse.ArgumentParser(prog="python -m lyrebot.jianpu", description="把 LyreBot 曲谱导出成诗琴简谱（HTML）")
     parser.add_argument("scores", nargs="+", type=Path, help="曲谱文件，可以一次给多个")
-    parser.add_argument("-o", "--output", type=Path, help="保存位置（只给一个曲谱时可用）；默认存进 jianpu 文件夹")
+    parser.add_argument("-o", "--output", type=Path, help="保存位置（只给一个曲谱时可用）；默认存进 jianpu_output 文件夹")
     args = parser.parse_args(argv)
     if args.output and len(args.scores) > 1:
         parser.error("一次给多个曲谱时不能用 -o")
     failed = 0
     for path in args.scores:
-        target = args.output or Path(__file__).resolve().parent.parent / "jianpu" / f"{path.stem}.html"
+        target = args.output or Path(__file__).resolve().parent.parent / "jianpu_output" / f"{path.stem}.html"
         try:
             export(path, target)
         except (OSError, ScoreError) as error:

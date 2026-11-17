@@ -32,7 +32,7 @@ from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
 MIDI_DIR = PROJECT / "midi"
-JIANPU_DIR = PROJECT / "jianpu"
+JIANPU_DIR = PROJECT / "jianpu_output"
 TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
@@ -655,7 +655,7 @@ class App:
         self.menu.tk_popup(event.x_root, event.y_root)
 
     def export_jianpu(self) -> Path | None:
-        """Write the selected score as 简谱 into the jianpu folder and open it."""
+        """Write the selected score as 简谱 into the jianpu_output folder and open it."""
         score = self.selected()
         if score is None:
             return None
@@ -665,7 +665,7 @@ class App:
         except (OSError, ScoreError) as error:
             messagebox.showerror("无法导出简谱", f"{score.name}：{error}", parent=self.root)
             return None
-        self.say(f"简谱已存进 jianpu 文件夹：{target.name}，在浏览器里可以打印成 PDF")
+        self.say(f"简谱已存进 jianpu_output 文件夹：{target.name}，在浏览器里可以打印成 PDF")
         self.open_file(target)
         return target
 

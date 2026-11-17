@@ -4,10 +4,11 @@ __pycache__/
 dist/
 build/
 *.spec
-score/
+jianpu/
+musical_staff/
 midi/*
 !midi/README.md
 !midi/*.mid
 tools/
-jianpu/*
-!jianpu/README.md
+jianpu_output/*
+!jianpu_output/README.md
