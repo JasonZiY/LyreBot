@@ -1,0 +1,47 @@
+# 由 MIDI 自动编配：无泪的哀声-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，93% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 80 拍（四分音符），速度平稳，4/4 拍
+speed=80
+0--e-e-|0--ah.a.ad-
+e-r.e.w.e.r.t.|ah.a.sf.ad.hj.ad.sfg.dg.
+r.e-w.q-q-|sh.ah.d.j.h.a.fh-
+r.e.w.q.g.f.g.j.|sfh.ad.sfj.ah.d.ms.d-  # 改动 ♯5→g ♯4→f ♯5→g
+y.q.e-h.q.e-|dh.0---.
+h-h.j.q-w.e.|n----
+r-t.r.e-h-|xs--n--
+g-g.h.j-q.w.|b----
+e-r.e.j--|za--c--
+h-h.j.q-w.e.|n----
+r-t.r.e-h-|xs--nd--
+r-r.w.e-e.q.|xs--nd--
+w.w.q.j.h--|cm~g-.~n.a.d-  # 改动 伴奏♯5→g
+e-e-y-r.e.|ah.a.ad-dh.a.sd.a.
+w.e.r.t.r.e-w.|hj.a.sg.d.sh.a.d.aj.
+q-q-r.e.w.q.|h.a.fh-sh.a.fj.h.
+g.f.g.j.h-d-|d.ms.d.g.nd.a.0-  # 改动 ♯5→g ♯4→f ♯5→g 伴奏♯5→g
+0-d-h-h.j.|n.a.0-n.a.d.a.
+q-w.e.r-t.r.|n.a.d.a.s.f.h.f.
+e-h-g-g.h.|n.a.d.a.b.m.s.m.
+j-q.w.e-r.e.|b.m.s.m.a.d.g.d.
+j--h-h.j.|c.b.m.b.n.a.d.a.  # 改动 伴奏♯5→b 伴奏♯5→b
+q-w.e.r-t.y.|d.a.d.a.s.f.h.f.
+e-h-r-r.w.|n.a.d.a.s.f.h.f.
+e-e.q.w.w.q.j.|n.a.d.a.c.b.m.b.  # 改动 伴奏♯5→b 伴奏♯5→b
+q~j~h~g~h~j~q~h~d~s~a~m~a~s~d~a~|nh.a.d.a.n--  # 改动 ♯5→g
+n~b~n~m~a~m~a~s~f-g-|0--bns-d-  # 改动 ♯5→b ♯1→a ♯1→a
+f-.g.f.d.s.a.|x.n.v.n.n.n.v.n.
+m.a.d-n-c-|.c.a.c-z-z.
+s-.d~s~a.m.n.b.|x.n.v.n.c-c-  # 改动 ♯5→b
+q-w-e-e-|cdh-xsj-za-g-
+r-.d.f.d.s.f.|xsh.n.f.n.vn.n.v.n.
+d-h-u-y-|n.c.n.m.nj.a.dh.a.
+r-.m~a's~d--|mj.v.s.v.m.v.x.v.  # 改动 ♯4→r ♭3→d 伴奏♯4→v 伴奏♭3→s 伴奏♯4→v 伴奏♯4→v 伴奏♭3→x 伴奏♯4→v
+e-.d~d'f'g-~d-|cdj.m.g.m.cmd.m.b.m.  # 改动 ♯5→g 伴奏♯5→g 伴奏♯5→b
+q.q.e.q.e.d.h.q.|nh----
+h.d.h.q.h--|----
+.q.e-y-r.e.|.a.dh-vfh.a.sfh.a.
+w.e.r.t.r.e-w.|bgj.as.sgj.sd.nsh.ad.g.j.
+q-q-r.e.w.q.|fh.a.fh-s.ah.sj.fh.
+j.h.g.j.h--|d.m.d.g.nad--  # 改动 ♯5→g 伴奏♯5→g

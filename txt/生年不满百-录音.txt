@@ -1,0 +1,44 @@
+# 由 MIDI 自动编配：生年不满百-录音.mid
+# 原曲的音阶相当于 C 大调 / A 小调（没有升降号），不用移调，94% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 75 拍（四分音符），速度平稳，4/4 拍
+speed=75
+q--.j.q.w.|ndh----
+j--g--|bdg----
+h--.g.h.j.|vaf----  # 改动 ♯5→g
+g--d--|cmd----  # 改动 ♯5→g
+q--.j.q.w.|ndh----
+e--j--|bgj----
+h-.r~e~r-h-|vf----
+0-.w~q~w.q.j.w.|cm----
+q--.w.e.r.|ndh----
+w--q-j-|bgj----
+q--.j.q.w.|vfh----
+g--q-w-|cmd----  # 改动 ♯5→g
+e~w~e--w.e.r.|cdh----
+w~q~w--q.w.e.|xsg----
+q~j~q--.w.q.|zaf----
+g.g-.q-w-|cmd~v~0---.  # 改动 ♯5→g ♯5→g 伴奏♯4→v
+q-q---|ndh-dh---
+w-w-w-e-|bgj-sgj-sgj-d-
+q-q---|vfh-afh---
+j-j-q-w-|cmd-md-a-s-
+e----|ndh----
+w-w-q-j-|bgj-s-a-m-
+q----|vfh----
+j-j-h-g-|cmd-m-n-b-  # 改动 ♯5→g 伴奏♯5→b
+h-.q~j~q-j.h.|nad--cn--
+t--a-s-|bsj-m-xb--
+q-.y~t~y-t.r.|vfh-.h~g~zvh-g.f.
+t-g-h-j-|cdj-b-cnm-m-  # 改动 ♯5→t ♯5→g 伴奏♯5→b
+h-.q~j~q-j.h.|nad-c-a-c-
+t-s-a-j-|bsj-x-b-xm-
+q-.e~w~e-y-|vfh-z.d~s~nd-zh-
+t-g-q-w-|cdj-m-ca-ms-  # 改动 ♯5→t ♯5→g
+q-.e~w~e-w.q.|ndh----
+w-.e.r-w.j.|bgj----
+h-.q~j~q-j.h.|vaf----
+j-.q.w-j-|cd-.h.j-g-  # 改动 伴奏♯5→g
+q----|ndh----
+-.0--.|-.0--.

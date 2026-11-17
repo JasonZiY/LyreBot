@@ -1,0 +1,84 @@
+# 由 MIDI 自动编配：花舞蝶宫-录音.mid
+# 原曲的音阶相当于 E 大调 / C♯ 小调（4 个升号），降 4 个半音移成 C 大调 / A 小调，99% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 120 拍（四分音符），速度平稳，3/4 拍
+speed=120
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|bad---
+t.e.q.j.q.e.|-0--
+.e.q.j.q.e.|g.0--.
+t.e.q.j.q.e.|0---
+r.e.q.h.q.e.|nas---
+r.e.q.h.q.e.|---
+r.e.q.h.q.e.|nf---
+r.e.q.j.q.e.|--g-
+t.e.q.j.q.e.|bad---
+t.e.q.j.q.e.|---
+.e.q.j.q.e.|g---
+t.e.q.j.q.e.|-0--
+r.e-.q.e.|vaf.d.a.h.0-
+r.e.q.h.q.e.|vs---
+r.e.q.g.q.e.|f---  # 改动 ♯5→g
+r---|a--s-
+t.e.q.j.q.e.|zdg---
+t.e.q.j.q.e.|d-f-g-
+t.e.q.j.q.e.|ag---
+t.e.q.j.q.e.|b---
+r.e.q.h.q.e.|vns---
+r.e.q.h.q.e.|vd-vf-g-
+r.e.q.h.q.e.|nf-a.0-.
+r.e.q.h.q.e.|b-n-m-
+t.e.q.j.q.e.|zbd---
+t.e.q.j-e.|g-h.0-.
+t.e.q.j.q.e.|ch-.v-.
+t.e.q.j.q.e.|b-.za-.
+r.e.q.h.q.e.|vn~na~d--.
+r.e.q.h.q.e.|xns---
+r.e.q.h.g.f.|zva---  # 改动 ♯5→h
+d.f.d.s.a.m.|xb---
+t.e.q.j.q.e.|z-cba-cba-
+q.e.q.j.q.e.|z-zca-zcb.~b~
+w.e.q.j.q.e.|z-zcb-zba-
+e.e.q.j-e.|z-zca-.bd.
+r-e-w-|zv.d.va.n.a.d.
+q.e.q.h.q.e.|v-vna-vna.~z~
+r-e-w-|v.d.va.n.a.d.
+q.e.q.h.q.e.|v-vn-na.~z~
+t.e.q.j.q.e.|zg.b.c.z.cb-
+q.e.q.j.q.e.|za-zca-cb.~b~
+w.e.q.j.q.e.|zs.b.c.z.cb-
+e.e.q.j.q.e.|zd-zc-cb.~b~
+r-e-w-|zvf.d.vad.n.as.d.
+q.e.q.h-e.|va-vn-a.~z~
+r-e-w-|v.d.va.b.a.d.  # 改动 伴奏♯5→b
+t-h-j-|bg-n-m-
+q.d.a.m.a.d.|ng.0--.
+g.d.a.m.a.d.|0---
+q.d.a.b.a.d.|bg---
+j.d.a.b.a.d.|g.0--.
+g.d.a.n.a.d.|zv---
+g.d.a.b.a.d.|n-b-v-
+h.d.a.b.a.d.|cb---
+g.d.a.m.a.d.|b-n--
+q.d.a.m.a.d.|zg---
+g.d.a.m.a.d.|n---
+j.d.a.n.a.d.|bg---
+q.d.a.b.a.d.|cg---
+g.d.a.n.a.d.|v---
+g.d.a.n.a.d.|---
+f---|va---
+t---|g---
+---|---
+e.e.q.j.q.e.|g.0--.
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|0---
+t.e.q.j.q.e.|0---
+w.e.q.h.q.e.|0---
+r.e.q.h.q.e.|0---
+r.e.q.g.q.w.|0---  # 改动 ♯5→g
+---|0---
+e---|agj---
