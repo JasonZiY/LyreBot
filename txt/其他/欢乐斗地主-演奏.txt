@@ -1,0 +1,46 @@
+# 由键盘演奏记录：欢乐斗地主-演奏
+# 节拍是从按键推断的：约每分钟 128 拍（四分音符），速度平稳，4/4 拍
+# 拍号 4/4；共 320 次按键
+speed=128
+0--.zg-zbg.
+h.q.g.zbh.q.ct.t.cmt.
+e.t-cm-zg-zbg.
+h.q.g.zbh.e.bw.w.xbw.
+q.w-xb-ne-cne.
+w.e-cnt-vy-zvy.
+t.y-zvt.e.bw-xby.
+e.w.t.be.w.zq-bq.
+h.zq--zb-zb.
+n.a-n.a.cg-m.
+d.g-m-zb-b.
+n.a-bd-bs.d.xs.
+a.s-x-nd-cd.
+s.d-cg-vh.q.zh.
+speed=128.1
+g.h-zg.d.bs-xh.
+d.s.g.xd.w.ze-zw.
+.zq--xs.~d~s.
+d.g.h.w-zq-bg.
+.zq-.zg-zbg.h.
+speed=127.6
+q.g.zbh.q.ct.t.cmt.e.
+t-cm-zg-zbg.h.
+q.g.zbh.e.bw.w.xbw.q.
+w-xb-ne-cne.w.
+e-cnt-vy-zvy.t.
+y-zvt.e.bw-xby.e.
+w.t.be.w.zq-bq.h.
+zq--zb-zb.n.
+a-n.a.cg-m.d.
+g-m-zb-b.n.
+a-bd-bs.d.xs.a.
+speed=128.9
+s-x-nd-cd.s.
+d-cg-vh.q.zh.g.
+h-zg.d.bs-xh.d.
+s.g.xd.w.ze-zw-
+speed=126.9
+zq--xs.~d~s.d.
+g.h.w-zq-bg-
+speed=127.9
+zq----

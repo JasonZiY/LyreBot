@@ -1,0 +1,113 @@
+# 由 MIDI 自动编配：永无谢幕的演出-录音.mid
+# 原曲的音阶相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调，95% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 130 拍（四分音符），速度分 2 段各自平稳，段与段之间逐拍跟随，4/4 拍
+speed=130
+n.m~a~g~a~m.a.d.h.n.|0--n.0-.
+m~a~g.m.s.j~m~s.g.e~t'y~|0--.z.n~m~a~m~
+u---.n.|n.m~a~g~n~a.h.d.a.0.
+m~a~g~u-u~0.u.~y~u'y't'y.|0-n~a~s~g~dj.s~d~g.c.
+.m~a~g.m~a~s.h-y't'y.|n-n-n-nm~a~g~m~
+e.h.m~a~g~m~s~h~s~a~m~g~w~j~|n.0-.~x~z~0.x~z.
+j.~j.~g-d.b~m~n.|nsd.~csd.~csd-xbn.0-
+a~g~d.a~s~g~d~j~g~d~a~m~a.b~|0-c.b.n.~b~c~x~0.
+n.m~a~g.d.e~y~u.n~m~a~g~|0-.n.m~s~j.0-
+d~g~u~0.u~0.u.q~0.u~q~q~|0.s~g~dj.d~g~h~g~d~g~h.c.
+w.0-e~w~u--|n.ca~m~n.na~s~d.h.n~m~a~g~
+.s~d~h-a~s~d~g~q~j~h~g~|n-.n-.md~z~x~c~
+h.a~m~n.g'h'g.d-~m~a~s~|n.c-n.a~m~a~m~n~0.~
+a~m~f-~f~d~s~d~f~d~s~d~f~|0.n~m~a~m~n~a~m~n~v~x~n~b~v~c~  # 改动 伴奏♯5→b
+h.~e.~r.~t.~y-|nad.n~dj~n~n~afh~n~n~sj~n~n~adh.n.  # 改动 ♯5→t
+0-y~y~y~y~y-s~b~v~c~|nad-h~h~nh~nh~nh-m~0.~  # 改动 ♯5→b
+m.m~j-j~0.~q~0.~q~|v.~vms.m~v.a.vas.va.a.
+0.~w~0.~w~0.~q~0.j.|vs.s~vnm~s~s~vms.a.vna.cm-
+0.~j.m~n~j~a.a.a~d~q~q~|nm.m~cn.~c-cn.n-
+~d~d~d~n~d~h~d~m~s~j~s~a~d~q~d~|c-0--z-  # 改动 ♭3→s ♭3→s
+m.m~j.0-.q~a.a.|v.~vms.m~vm.a.vas.v-
+s.s~w-w~0.~q~0.j.|c.~ms.s~cs.a.ma.cm-
+0.~j.j.j~0.~q~0.~q~|nm.m~cn~m.nm.a.a.na.a.
+0.~j~0.q.h.q.e.y.|nm.m~n~a.na.cn.na.md.zh.
+j.j~u~0.~j.q.q.j.q~|vm.~vsj~j~j~vj.a.vas.vm.va.
+0.~w~0.w~0.q.q~0.~j~|s~s~s~vms~s~s~vms~d~a.vas.cm~m~m.
+0.~j~0.~j.q.q~0.~q~|nm~m~m~cad~m~m~nm.a.cna.na.a.
+g~d~m~d~h~d~m~d~j~0.~q~0.~|c-n-m~s~m~s~za~d~a~d~  # 改动 ♯5→g 伴奏♭3→s 伴奏♭3→s
+e~0.e~0.~e~0.~w~0.w~d~|v~d~d~nsh~d~d~vd.s~s~vms.vs~s~0.
+f~f~f~r~0.~r~0.~e~0.~j~|b.~ms~f~f~f.d.msd.j.j.  # 改动 伴奏♯5→b
+~j.j~0.~j~0.~q~0.~q~|nm.m~cna~m~m~nm.a~a~cna.na~a~a.
+0.~j~0.~h.d.a~0.~n~|nm~m~m~cna~n~n~n.d.cna.n.n~c~
+d~h-.~b--|na.~n.~n.zc--  # 改动 ♯5→b
+.n~m~a~m~a~s~d~s~d~f~g~h~j~w~|-z.z~x~c~x~c~v~b~v~b~c~  # 改动 ♯4→f ♯5→g 伴奏♯4→v 伴奏♯5→b 伴奏♯4→v 伴奏♯5→b
+r--e--|na.~n.~n.cna--
+.h~j~q~h~j~g~j~h~d~f~d~s~e.|.n~m~z~n~m~b~m~n~c~v~c~x~z~m~  # 改动 ♯5→g 伴奏♯5→b
+y--y--|nad.~n.~n.cad--
+t--y--|zad~m~z~x~c~x~c~v~bad~n~b~v~c~x~z~m~  # 改动 ♯5→t
+f--d--|vna.~n.~n.cna-.cn~cn~
+0-.s~a~m--|cn--~x.c~c-
+y.r.e.q.h.f.d.y.|ndh.f.nd.a.n.v.cn.nh~n~
+r.e.q.h.f.d.a.n.|nf.d.na.n.vn.c.zn-
+y.r.e.q.h.f.d.y.|mh.f.md.a.nm.v.cm.mh~m~
+r.e.q.h.f.d.a.h.|mf.d.ma.n.vm.c.z.n.
+e.r.e.q.h.f.d.e.|zh.f.zd.a.zn.v.zc.h.
+r.e.q.h.f.d.a.n.|zf.d.za.n.zv.c.z.z.
+e.r.e.q.h.f.d.h.|xah.f.xd.xa.xn.v.xc.x.
+r.e.q.h.f.d.a~b~c~g~|xf.d.xa.n.zv.c.z-
+h~f~d~a~n~v~c~z~n~z~c~v~n~a.h~|n-0--.c.
+j-.~f~q--|nm~f~s~m~n~m~s.na~f~s~a~nh~a~ns~nf~
+w--c~v~c~x~m~n~v~c~|ms~h~f~d~ms~j~h~f~0--
+x~m~n.x~n~v~d~s~j~h~w~e~w~q~j~|0--m-md-
+~u~y~e~q~j~h~d~a~d~h~j~q~e~y~j'q~|za-z-z-z.z.
+~y~e~q~j~h~d~a.a~d~h~j~q~e~y~|zm-z-zn-z-
+u~r~w~j~h~f~s~m~s~f~h~w.y~j'q'w.|xj-x-x-xf-
+~y~r~w~h~f~h~w~e~r~y~u~t-|xa-x-c-c-  # 改动 ♯5→t
+.y~0.~y~y~y~y~y.y~h~h~h~|nh~h.h~h~h~cna.cna.~cna.~n~n~
+~h~h~h~h~h~y~y~y~y~y.y~h~h~h~|n-.cna.cna.~cna.~n~n~
+~h~h~h~h~h~y~y~y~y~y.y~h~h~h~|n-.vnm.vnm.~vnm.~n~n~
+~h~h~h~h.y~y~y~y~y.y~h~d~h~|n-.vnm.vnm.~vnm.~n~n~
+0.~h~h~h~y~y~y~y~y.y~h~d~h~|n~n~n~0.~cad.cad.~cad.~n~n~
+0.~h~h~h~y~y~y~y~y.y~h.h~|n~n~n~0.~cad.cad.~cad.~nd~n~
+0.y~y~y~0.~y.y~y~y~0.~|n-~h~vsf~h~vfh~h.vsf.h~nh~nh~
+y.y~y~y.y~y~y~y~w~y~0-|nh~h~0.ah~h~0.ah.a.ah-  # 改动 ♭3→w
+0--f-d-|cad~n~c~m~z~x~z~v~vb~n~b~v~c~x~m~c~
+g-f-f-d-|bad~c~n~m~zv~x~c~z~b~n~b~v~c~x~m~c~
+f--g-f-|na~c~n~m~z~x~c~v~b~n~b~v~c~x~m~c~
+t-g-h-h-|ndg~c~n~m~z~x~c.b~m~b~v~c~x~z~c~  # 改动 ♯5→h ♯5→h 伴奏♯5→b 伴奏♯5→b
+y-.a~d~h~j~q~e~y~u~q~e~|nah~c~n~m~z~c~n~m~a~d~a~j~a~d~0.
+y~e~q~u~y~e~q~j~h~d.j~q~e~r~y~|a~j~h~d~a~j~h~d~a~m~na~c~z~m~n~c~
+u---r.r~y~|nfj.~x~v~n~mf~s~fj~sh~mj~ns~v~xs~m~n~
+q-.~q~w~r~y~w~w-|na~f~x~b~na~bf~x~n~ns-.n.
+h.~s.~h~h~y-h~0.~|v~n~n~xvn~n~n~v-xns~n~v~n~n~n~
+j~0.~j.j~q~q~q~q.q~0.~|v~m~m~vms.m~v-vns~a~v~a~a~a~
+w~0.~w~0.q~q~q~q.q~0.~|c~s~s~cas.s~cs-cna~a~c~a~a~a~
+j~0.~j.j~h~h.h.h~0.~|c~m~m~cnm.m~c-cn~n~c~n~n~n~
+h~0.~h.h.y-h~0.~|x~n~n~na.n~x~n~h~n~na~n~x~n~n~n~  # 改动 伴奏♭3→x 伴奏♭3→x 伴奏♭3→x
+j~0.~j.j~q~q~q~0.q~0.~|x~m~m~nm.m~x-n~a~x~a~a~a~  # 改动 伴奏♭3→x 伴奏♭3→x 伴奏♭3→x
+q~a~a~a~q.q~q~q~q~q~q~q~0.j'h'j~|c.~cn.a~c-cna.c~a~a.
+~0.~j.j~j~u~j~m~m~j~j~u.|c~m~m~cm.m~c-c.c-
+h----|xsf-x.vns~vns~vns-x.x~x~
+j--q--|xsf-x.vns~vns~vsh-x.x~x~
+w--q--|csh-c.nad~nad~ndh-c.c~c~
+j--h--|csf-c.nad~nad~nad-c.c~c~
+w----|ah-v.na~na~na-v.v~v~  # 改动 ♭3→w 伴奏♯4→v 伴奏♯4→v 伴奏♯4→v 伴奏♯4→v
+r--j--|ah-v.v~v~m-m.m~m~  # 改动 ♯4→r 伴奏♯4→v 伴奏♯4→v 伴奏♯4→v
+y---.t~r~|cdh-c.c~cad~cad-c.c~f~  # 改动 ♯5→t ♯4→r 伴奏♯4→f
+t--y.h~e~h~y~y.|c-c.cmd~cmd~cdh-.h.  # 改动 ♯5→t
+y.f~a~d~d~a~a~v~v~c~c~h.f~f~|n.na~n~0-z~z~z~z~na.na~na~
+e~e~q~q~h~h~h~h~h~h~h~h~h~h~0.|nh~nh.~naf~naf~nad~nad~vna~vna~vna~na~cna~na~z.
+y.r.e.q.h.q.y.r.|nah.nah~nah~nah~nah~nad~nad~nad~nad~nad.nh.nfh~fh~
+e.h~h~h~h~h~h~d~d~n~n~n-|dh~dh~naf~naf~nad~nad~vaf~vaf~n~n~c~c~0.z.
+.r~q~e~e~q~q~h~h~0.y.r~r~|.nah-.naf~a~d~d~nah.nah.
+e~e~q~q~h~h~0.n~a~n-.|-naf~a~ad~ad~v~n~v.c.z.
+y.r~r~e~e~h.h.q.y.r~q~|nah.nah~a~0.ad~ad~ad~n~ad.nh.nh.
+e~e~f~f~d~d~f~q~y.y.u.q.|.na~na~na~na~vna.nd.ndh.mj.za.
+0----|0----
+speed=121.1
+0----|0----
+speed=124.6
+0---n-|0----
+----|0----
+----|0----
+----|0----
+----|0----
+----|0----
+----|0----

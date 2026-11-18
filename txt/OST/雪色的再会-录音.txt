@@ -1,0 +1,56 @@
+# 由 MIDI 自动编配：雪色的再会-录音.mid
+# 原曲中途转调，各段分别移调，93% 的音落在白键上
+# 第 1–37 小节相当于 A 大调 / F♯ 小调（3 个升号），升 3 个半音移成 C 大调 / A 小调
+# 第 38–48 小节相当于 C 大调 / A 小调（没有升降号），不用移调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 95 拍（四分音符），速度平稳，4/4 拍
+speed=95
+0---f.q.|0----
+t-q.t-.f.q.|0.c--~0-~
+b-z.b-.a-|0.c--.v.z.
+g-j-q.d.s.a.|b.b.s.m-.c.z.
+g-g-h.d.s.a.|b.n.d.m-.v.z.
+g-g-h.a-s.|b.b.s.bm-.z.b.
+d---a-|x.z.b.c-.v.z.
+g-j-q.d.s.a.|b.b.s.m-.c.z.
+g-g-h.d.s.a.|b.n.d.m-.v.z.
+g-g-h.s.s.a.|b.b.s.m-.z.b.
+---t-|x.z.b.c-.v.a.
+.t--.v.t.|g.c.a.g--a.
+-t--a-|g.c.a.g-.vb.z.
+g-j-q.d.s.a.|ba.b.s.m.d.a.cm.z.
+g-g-h.d.s.a.|ba.n.d.m.d.a.vm.z.
+g-g-h.a-s.|b.b.s.m-b.z.bm.
+d.z.b--a-|xa.0--.vb.z.
+g-j-q.d.s.a.|ba.b.s.m.d.a.cm.z.
+g-g-h.d.s.a.|ba.n.d.m.d.a.vm.z.
+g-g-h.s.s.a.|b.b.s.m-b.zb.b.
+---.b.|x.z.b.c-.z.0.
+x-c--s.f.|0-z--b.s.  # 改动 ♭3→s 伴奏♯5→b 伴奏♭3→s
+g.e.w-q.h-.|n.s.n.s.h.s.b.n.  # 改动 ♭3→e ♭7→h 伴奏♭7→n 伴奏♭3→s 伴奏♭7→n 伴奏♭7→h 伴奏♭7→n
+q.g-f.s.h-.|f.n.a.s.b.s.b.s.  # 改动 ♭3→s ♭7→h 伴奏♭7→n 伴奏♭3→s 伴奏♭3→s 伴奏♯5→b 伴奏♭3→s
+q.g-f.s.g.0-|h.s.n.s.n.s.a.s.  # 改动 ♭3→s 伴奏♭7→h 伴奏♭3→s 伴奏♭7→n 伴奏♭7→n 伴奏♭3→s
+h.g.z.x.b-s.f.|b.s.0-.x.b.s.  # 改动 ♯5→h ♭3→s 伴奏♭3→s 伴奏♯5→b 伴奏♭3→s
+g.e.w-q.h.0-|n.s.n.s.h.s.b.n.  # 改动 ♭3→e ♭7→h 伴奏♭7→n 伴奏♭3→s 伴奏♭7→n 伴奏♭7→h 伴奏♭7→n
+q.g-f.s.h.h-|f.n.a.s.b.s.b.s.  # 改动 ♭3→s ♭7→h ♭7→h 伴奏♭7→n 伴奏♭3→s 伴奏♭3→s 伴奏♯5→b 伴奏♭3→s
+q.g-f.n.s.g-|h.s-s-x.b.s.  # 改动 ♭7→n ♭3→s 伴奏♭7→h 伴奏♭3→s 伴奏♭3→s
+-v.x.v.x.a.s.|b.s.0--vn.zm.  # 改动 伴奏♭3→s
+d.q.j-h.g-.|ba.nh.bg.x.mf.xd.c.x.
+h.d-s.a.g.g-|bf.xa.n.bm.zn.bd.vd.z.
+h.d-s.a.d.d-|bf.na.b.xm.n.xa.na.b.
+f.d.d--a.s.|as.ba.ba.a.m.b.vn.zm.
+d.q.j-h.g-.|ba.nh.bg.x.mf.d.c.x.
+y.e-w.q.t.t-|bf.a.n.bj.ah.bd.vd.z.
+y.e-w-q-s.|bf.ba.x.mj-g.b-  # 改动 ♭3→s 伴奏♯5→b
+g-a.g-.v.a.|.c--.0-  # 转调到 C 大调 / A 小调，从这里起不移调
+g-a.g-.q-|0.c.0--v.a.
+t-u-q.e.w.q.|g.b.s.j.0-c.a.
+t-t-y.e.w.q.|g.n.d.j-.v.a.
+t-t-y-.w.|g.b.s.j-a.z.b.
+e---q-|s.z.b.d-.v.a.
+t-u-q.e.w.q.|g.b.s.j-.c.a.
+t-t-y.e.w.q.|g.n.d.j.0-v.a.
+t-t-y.w.w.q.|g.b.s.j.0-z.b.
+---z.b.|s.z.b.d-.0-
+s-d---|0.z.ba---
