@@ -1,6 +1,6 @@
 """Arrange a MIDI file for the 21-key lyre and write it as a LyreBot score.
 
-Run ``python -m lyrebot.arrange song.mid`` (see README.md).  The steps follow
+Run ``python -m lyrebot.arrange song.mid`` (see docs/原理与开发记录.md).  The steps follow
 how people arrange for the lyre by hand:
 
 1. Split the file into parts, one per track and channel.  Drums and sound

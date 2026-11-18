@@ -43,7 +43,7 @@ PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演�
 MIDI_FILE_SUFFIX = "-MIDI"  # and the score arranged from a MIDI file of it, 飞鼠进行曲.mid, as 飞鼠进行曲-MIDI
 NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没有自带。\n\n"
             "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
-            "下载地址和放法见 README 的「从录音生成曲谱」。")
+            "下载地址和放法见 docs 文件夹里的「从录音生成曲谱-安装说明」。")
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0
 FAMILY = "Microsoft YaHei UI"
@@ -925,7 +925,7 @@ class App:
         tools = find_tools(self.tool_dirs)
         if tools is None:
             self.mark_failed(source)
-            self.say(f"{source.name} 无法转录：没有找到转录工具，见 README「从录音生成曲谱」", warn=True)
+            self.say(f"{source.name} 无法转录：没有找到转录工具，见 docs 文件夹里的「从录音生成曲谱-安装说明」", warn=True)
             return
         self.say(f"正在把 {source.name} 转成 MIDI…")
         self.stop_transcribing = threading.Event()

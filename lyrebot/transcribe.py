@@ -1,7 +1,7 @@
 """Turn a recording into a MIDI file with audio.cpp and the MuScriptor model.
 
 Neither ships with LyreBot. They are looked for in a ``tools`` folder inside
-the LyreBot folder, or in a ``LyreBot-tools`` folder next to it (see README).
+the LyreBot folder, or in a ``LyreBot-tools`` folder next to it (see docs/从录音生成曲谱-安装说明.md).
 """
 
 from __future__ import annotations

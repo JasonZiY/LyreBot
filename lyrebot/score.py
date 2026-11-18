@@ -1,6 +1,6 @@
 """Read LyreBot text scores into exact, beat-based events.
 
-The notation is documented in README.md.  Everything here works in quarter-note
+The notation is documented in docs/曲谱格式.md.  Everything here works in quarter-note
 beats using exact fractions; seconds appear only through ``TempoMap``.
 """
 
