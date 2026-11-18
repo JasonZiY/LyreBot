@@ -266,7 +266,7 @@ python -m unittest discover tests
 
 ## 琴谱来源
 
-`txt` 文件夹里手写的曲谱转写自 <https://space.bilibili.com/76052941> 发布的诗琴简谱，编曲归原作者所有。
+`txt` 文件夹里的曲谱，一部分转写自 <https://space.bilibili.com/76052941> 发布的诗琴简谱，其余来自公开的音频和乐谱资源。乐曲和编曲归各自的作者所有。
 
 ## 许可证
 
