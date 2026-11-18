@@ -8,7 +8,6 @@ jianpu/
 musical_staff/
 midi/*
 !midi/README.md
-!midi/*.mid
 tools/
 jianpu_output/*
 !jianpu_output/README.md
