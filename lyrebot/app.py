@@ -830,6 +830,10 @@ class App:
         self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
         self.search_entry.bind("<Return>", lambda _: self.search())
+        # A press anywhere else in the window takes the keyboard from it (the window's own binding sees
+        # its pieces' presses; a press on the title bar or an edge is counted by the frame, see ``poll``).
+        root.bind("<ButtonPress>", self.click_away, add="+")
+        self.frame_presses = 0
 
         # ---- song list ----
         top = Sheet(root, theme)
@@ -1719,7 +1723,25 @@ class App:
     def stop(self) -> None:
         self.cancel.set()
 
+    def click_away(self, event: tk.Event) -> None:
+        """A press anywhere but on the search line (where the pointer is an I-beam) leaves it."""
+        line = str(self.search_field)
+        where = str(event.widget)
+        if where != line and not where.startswith(line + "."):
+            self.leave_search()
+
+    def leave_search(self) -> None:
+        try:
+            typing = self.root.focus_get() is self.search_entry
+        except (KeyError, tk.TclError):  # (a focus Tk cannot name, in a menu)
+            return
+        if typing:
+            self.root.focus_set()
+
     def poll(self) -> None:
+        if self.title_bar is not None and self.title_bar.frame.presses != self.frame_presses:
+            self.frame_presses = self.title_bar.frame.presses  # pressed on the title bar or an edge
+            self.leave_search()
         while True:
             try:
                 kind, value = self.updates.get_nowait()

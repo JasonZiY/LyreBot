@@ -30,6 +30,7 @@ HTTRANSPARENT, HTCLIENT, HTCAPTION = -1, 1, 2
 HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT = range(10, 18)
 
 WM_NCDESTROY, WM_NCCALCSIZE, WM_NCHITTEST, WM_SYSCOMMAND = 0x0082, 0x0083, 0x0084, 0x0112
+WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN = 0x00A1, 0x00A4
 SC_MINIMIZE, SC_MAXIMIZE = 0xF020, 0xF030
 GWL_EXSTYLE, GWL_STYLE, GWLP_WNDPROC = -20, -16, -4
 WS_CAPTION, WS_SYSMENU, WS_THICKFRAME = 0x00C00000, 0x00080000, 0x00040000
@@ -49,6 +50,7 @@ class Frame:
         self.caption = caption  # the title bar's height: a press there moves the window
         self.buttons: list[Box] = []  # on the title bar, but Tk's to press
         self.hwnd = 0  # the window Windows sees (Tk's wrapper), once adopted
+        self.presses = 0  # presses on the title bar and the edges, which Windows has and Tk never hears of
 
     def hit(self, x: int, y: int, width: int, height: int) -> int:
         """What a press at (x, y) does in a window ``width`` by ``height``: one of the HT codes."""
@@ -112,7 +114,8 @@ _procedures: list = []
 
 def _subclass(hwnd: int, handle: Callable[[int, int, int], int | None]) -> None:
     """Put ``handle(message, wparam, lparam)`` in front of the window's procedure: what it returns is
-    the answer, and None passes the message on as before."""
+    the answer, None passes the message on as before, and ``("pass", wparam, lparam)`` passes it on
+    with those instead."""
     previous = _user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC)
     if not previous:
         raise OSError("no window procedure to follow")
@@ -122,7 +125,9 @@ def _subclass(hwnd: int, handle: Callable[[int, int, int], int | None]) -> None:
             answer = handle(message, wparam or 0, lparam or 0)
         except Exception:  # never let an error escape into Windows: carry on as before
             answer = None
-        if answer is not None:
+        if isinstance(answer, tuple):
+            _, wparam, lparam = answer
+        elif answer is not None:
             return answer
         return _user32.CallWindowProcW(previous, window, message, wparam, lparam)
 
@@ -157,6 +162,8 @@ def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Mi
                 return 0  # all of the window is client: no system frame anywhere
             if message == WM_NCHITTEST:
                 return frame.at(lparam)
+            if message in (WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN):
+                frame.presses += 1  # (and Windows goes on to move, size or show the menu)
             if message == WM_SYSCOMMAND and wparam & 0xFFF0 == SC_MAXIMIZE:
                 return 0  # no maximising (Win+Up, the system menu): a frameless window would spill off the screen
             return None

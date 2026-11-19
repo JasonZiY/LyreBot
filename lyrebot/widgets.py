@@ -14,7 +14,7 @@ import time
 import tkinter as tk
 from typing import Callable
 
-from . import icons
+from . import icons, ime
 from .paper import OnPage
 from .theme import (EMBER, FAINT, GILT, GILT_BRIGHT, GILT_DEEP, GOLD, GOLD_SOFT, HAIR, HOVER, INK, LEATHER_EDGE,
                     LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, VEIL,
@@ -811,9 +811,11 @@ class PageLine(Sheet):
     and a hair line under them that turns gold while they have the keyboard.
 
     A tk.Entry is solid, which shows wherever the page is not one even colour, so the words are a canvas
-    text item edited by hand (``Typing``).  What an input method composes reaches Tk as ordinary key
-    presses, so Chinese goes in as it would into an Entry.  ``entry`` answers the part of an Entry's
-    interface LyreBot uses: get, insert, delete, focus_set and bind."""
+    text item edited by hand (``Typing``).  What an input method chooses reaches Tk as ordinary key
+    presses, and what it is still composing is shown in the line itself (``ime``), so Chinese goes in as
+    it would into an Entry.  The magnifier is part of the line: the pointer is an I-beam over all of it,
+    and a press there gives it the keyboard.  ``entry`` answers the part of an Entry's interface LyreBot
+    uses: get, insert, delete, focus_set and bind."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, icon: Callable[[int], object] | None = None):
         super().__init__(parent, theme)
@@ -821,6 +823,7 @@ class PageLine(Sheet):
         self.columnconfigure(1, weight=1)
         if icon is not None:
             mark = Picture(self, theme, theme.icon(icon.__name__, px(13), MUTED, icon, GOLD))
+            mark.configure(cursor="xterm")
             mark.grid(row=0, column=0, padx=(0, px(6)))
             mark.bind("<Button-1>", lambda _: self.entry.focus_set())
         self.typing = Typing(self, theme, self.restyle)
@@ -835,16 +838,17 @@ class PageLine(Sheet):
 
 class Typing(OnPage, tk.Canvas):
     """The words of a ``PageLine``: one canvas text item, its insertion cursor and selection, kept in sight
-    as they grow longer than the line.  It answers ``get``, ``insert``, ``delete`` and ``focus_set`` as a
-    tk.Entry does (an Entry's ``delete(first, last)`` stops short of ``last``; a canvas's ``dchars`` does
-    not), and the canvas's own methods of those names are reached through tk.Canvas."""
+    as they grow longer than the line, and what an input method is composing, shown at the cursor with a
+    gold line under it.  It answers ``get``, ``insert``, ``delete`` and ``focus_set`` as a tk.Entry does
+    (an Entry's ``delete(first, last)`` stops short of ``last``; a canvas's ``dchars`` does not), and the
+    canvas's own methods of those names are reached through tk.Canvas."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, on_focus: Callable[[bool], None]):
         self.theme, self.on_focus = theme, on_focus
         px = theme.px
         self.font = theme.fonts.body
         self.pad = px(3)  # above and below the words, as an Entry in a WritingLine has
-        line = int(theme.root.tk.call("font", "metrics", self.font, "-linespace"))
+        line = self.line_height = int(theme.root.tk.call("font", "metrics", self.font, "-linespace"))
         tk.Canvas.__init__(self, parent, width=1, height=line + 2 * self.pad, bg=parent.cget("bg"),
                            highlightthickness=0, borderwidth=0, cursor="xterm", takefocus=True, insertbackground=INK,
                            insertwidth=max(1, px(1)), selectbackground=HOVER, selectforeground=INK)
@@ -852,6 +856,9 @@ class Typing(OnPage, tk.Canvas):
         self.words = self.create_text(0, self.pad + line / 2, anchor="w", text="", font=self.font, fill=INK)
         self.shift = 0  # how far the words are moved left, to keep the cursor in sight
         self.anchor = 0  # where a selection made with the mouse began
+        self.composition = ime.attach(self.winfo_toplevel())  # what an input method is composing here
+        self.seen = 0  # the composition's version last shown
+        self.watching: str | None = None
         self.bind("<Configure>", lambda _: self.follow(), add="+")
         self.bind("<FocusIn>", lambda _: self.focused(True))
         self.bind("<FocusOut>", lambda _: self.focused(False))
@@ -977,20 +984,69 @@ class Typing(OnPage, tk.Canvas):
         else:
             self.select_clear()
             self.focus("")
+        if self.composition is not None:
+            self.composition.active = inside
+            if not inside:
+                self.composition.show("")
+            if self.watching is not None:
+                self.winfo_toplevel().after_cancel(self.watching)
+                self.watching = None
+            if inside:
+                self.watch()
+        self.follow()
         self.on_focus(inside)
 
+    def watch(self) -> None:
+        """While the line has the keyboard, show what the input method composes as it changes (it is read
+        in the window procedure, which may not touch Tk)."""
+        self.watching = None
+        if self.composition is None or not self.composition.active:
+            return
+        if self.composition.version != self.seen:
+            self.seen = self.composition.version
+            self.follow()
+        self.watching = self.winfo_toplevel().after(30, self.watch)
+
     def follow(self) -> None:
-        """Keep the cursor in the line: the words slide left as they run past its end, and back."""
+        """Keep the cursor in the line (the words slide left as they run past its end, and back), show what
+        an input method is composing there, and tell the input method where the cursor and the line are."""
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
-        text = self.get()
-        cursor = self.theme.measure(self.font, text[:self.place_of("insert")])
-        whole = self.theme.measure(self.font, text)
+        text, at = self.get(), self.place_of("insert")
+        composing = self.composition.text if self.composition is not None and self.composition.active else ""
+        shown = text[:at] + composing + text[at:]
+        cursor = self.theme.measure(self.font, shown[:at + len(composing)])
+        whole = self.theme.measure(self.font, shown)
         room = max(width - self.theme.px(2), 1)
         shift = min(max(self.shift, cursor - room), cursor)
-        shift = max(0, min(shift, max(whole - room, 0)))
-        if shift != self.shift:
-            self.shift = shift
-            self.coords(self.words, -shift, self.coords(self.words)[1])
+        self.shift = shift = max(0, min(shift, max(whole - room, 0)))
+        middle = self.coords(self.words)[1]
+        self.coords(self.words, -shift, middle)
+        tk.Canvas.delete(self, "composing")
+        if composing:  # the words as they will be, the part still being composed underlined in gold
+            self.itemconfigure(self.words, state="hidden")
+            self.create_text(-shift, middle, anchor="w", text=shown, font=self.font, fill=INK, tags="composing")
+            start = -shift + self.theme.measure(self.font, text[:at])
+            foot = middle + self.line_height / 2
+            self.create_line(start, foot, start + self.theme.measure(self.font, composing), foot, fill=GOLD,
+                             width=max(1, self.theme.px(1)), tags="composing")
+        else:
+            self.itemconfigure(self.words, state="normal")
+        self.tell(cursor - shift)
+
+    def tell(self, cursor: float) -> None:
+        """Where the cursor and the line are in the window, for the input method to put its candidates."""
+        if self.composition is None:
+            return
+        try:
+            window = self.winfo_toplevel()
+            left, top = self.winfo_rootx() - window.winfo_rootx(), self.winfo_rooty() - window.winfo_rooty()
+            line = self.master
+            line_left = line.winfo_rootx() - window.winfo_rootx()
+        except tk.TclError:
+            return
+        height = self.winfo_height() if self.winfo_height() > 1 else int(self.cget("height"))
+        self.composition.caret = (round(left + cursor), top, top + height)
+        self.composition.area = (line_left, top, line_left + line.winfo_width(), top + height)
 
 
 class TitleBar(tk.Canvas):

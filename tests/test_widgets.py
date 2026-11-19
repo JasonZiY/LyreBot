@@ -196,6 +196,33 @@ class Pieces(unittest.TestCase):
             self.type_into(line, "^v")
         self.assertEqual(line.get(), "林中 晨歌")  # lines and runs of space pasted as one space
 
+    def test_what_an_input_method_composes_shows_in_the_line(self):
+        line = PageLine(self.root, self.theme, icon=icons.magnifier).entry
+        if line.composition is None:
+            self.skipTest("input methods are Windows' here")
+        line.insert(0, "风息")
+        line.icursor(line.words, 1)
+        line.composition.active = True
+        line.composition.show("qing")
+        line.watch()
+        [shown] = [item for item in line.find_withtag("composing") if line.type(item) == "text"]
+        self.assertEqual(line.itemcget(shown, "text"), "风qing息")  # at the cursor, the rest moved on
+        self.assertEqual(line.itemcget(line.words, "state"), "hidden")
+        self.assertEqual(line.get(), "风息")  # nothing is written until the input method chooses
+        line.composition.show("")
+        line.watch()
+        self.assertEqual(line.find_withtag("composing"), ())
+        self.assertEqual(line.itemcget(line.words, "state"), "normal")
+        line.focused(False)  # leaving the line stops watching and forgets any composition
+        self.assertFalse(line.composition.active)
+        self.assertIsNone(line.watching)
+
+    def test_the_magnifier_is_part_of_the_line(self):
+        line = PageLine(self.root, self.theme, icon=icons.magnifier)
+        mark = line.grid_slaves(row=0, column=0)[0]
+        self.assertEqual(mark.cget("cursor"), "xterm")
+        self.assertEqual(line.entry.cget("cursor"), "xterm")
+
     def test_a_long_search_slides_to_keep_the_cursor_in_sight(self):
         line = PageLine(self.root, self.theme).entry
         line.configure(width=60)

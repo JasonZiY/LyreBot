@@ -731,6 +731,37 @@ class Folders(unittest.TestCase):
         self.assertEqual(row.pack_info()["side"], "bottom")
         self.assertIs(packed[-1], app.browser.master)
 
+    def test_a_press_anywhere_but_the_search_line_leaves_it(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from lyrebot.app import App
+        self.write_scores("甲.txt")
+        app = App(self.window(), self.scores, self.midi)
+        mark = app.search_field.grid_slaves(row=0, column=0)[0]
+        with mock.patch.object(app.root, "focus_get", return_value=app.search_entry), \
+                mock.patch.object(app.root, "focus_set") as leave:
+            for inside in (app.search_entry, mark, app.search_field):
+                app.click_away(SimpleNamespace(widget=inside))
+            leave.assert_not_called()
+            for outside in (app.browser, app.button, app.backdrop, app.search_field.master):
+                app.click_away(SimpleNamespace(widget=outside))
+            self.assertEqual(leave.call_count, 4)
+        with mock.patch.object(app.root, "focus_get", return_value=app.browser), \
+                mock.patch.object(app.root, "focus_set") as leave:
+            app.click_away(SimpleNamespace(widget=app.backdrop))  # not in it: nothing to leave
+        leave.assert_not_called()
+
+    def test_a_press_on_the_title_bar_leaves_the_search_line_too(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        with mock.patch.object(app.root, "focus_get", return_value=app.search_entry), \
+                mock.patch.object(app.root, "focus_set") as leave:
+            app.poll()
+            leave.assert_not_called()
+            app.title_bar.frame.presses += 1  # what the frame counts for a press Windows has
+            app.poll()
+            leave.assert_called_once_with()
+
     def test_the_search_box_jumps_to_each_match(self):
         from lyrebot.app import App
         first, second, third = self.write_scores("OST/蒙德/风息的离别诗.txt", "OST/纳塔/风清月白.txt", "歌曲/春风.txt")
