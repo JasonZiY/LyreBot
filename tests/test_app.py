@@ -332,7 +332,8 @@ class Folders(unittest.TestCase):
         self.assertGreater(top, 0)
         x, y = app.page.offset(browser)
         self.assertEqual(browser.coords(browser.find_withtag("paper")[0]), [-x, top - y])
-        self.assertEqual(app.search_field.entry.cget("bg"), app.page.head)  # the field sits in the even head
+        [laid] = app.search_entry.find_withtag("paper")  # the search field's words lie on the page too
+        self.assertEqual(app.search_entry.coords(laid), [-v for v in app.page.offset(app.search_entry)])
 
     def test_unless_asked_the_window_keeps_the_system_title_bar(self):
         from lyrebot.app import App
@@ -712,7 +713,7 @@ class Folders(unittest.TestCase):
         self.assertIsNone(next_match(songs, "雪"))
         self.assertIsNone(next_match(songs, "  "))
 
-    def test_the_search_field_has_the_right_third_of_its_row_and_no_button(self):
+    def test_the_search_field_has_the_right_third_of_the_row_over_the_rule_and_no_button(self):
         from lyrebot.app import App
         from lyrebot.widgets import PillButton
         self.write_scores("甲.txt")
@@ -723,8 +724,12 @@ class Folders(unittest.TestCase):
         parts = [row.grid_columnconfigure(column) for column in (0, 1)]
         self.assertEqual([(part["weight"], part["uniform"]) for part in parts], [(2, "thirds"), (1, "thirds")])
         self.assertFalse([child for child in row.winfo_children() if isinstance(child, PillButton)])
-        self.assertEqual(app.search_field.hint.cget("text"), "")  # no words in it while it is empty
-        self.assertEqual(app.search_field.hint.winfo_manager(), "")
+        self.assertEqual(app.search_entry.get(), "")  # and nothing written in it to start with
+        packed = app.root.pack_slaves()  # from the foot up: the player, its rule, the search row; the list fills
+        rule = next(widget for widget in packed if type(widget).__name__ == "Ornament")
+        self.assertEqual(packed.index(row), packed.index(rule) + 1)
+        self.assertEqual(row.pack_info()["side"], "bottom")
+        self.assertIs(packed[-1], app.browser.master)
 
     def test_the_search_box_jumps_to_each_match(self):
         from lyrebot.app import App

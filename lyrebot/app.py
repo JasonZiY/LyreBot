@@ -34,8 +34,8 @@ from .theme import (CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, 
                     PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Choice, IconButton, Ornament, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar, Words,
-                      WritingLine)
+from .widgets import (Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar,
+                      Words)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -818,18 +818,17 @@ class App:
         self.build_images()
 
         # ---- search ----
-        # Two parts: the lyre at the left (it moves up into the title bar when LyreBot draws one), and
-        # the search field filling the right third.  Enter searches; there is no button for it.
+        # Over the player's ornamental rule, in two parts: the lyre at the left (it moves up into the title
+        # bar when LyreBot draws one), and the search field filling the right third, written on the page
+        # (no hint: the magnifier says what it is for).  Enter searches; there is no button for it.
         finder = Sheet(root, theme)
         for column, share in ((0, 2), (1, 1)):
             finder.columnconfigure(column, weight=share, uniform="thirds")
         self.crest = Picture(finder, theme, theme.icon("lyre", px(20), GOLD, icons.lyre))
         self.crest.grid(row=0, column=0, sticky="w")
-        self.search_field = WritingLine(finder, theme, icon=icons.magnifier, bg=self.page.head)  # no hint: the
-        # magnifier says what it is for
+        self.search_field = PageLine(finder, theme, icon=icons.magnifier)
         self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
-        self.search_entry.configure(width=1)  # as wide as its third, whatever that is
         self.search_entry.bind("<Return>", lambda _: self.search())
 
         # ---- song list ----
@@ -901,16 +900,17 @@ class App:
         self.keys_button = IconButton(controls, self.keys_images, self.listen, "记录演奏", theme)
         self.keys_button.pack(side="right", padx=(0, px(2)))
 
-        # The player goes in first, so that a short window takes its room from the list.
+        # From the foot up: the player, its rule and the search row go in first, so that a short window
+        # takes its room from the list, which has the top.
         panel.pack(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))
         rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
-        finder.pack(side="top", fill="x", padx=px(16), pady=(px(10), 0))
-        top.pack(fill="both", expand=True, padx=px(8), pady=(px(4), 0))
+        finder.pack(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))
+        top.pack(fill="both", expand=True, padx=px(8), pady=(px(8), 0))
 
         self.refresh()
         self.show_selected()  # nothing is chosen yet: it asks for a song
         self.title_bar: TitleBar | None = None
-        if not (own_frame and self.take_frame(finder, panel)):
+        if not (own_frame and self.take_frame(panel)):
             dress(root)
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
@@ -918,7 +918,7 @@ class App:
         root.after(2000, self.watch)
         root.after(HOTKEY_POLL, self.watch_start_key)
 
-    def take_frame(self, finder: tk.Frame, first: tk.Widget) -> bool:
+    def take_frame(self, first: tk.Widget) -> bool:
         """Draw the title bar in LyreBot's own leather and gilt instead of Windows' (see ``chrome``): the lyre
         moves up into it, and the window opens in the middle of the screen the pointer is on."""
         if not chrome.available():
@@ -929,7 +929,6 @@ class App:
                        frame.minimise, self.close)
         bar.pack(side="top", fill="x", before=first)
         self.crest.grid_remove()
-        finder.pack_configure(pady=(px(6), 0))  # close under the bar's gilt fillet
         width, height = px(WINDOW_WIDTH), px(640)
         left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
         root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
@@ -940,7 +939,6 @@ class App:
             return True
         bar.destroy()
         self.crest.grid()
-        finder.pack_configure(pady=(px(10), 0))
         return False
 
     def watch_start_key(self) -> None:

@@ -17,8 +17,7 @@ its own slice of one picture of the paper under what it draws (``OnPage``).  The
 The picture is opaque, so the canvases only copy it to the screen when they repaint: a picture with
 see-through pixels would be blended afresh on every repaint, which made dragging the window slow.  The
 clouding and the grain belong to the window's coordinates, not its size, so they keep still while it is
-resized.  The search field cannot lie on the page (a real Entry is solid), so the head of the
-page, where it sits, is one even colour, which the field takes (``Page.head``).
+resized.  The head of the page, under the title bar, is one even lamplight.
 """
 
 from __future__ import annotations
@@ -217,7 +216,6 @@ class Page:
 
     def __init__(self, root: tk.Misc, flat: int):
         self.root, self.flat = root, flat
-        self.head = _hex(HEAD)  # the even colour of the top ``flat`` rows
         self.surfaces: list[OnPage] = []
         self.image: tk.PhotoImage | None = None  # the paper, as the surfaces lay it
         self.grain: tk.PhotoImage | None = None

@@ -1,7 +1,7 @@
 """The pieces LyreBot's window is built of, each drawn in its own style rather than the system's:
 icon buttons, rounded buttons and choices, tips, menus, a fine scrollbar, an ornamental rule,
-a writing line, the window's leather title bar, and the sheets, words and pictures that lie on the
-main window's page (see ``paper``) where a Frame or a Label would hide it.
+a writing line, the window's leather title bar, and the sheets, words, pictures and the line to write on
+that lie on the main window's page (see ``paper``) where a Frame, a Label or an Entry would hide it.
 
 ``PopupMenu`` keeps the part of ``tk.Menu``'s interface LyreBot uses, so the
 code that fills a menu, and the tests that read one, need not know the
@@ -804,6 +804,193 @@ class Picture(OnPage, tk.Canvas):
                          borderwidth=0)
         self.create_image(width / 2, height / 2, image=image)
         self.take_page(theme)
+
+
+class PageLine(Sheet):
+    """A line to write on, written straight on the window's page: a magnifier, the words as they are typed,
+    and a hair line under them that turns gold while they have the keyboard.
+
+    A tk.Entry is solid, which shows wherever the page is not one even colour, so the words are a canvas
+    text item edited by hand (``Typing``).  What an input method composes reaches Tk as ordinary key
+    presses, so Chinese goes in as it would into an Entry.  ``entry`` answers the part of an Entry's
+    interface LyreBot uses: get, insert, delete, focus_set and bind."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, icon: Callable[[int], object] | None = None):
+        super().__init__(parent, theme)
+        px = theme.px
+        self.columnconfigure(1, weight=1)
+        if icon is not None:
+            mark = Picture(self, theme, theme.icon(icon.__name__, px(13), MUTED, icon, GOLD))
+            mark.grid(row=0, column=0, padx=(0, px(6)))
+            mark.bind("<Button-1>", lambda _: self.entry.focus_set())
+        self.typing = Typing(self, theme, self.restyle)
+        self.typing.grid(row=0, column=1, sticky="ew")
+        self.line = tk.Frame(self, bg=HAIR, height=max(1, px(1)))
+        self.line.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.entry = self.typing
+
+    def restyle(self, focused: bool) -> None:
+        self.line.configure(bg=GOLD if focused else HAIR)
+
+
+class Typing(OnPage, tk.Canvas):
+    """The words of a ``PageLine``: one canvas text item, its insertion cursor and selection, kept in sight
+    as they grow longer than the line.  It answers ``get``, ``insert``, ``delete`` and ``focus_set`` as a
+    tk.Entry does (an Entry's ``delete(first, last)`` stops short of ``last``; a canvas's ``dchars`` does
+    not), and the canvas's own methods of those names are reached through tk.Canvas."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, on_focus: Callable[[bool], None]):
+        self.theme, self.on_focus = theme, on_focus
+        px = theme.px
+        self.font = theme.fonts.body
+        self.pad = px(3)  # above and below the words, as an Entry in a WritingLine has
+        line = int(theme.root.tk.call("font", "metrics", self.font, "-linespace"))
+        tk.Canvas.__init__(self, parent, width=1, height=line + 2 * self.pad, bg=parent.cget("bg"),
+                           highlightthickness=0, borderwidth=0, cursor="xterm", takefocus=True, insertbackground=INK,
+                           insertwidth=max(1, px(1)), selectbackground=HOVER, selectforeground=INK)
+        self.take_page(theme)
+        self.words = self.create_text(0, self.pad + line / 2, anchor="w", text="", font=self.font, fill=INK)
+        self.shift = 0  # how far the words are moved left, to keep the cursor in sight
+        self.anchor = 0  # where a selection made with the mouse began
+        self.bind("<Configure>", lambda _: self.follow(), add="+")
+        self.bind("<FocusIn>", lambda _: self.focused(True))
+        self.bind("<FocusOut>", lambda _: self.focused(False))
+        self.bind("<Button-1>", self.press)
+        self.bind("<B1-Motion>", self.drag)
+        self.bind("<Double-Button-1>", lambda _: self.select_all())
+        self.bind("<Key>", self.key)
+
+    # -- what an Entry answers --
+    def get(self) -> str:
+        return self.itemcget(self.words, "text")
+
+    def insert(self, index, text: str) -> None:  # type: ignore[override]
+        tk.Canvas.insert(self, self.words, index, text)
+        self.follow()
+
+    def delete(self, first, last=None) -> None:  # type: ignore[override]
+        start = self.place_of(first)
+        end = start + 1 if last is None else self.place_of(last)
+        if end > start:
+            self.dchars(self.words, start, end - 1)
+        self.follow()
+
+    def focus_set(self) -> None:
+        tk.Canvas.focus_set(self)
+        self.focus(self.words)
+
+    def place_of(self, index) -> int:
+        return len(self.get()) if index == "end" else int(tk.Canvas.index(self, self.words, index))
+
+    # -- typing --
+    def key(self, event: tk.Event) -> str | None:
+        name, held = event.keysym, event.state
+        control = bool(held & 0x4) and not held & 0x20000  # (AltGr reports Control and Alt together)
+        at, chosen = self.place_of("insert"), self.chosen()
+        if name in ("BackSpace", "Delete") and chosen:
+            self.cut(chosen)
+        elif name == "BackSpace":
+            if at:
+                self.delete(at - 1)
+        elif name == "Delete":
+            self.delete(at)
+        elif name in ("Left", "Right"):
+            if chosen:  # to that end of the selection
+                self.put_cursor(chosen[0] if name == "Left" else chosen[1])
+            else:
+                self.put_cursor(at - 1 if name == "Left" else at + 1)
+        elif name in ("Home", "End"):
+            self.put_cursor(0 if name == "Home" else len(self.get()))
+        elif control and name.lower() == "a":
+            self.select_all()
+        elif control and name.lower() in ("c", "x") and chosen:
+            self.clipboard_clear()
+            self.clipboard_append(self.get()[chosen[0]:chosen[1]])
+            if name.lower() == "x":
+                self.cut(chosen)
+        elif control and name.lower() == "v":
+            try:
+                pasted = " ".join(self.clipboard_get().split())
+            except tk.TclError:
+                return "break"
+            self.write(pasted)
+        elif event.char and event.char.isprintable() and not control:
+            self.write(event.char)
+        else:
+            return None  # Tab and the rest go on to whoever else listens
+        return "break"
+
+    def write(self, text: str) -> None:
+        chosen = self.chosen()
+        if chosen:
+            self.cut(chosen)
+        self.insert("insert", text)
+
+    def chosen(self) -> tuple[int, int] | None:
+        """The selected characters, as an Entry would slice them, if any are selected here."""
+        try:
+            if str(self.select_item()) != str(self.words):
+                return None
+            first = int(tk.Canvas.index(self, self.words, "sel.first"))
+            last = int(tk.Canvas.index(self, self.words, "sel.last"))  # the last one selected, not past it
+        except (tk.TclError, TypeError, ValueError):
+            return None
+        return (first, last + 1) if last >= first else None
+
+    def cut(self, chosen: tuple[int, int]) -> None:
+        self.select_clear()
+        self.delete(chosen[0], chosen[1])
+        self.put_cursor(chosen[0])
+
+    def put_cursor(self, place: int) -> None:
+        self.select_clear()
+        self.icursor(self.words, min(max(place, 0), len(self.get())))
+        self.follow()
+
+    def select_all(self) -> None:
+        self.focus_set()
+        if self.get():
+            self.select_from(self.words, 0)
+            self.select_to(self.words, len(self.get()) - 1)
+
+    def press(self, event: tk.Event) -> None:
+        self.focus_set()
+        self.select_clear()
+        self.anchor = int(tk.Canvas.index(self, self.words, f"@{self.canvasx(event.x)},{self.canvasy(event.y)}"))
+        self.icursor(self.words, self.anchor)
+        self.follow()
+
+    def drag(self, event: tk.Event) -> None:
+        here = int(tk.Canvas.index(self, self.words, f"@{self.canvasx(event.x)},{self.canvasy(event.y)}"))
+        self.icursor(self.words, here)
+        if here == self.anchor:
+            self.select_clear()
+        else:  # the characters between the two places (a canvas selects from one character to another, both in)
+            first, last = sorted((self.anchor, here))
+            self.select_from(self.words, first)
+            self.select_to(self.words, last - 1)
+        self.follow()
+
+    def focused(self, inside: bool) -> None:
+        if inside:
+            self.focus(self.words)  # the cursor shows (by a click, or by Tab)
+        else:
+            self.select_clear()
+            self.focus("")
+        self.on_focus(inside)
+
+    def follow(self) -> None:
+        """Keep the cursor in the line: the words slide left as they run past its end, and back."""
+        width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
+        text = self.get()
+        cursor = self.theme.measure(self.font, text[:self.place_of("insert")])
+        whole = self.theme.measure(self.font, text)
+        room = max(width - self.theme.px(2), 1)
+        shift = min(max(self.shift, cursor - room), cursor)
+        shift = max(0, min(shift, max(whole - room, 0)))
+        if shift != self.shift:
+            self.shift = shift
+            self.coords(self.words, -shift, self.coords(self.words)[1])
 
 
 class TitleBar(tk.Canvas):

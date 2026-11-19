@@ -11,7 +11,7 @@ import zlib
 
 from lyrebot import chrome, dialogs, icons
 from lyrebot.theme import Theme, fit, geometry, screen_area
-from lyrebot.widgets import Choice, PillButton, PopupMenu, ThinScrollbar, TitleBar, Tooltip, WritingLine
+from lyrebot.widgets import Choice, PageLine, PillButton, PopupMenu, ThinScrollbar, TitleBar, Tooltip, WritingLine
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_app import hidden_window
@@ -148,6 +148,64 @@ class Pieces(unittest.TestCase):
         self.assertFalse(line.hint.winfo_manager())
         line.entry.delete(0, "end")
         self.assertTrue(line.hint.winfo_manager())
+
+    def type_into(self, line, *keys):
+        """Press ``keys`` (a character, or a key's name with "^" before it for Control) in ``line``."""
+        for key in keys:
+            if len(key) == 1:
+                line.key(SimpleNamespace(keysym="??", state=0, char=key))
+            else:
+                held = 0x4 if key.startswith("^") else 0
+                line.key(SimpleNamespace(keysym=key.lstrip("^"), state=held, char=""))
+
+    def test_a_page_line_takes_what_an_entry_takes_and_ends_as_an_entry_would(self):
+        line = PageLine(self.root, self.theme, icon=icons.magnifier).entry
+        entry = tk.Entry(self.root)
+        for target in (line, entry):
+            target.insert(0, "风息")
+            target.insert("end", "的离别诗")
+            target.insert(2, "·")
+            target.delete(0)  # one character
+            target.delete(1, 3)  # up to the third, not including it
+            target.delete(0, "end")
+            target.insert(0, "清润玉响")
+        self.assertEqual(line.get(), entry.get())
+        self.assertEqual(line.get(), "清润玉响")
+
+    def test_typing_on_a_page_line(self):
+        line = PageLine(self.root, self.theme, icon=icons.magnifier).entry
+        self.type_into(line, *"春日影")
+        self.assertEqual(line.get(), "春日影")
+        self.type_into(line, "Left", "BackSpace", "Home", "Delete", "End", "Right", "x")
+        self.assertEqual(line.get(), "影x")  # 日 then 春 gone; the cursor never runs past either end
+        self.type_into(line, "Home", "^a", "风")  # a selection is written over
+        self.assertEqual(line.get(), "风")
+        self.assertEqual(line.key(SimpleNamespace(keysym="Tab", state=0, char="\t")), None)  # left to others
+
+    def test_a_page_line_cuts_copies_and_pastes_on_one_line(self):
+        line = PageLine(self.root, self.theme).entry
+        board = []
+        with mock.patch.object(line, "clipboard_clear", side_effect=board.clear), \
+                mock.patch.object(line, "clipboard_append", side_effect=board.append), \
+                mock.patch.object(line, "clipboard_get", side_effect=lambda: "".join(board)):
+            self.type_into(line, *"晨歌", "^a", "^c")
+            self.assertEqual((line.get(), board), ("晨歌", ["晨歌"]))
+            self.type_into(line, "^x")
+            self.assertEqual((line.get(), board), ("", ["晨歌"]))
+            board[:] = ["林中\r\n晨歌  "]
+            self.type_into(line, "^v")
+        self.assertEqual(line.get(), "林中 晨歌")  # lines and runs of space pasted as one space
+
+    def test_a_long_search_slides_to_keep_the_cursor_in_sight(self):
+        line = PageLine(self.root, self.theme).entry
+        line.configure(width=60)
+        line.insert(0, "一宵岁起明日新-录音" * 2)
+        self.assertGreater(line.shift, 0)
+        x = line.coords(line.words)[0]
+        width = self.theme.measure(line.font, line.get())
+        self.assertLessEqual(x + width, 60)  # its end, where the cursor is, inside the line
+        self.type_into(line, "Home")
+        self.assertEqual(line.shift, 0)  # and back to its start
 
     def test_a_window_may_have_its_corners_rounded_without_an_edge(self):
         from lyrebot import theme
