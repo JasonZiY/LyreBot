@@ -712,7 +712,7 @@ class Folders(unittest.TestCase):
         self.assertIsNone(next_match(songs, "雪"))
         self.assertIsNone(next_match(songs, "  "))
 
-    def test_the_search_field_has_the_right_half_of_its_row_and_no_button(self):
+    def test_the_search_field_has_the_right_third_of_its_row_and_no_button(self):
         from lyrebot.app import App
         from lyrebot.widgets import PillButton
         self.write_scores("甲.txt")
@@ -720,8 +720,8 @@ class Folders(unittest.TestCase):
         row = app.search_field.master
         self.assertEqual(int(app.search_field.grid_info()["column"]), 1)
         self.assertEqual(app.search_field.grid_info()["sticky"], "ew")
-        halves = [row.grid_columnconfigure(column) for column in (0, 1)]
-        self.assertEqual([(half["weight"], half["uniform"]) for half in halves], [(1, "half"), (1, "half")])
+        parts = [row.grid_columnconfigure(column) for column in (0, 1)]
+        self.assertEqual([(part["weight"], part["uniform"]) for part in parts], [(2, "thirds"), (1, "thirds")])
         self.assertFalse([child for child in row.winfo_children() if isinstance(child, PillButton)])
         self.assertEqual(app.search_field.hint.cget("text"), "")  # no words in it while it is empty
         self.assertEqual(app.search_field.hint.winfo_manager(), "")

@@ -818,18 +818,18 @@ class App:
         self.build_images()
 
         # ---- search ----
-        # Two halves: the lyre at the left (it moves up into the title bar when LyreBot draws one), and
-        # the search field filling the right.  Enter searches; there is no button for it.
+        # Two parts: the lyre at the left (it moves up into the title bar when LyreBot draws one), and
+        # the search field filling the right third.  Enter searches; there is no button for it.
         finder = Sheet(root, theme)
-        for column in (0, 1):
-            finder.columnconfigure(column, weight=1, uniform="half")
+        for column, share in ((0, 2), (1, 1)):
+            finder.columnconfigure(column, weight=share, uniform="thirds")
         self.crest = Picture(finder, theme, theme.icon("lyre", px(20), GOLD, icons.lyre))
         self.crest.grid(row=0, column=0, sticky="w")
         self.search_field = WritingLine(finder, theme, icon=icons.magnifier, bg=self.page.head)  # no hint: the
         # magnifier says what it is for
         self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
-        self.search_entry.configure(width=1)  # as wide as its half, whatever that is
+        self.search_entry.configure(width=1)  # as wide as its third, whatever that is
         self.search_entry.bind("<Return>", lambda _: self.search())
 
         # ---- song list ----
@@ -904,8 +904,8 @@ class App:
         # The player goes in first, so that a short window takes its room from the list.
         panel.pack(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))
         rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
-        finder.pack(side="top", fill="x", padx=px(16), pady=(px(14), px(4)))
-        top.pack(fill="both", expand=True, padx=px(8), pady=(px(6), 0))
+        finder.pack(side="top", fill="x", padx=px(16), pady=(px(10), 0))
+        top.pack(fill="both", expand=True, padx=px(8), pady=(px(4), 0))
 
         self.refresh()
         self.show_selected()  # nothing is chosen yet: it asks for a song
@@ -929,7 +929,7 @@ class App:
                        frame.minimise, self.close)
         bar.pack(side="top", fill="x", before=first)
         self.crest.grid_remove()
-        finder.pack_configure(pady=(px(12), px(4)))
+        finder.pack_configure(pady=(px(6), 0))  # close under the bar's gilt fillet
         width, height = px(WINDOW_WIDTH), px(640)
         left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
         root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
@@ -940,7 +940,7 @@ class App:
             return True
         bar.destroy()
         self.crest.grid()
-        finder.pack_configure(pady=(px(14), px(4)))
+        finder.pack_configure(pady=(px(10), 0))
         return False
 
     def watch_start_key(self) -> None:
