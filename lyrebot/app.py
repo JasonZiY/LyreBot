@@ -75,6 +75,7 @@ GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 LIST_FONT, SMALL_FONT, TITLE_FONT = 9, 8, 10  # points
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
+WINDOW_WIDTH = 400  # the window's width when it opens, and the narrowest it goes, likewise
 
 
 def parse_speed(text: str) -> float | None:
@@ -481,6 +482,7 @@ class SongBrowser(tk.Canvas):
                  on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
         px = lambda n: max(1, round(n * scale))  # noqa: E731
         self.row, self.shelf_width, self.region_width, self.pad = px(ROW_HEIGHT), px(52), px(76), px(6)
+        self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
         self.locked, self.on_select, self.on_play, self.on_delete = locked, on_select, on_play, on_delete
@@ -572,10 +574,14 @@ class SongBrowser(tk.Canvas):
             color = MUTED if bold else WARN if cell.path in self.bad else INK
             self.create_text(left + self.pad, (top + bottom) / 2, anchor="w", fill=color, tags="content",
                              font=(FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT),
-                             text=self.fit(cell.text, int(right - left) - 2 * self.pad, bold))
+                             text=self.fit(cell.text, self.room(cell), bold))
         self.configure(scrollregion=(0, 0, width, max(y, 1)))
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
+
+    def room(self, cell: Cell) -> int:
+        """How wide a cell's text may be."""
+        return int(cell.box[2] - cell.box[0]) - self.pad - self.tail
 
     def fit(self, text: str, width: int, bold: bool) -> str:
         """``text``, cut short with … if it is wider than ``width``."""
@@ -721,8 +727,8 @@ class App:
         scale = self.scale = root.winfo_fpixels("1i") / 96
         px = lambda n: max(1, round(n * scale))  # noqa: E731
         root.title(self.base_title)
-        root.geometry(f"{px(500)}x{px(640)}")
-        root.minsize(px(400), px(360))
+        root.geometry(f"{px(WINDOW_WIDTH)}x{px(640)}")  # opens as narrow as it may be
+        root.minsize(px(WINDOW_WIDTH), px(360))
         root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
