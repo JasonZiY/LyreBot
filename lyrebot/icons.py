@@ -149,8 +149,10 @@ def paint(parts: Part | Iterable[Part], color: str, gold: str | None = None) -> 
 # ---- rendering ----------------------------------------------------------------
 
 def rgba(width: int, height: int, layers: Layers) -> bytes:
-    """RGBA pixels of ``layers`` (later ones over earlier ones) on nothing."""
+    """RGBA pixels of ``layers`` (later ones over earlier ones) on nothing.  A layer's colour may carry its
+    own opacity ("#RRGGBBAA"), for a tint that lets what lies under the image show through."""
     colors = [_rgb(color) for color, _ in layers]
+    opacity = [int(color[7:9], 16) / 255 if len(color) == 9 else 1.0 for color, _ in layers]
     shapes = [shape for _, shape in layers]
     top = len(shapes) - 1
 
@@ -173,13 +175,13 @@ def rgba(width: int, height: int, layers: Layers) -> bytes:
                     for ox in _OFFSETS:
                         index = pick(px + ox, py + oy)
                         hits[index] = hits.get(index, 0) + 1
-            covered = n - hits.get(-1, 0)
+            covered = sum(opacity[i] * count for i, count in hits.items() if i >= 0)
             if not covered:
                 out += b"\x00\x00\x00\x00"
                 continue
-            red = sum(colors[i][0] * count for i, count in hits.items() if i >= 0) / covered
-            green = sum(colors[i][1] * count for i, count in hits.items() if i >= 0) / covered
-            blue = sum(colors[i][2] * count for i, count in hits.items() if i >= 0) / covered
+            red = sum(colors[i][0] * opacity[i] * count for i, count in hits.items() if i >= 0) / covered
+            green = sum(colors[i][1] * opacity[i] * count for i, count in hits.items() if i >= 0) / covered
+            blue = sum(colors[i][2] * opacity[i] * count for i, count in hits.items() if i >= 0) / covered
             out += bytes((round(red), round(green), round(blue), round(255 * covered / n)))
     return bytes(out)
 

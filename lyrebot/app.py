@@ -26,15 +26,16 @@ from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
 from .midi import MidiError
 from .notate import notate
+from .paper import OnPage, Page
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
-from .theme import (FAINT, GOLD, GOLD_SOFT, HAIR, HIGHLIGHT, HOVER, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH,
-                    RIM, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
+from .theme import (CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER,
+                    PEACH, RIM, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Choice, IconButton, Ornament, PillButton, PopupMenu, ThinScrollbar, TitleBar, WritingLine, rounded,
-                      rounded_points)
+from .widgets import (Choice, IconButton, Ornament, Picture, PillButton, PopupMenu, Sheet, ThinScrollbar, TitleBar,
+                      Words, WritingLine)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -420,7 +421,7 @@ class Cell:
     is_open: bool = False  # a shelf or region showing what is in it
 
 
-class SongBrowser(tk.Canvas):
+class SongBrowser(OnPage, tk.Canvas):
     """The song list: unfiled scores across the top, then OST by region and 歌曲.
 
     Everything starts at one left edge and opens downwards: a shelf's
@@ -429,9 +430,10 @@ class SongBrowser(tk.Canvas):
     its regions closed, and 歌曲 closed.
 
     A shelf's title is set in the serif with a hairline running on to the
-    edge; chevrons are old gold; the chosen song sits on a warm rounded
-    ground with an orange edge, and the song being played shows three
-    small orange bars keeping time.
+    edge; chevrons are old gold; the chosen song sits on a rounded breath of
+    orange with an orange edge, and the song being played shows three small
+    orange bars keeping time.  The page shows through it all, and stays
+    still while the list scrolls over it.
     """
 
     def __init__(self, parent: tk.Widget, theme: Theme, locked: Callable[[], object],
@@ -445,7 +447,7 @@ class SongBrowser(tk.Canvas):
         self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
         self.shelf_gap = px(6)  # breathing room above a shelf with something over it
         self.corner = px(5)
-        super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
+        super().__init__(parent, bg=parent.cget("bg"), highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
         self.locked, self.on_select, self.on_play, self.on_delete = locked, on_select, on_play, on_delete
         self.library: Library | None = None
@@ -459,8 +461,8 @@ class SongBrowser(tk.Canvas):
         self.fitted: dict[tuple[str, int, tuple], str] = {}
         self.beat_job: str | None = None
         self.beat_floor = 0.0
-        self.hover_box = rounded(self, 0, 0, 1, 1, self.corner, fill=HOVER, outline="", state="hidden")
-        self.chosen_box = rounded(self, 0, 0, 1, 1, self.corner, fill=HIGHLIGHT, outline="", state="hidden")
+        self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
+        self.chosen_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_edge = self.create_rectangle(0, 0, 0, 0, fill=ORANGE, width=0, state="hidden")
         self.bind("<Configure>", lambda _: self.lay_out())
         self.bind("<Button-1>", self.click)
@@ -471,6 +473,30 @@ class SongBrowser(tk.Canvas):
             self.bind(f"<KeyPress-{key}>", lambda _, step=step: self.step(step))
         self.bind("<Return>", lambda _: None if self.locked() else self.on_play())
         self.bind("<Delete>", lambda _: None if self.locked() else self.on_delete())
+        self.take_page(theme)
+
+    def yview(self, *args):  # type: ignore[override]
+        result = super().yview(*args)
+        if args:
+            self.follow_page()
+        return result
+
+    def yview_moveto(self, fraction: float) -> None:  # type: ignore[override]
+        super().yview_moveto(fraction)
+        self.follow_page()
+
+    def yview_scroll(self, number: int, what: str) -> None:  # type: ignore[override]
+        super().yview_scroll(number, what)
+        self.follow_page()
+
+    def ground(self, item: int, color: str, box: tuple[float, float, float, float]) -> None:
+        """Lay the rounded tint ``color`` over ``box`` (less a pixel above and below) as ``item``."""
+        left, top, right, bottom = box
+        width, height, corner = max(1, round(right - left)), max(1, round(bottom - top) - 2), self.corner
+        image = self.theme.image(f"ground:{color}:{corner}", width, height,
+                                 lambda: [(color, icons.rect(0, 0, width, height, corner))])
+        self.coords(item, round(left), round(top) + 1)
+        self.itemconfigure(item, image=image, state="normal")
 
     def show(self, library: Library, bad: frozenset[Path]) -> None:
         self.library, self.bad = library, bad
@@ -537,6 +563,7 @@ class SongBrowser(tk.Canvas):
             self.create_image(width / 2, y + self.theme.px(28) + size / 2, image=art, tags="content")
             bottom = y + self.theme.px(40) + size
         self.configure(scrollregion=(0, 0, width, max(bottom, 1)))
+        self.follow_page()  # a new scroll region may have moved the view
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
         if self.find_withtag("beat") and not self.beat_job:
@@ -634,11 +661,10 @@ class SongBrowser(tk.Canvas):
             self.itemconfigure(self.chosen_edge, state="hidden")
             return
         left, top, right, bottom = cell.box
-        self.coords(self.chosen_box, *rounded_points(left, top + 1, right, bottom - 1, self.corner))
+        self.ground(self.chosen_box, CHOSEN_TINT, cell.box)
         edge = self.theme.px(2)
         self.coords(self.chosen_edge, left + edge / 2, top + self.theme.px(6), left + edge / 2 + edge,
                     bottom - self.theme.px(6))
-        self.itemconfigure(self.chosen_box, state="normal")
         self.itemconfigure(self.chosen_edge, state="normal")
 
     def visible_songs(self) -> list[Path]:
@@ -702,9 +728,7 @@ class SongBrowser(tk.Canvas):
         if cell is None:
             self.itemconfigure(self.hover_box, state="hidden")
         else:
-            left, top, right, bottom = cell.box
-            self.coords(self.hover_box, *rounded_points(left, top + 1, right, bottom - 1, self.corner))
-            self.itemconfigure(self.hover_box, state="normal")
+            self.ground(self.hover_box, HOVER_TINT, cell.box)
 
     def step(self, by: int) -> str:
         songs = self.visible_songs()
@@ -768,24 +792,31 @@ class App:
         root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
+        # The page under it all (``paper``): lamplight at the head, where the search field's solid ground
+        # sits, evening at the foot.  The head is as tall as a title bar and the search row.
+        theme.page = self.page = Page(root, flat=px(110))
+        self.page.lay(px(WINDOW_WIDTH), px(640))
+        self.backdrop = Sheet(root, theme)  # the paper between the pieces
+        self.backdrop.place(x=0, y=0, relwidth=1, relheight=1)
+        tk.Misc.lower(self.backdrop)  # under every other piece (a canvas's own lower() moves its items)
         self.bar_hover = False
         self.breath = False
         self.breath_job: str | None = None
         self.build_images()
 
         # ---- search ----
-        finder = tk.Frame(root, bg=PAPER)
-        self.crest = tk.Label(finder, image=theme.icon("lyre", px(20), GOLD, icons.lyre), bg=PAPER)
+        finder = Sheet(root, theme)
+        self.crest = Picture(finder, theme, theme.icon("lyre", px(20), GOLD, icons.lyre))
         self.crest.pack(side="left", padx=(0, px(8)))  # moves up into the title bar when LyreBot draws one
         self.search_button = PillButton(finder, theme, "搜索", self.search)
         self.search_button.pack(side="right", padx=(px(10), 0))
-        self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier)
+        self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier, bg=self.page.head)
         self.search_field.pack(side="left", fill="x", expand=True)
         self.search_entry = self.search_field.entry
         self.search_entry.bind("<Return>", lambda _: self.search())
 
         # ---- song list ----
-        top = tk.Frame(root, bg=PAPER)
+        top = Sheet(root, theme)
         self.browser = SongBrowser(top, theme, self.locked, self.show_selected, self.start, self.delete)
         self.browser.pack(side="left", fill="both", expand=True)
         self.scrollbar = ThinScrollbar(top, theme, self.browser.yview)
@@ -807,31 +838,31 @@ class App:
         rule = Ornament(root, theme)
 
         # ---- now playing ----
-        panel = tk.Frame(root, bg=PAPER)
-        heading = tk.Frame(panel, bg=PAPER)
+        panel = Sheet(root, theme)
+        heading = Sheet(panel, theme)
         heading.pack(fill="x")
-        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=fonts.figures)
+        self.time_label = Words(heading, theme, fg=MUTED, font=fonts.figures)
         self.time_label.pack(side="right", anchor="s", pady=(0, px(2)))
-        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=fonts.figures)  # 2|20: bar 2 of 20
+        self.bar_label = Words(heading, theme, fg=MUTED, font=fonts.figures)  # 2|20: bar 2 of 20
         self.bar_label.pack(side="right", anchor="s", padx=(0, px(12)), pady=(0, px(2)))
-        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=fonts.title, anchor="w")
+        self.title_label = Words(heading, theme, fg=INK, font=fonts.title, anchor="w")
         self.title_label.pack(side="left", fill="x", expand=True)
 
         self.bar_height = px(14)  # the clickable band; the drawn track is thinner
-        self.bar = tk.Canvas(panel, height=self.bar_height, bg=PAPER, highlightthickness=0, cursor="hand2")
+        self.bar = Sheet(panel, theme, height=self.bar_height, cursor="hand2")
         self.bar.pack(fill="x", pady=(px(4), 0))
-        self.bar.bind("<Configure>", lambda _: self.draw_bar())
+        self.bar.bind("<Configure>", lambda _: self.draw_bar(), add="+")
         self.bar.bind("<ButtonPress-1>", self.pick_up)
         self.bar.bind("<B1-Motion>", self.slide)
         self.bar.bind("<ButtonRelease-1>", self.let_go)
         self.bar.bind("<Enter>", lambda _: self.hover_bar(True))
         self.bar.bind("<Leave>", lambda _: self.hover_bar(False))
 
-        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.status_label = Words(panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
         self.status_label.pack(fill="x", pady=(px(2), 0))
-        panel.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
+        panel.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width), add="+")
 
-        controls = tk.Frame(panel, bg=PAPER)
+        controls = Sheet(panel, theme)
         controls.pack(fill="x", pady=(px(8), 0))
         self.speed = tk.StringVar(master=root, value="100%")
         self.mode = tk.StringVar(master=root, value=SINGLE)
@@ -886,7 +917,7 @@ class App:
         left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
         root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
                                width, height))
-        if chrome.adopt(root, frame, see_through=(root, bar)):
+        if chrome.adopt(root, frame, see_through=(root, self.backdrop, bar)):
             round_corners(root, border=RIM)
             self.title_bar = bar
             return True
@@ -925,7 +956,7 @@ class App:
         stop = picture("play-stop", big, face(PEACH, HAIR, icons.stop))
         self.stop_images = {"normal": stop, "hover": stop, "disabled": stop}
 
-        def halo(color: str = HOVER) -> tuple[str, icons.Shape]:
+        def halo(color: str = HOVER_TINT) -> tuple[str, icons.Shape]:  # a shade over the page
             return color, icons.circle(s, s, s - 0.5)
 
         def plain(name: str, draw: Callable[[int], list]) -> dict[str, tk.PhotoImage]:
@@ -950,13 +981,13 @@ class App:
                 ring, _ = icons.record(small)
                 return [halo(ground), (edge, ring), (color, icons.stop(small))]
             return layers
-        self.recording_images = {"normal": picture("recording-in", small, square(HIGHLIGHT, ORANGE, ORANGE)),
+        self.recording_images = {"normal": picture("recording-in", small, square(CHOSEN_TINT, ORANGE, ORANGE)),
                                  "hover": picture("recording-hover", small, square(PEACH, ORANGE_DEEP, ORANGE_DEEP)),
                                  "disabled": picture("recording-disabled", small,
                                                      lambda: [(FAINT, icons.stop(small))])}
         # The other breath of a recording: the ground and ring a shade lighter.
         self.recording_breath = {**self.recording_images,
-                                 "normal": picture("recording-out", small, square(HOVER, PEACH, ORANGE))}
+                                 "normal": picture("recording-out", small, square(HOVER_TINT, PEACH, ORANGE))}
         knob = lambda size: lambda: [(ORANGE, icons.circle(size / 2, size / 2, size / 2 - 0.5)),  # noqa: E731
                                      (PAPER, icons.circle(size / 2, size / 2, size / 2 - 0.5 - 2 * line))]
         self.knob_images = {False: picture("knob", px(10), knob(px(10))),
@@ -1001,7 +1032,7 @@ class App:
 
     def draw_bar(self) -> None:
         bar, middle = self.bar, self.bar_height / 2
-        bar.delete("all")
+        bar.delete("!paper")
         left, right = self.track()
         thick = self.theme.px(2)
         bar.create_line(left, middle, right, middle, width=thick, fill=HAIR, capstyle="round")

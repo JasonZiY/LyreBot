@@ -49,6 +49,14 @@ GILT_BRIGHT = "#E8D2A0"  # the title, where the gold catches the light
 GILT_DEEP = "#B58F50"  # the fillet along the cover's foot
 EMBER = "#E8A386"  # a warning in the gold's company
 
+# On the main window's page, which changes colour from head to foot (``paper``), grounds are tints that
+# let the paper show through rather than colours of their own.
+VEIL = "#FFFFFF66"  # a button's face: a slip of lighter paper
+VEIL_HOVER = "#FFFFFFB3"
+VEIL_FAINT = "#FFFFFF33"
+CHOSEN_TINT = "#D9775729"  # the chosen song: a breath of orange
+HOVER_TINT = "#8A81741A"  # under the pointer: a shade
+
 SANS = "Microsoft YaHei UI"
 SERIFS = ("Noto Serif SC SemiBold", "Source Han Serif SC SemiBold", "Source Han Serif CN SemiBold",
           "Noto Serif CJK SC SemiBold", "Noto Serif SC Medium", "Noto Serif SC", "Source Han Serif SC")
@@ -87,6 +95,7 @@ class Theme:
         self.scale = root.winfo_fpixels("1i") / 96
         self.fonts = Fonts(root)
         self.images: dict[tuple, tk.PhotoImage] = {}
+        self.page = None  # the window's paper, where it has one (``paper.Page``)
         root.lyrebot_theme = self  # type: ignore[attr-defined]
 
     @staticmethod

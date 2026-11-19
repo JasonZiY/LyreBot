@@ -1,6 +1,7 @@
 """The pieces LyreBot's window is built of, each drawn in its own style rather than the system's:
 icon buttons, rounded buttons and choices, tips, menus, a fine scrollbar, an ornamental rule,
-a writing line and the window's leather title bar.
+a writing line, the window's leather title bar, and the sheets, words and pictures that lie on the
+main window's page (see ``paper``) where a Frame or a Label would hide it.
 
 ``PopupMenu`` keeps the part of ``tk.Menu``'s interface LyreBot uses, so the
 code that fills a menu, and the tests that read one, need not know the
@@ -14,9 +15,10 @@ import tkinter as tk
 from typing import Callable
 
 from . import icons
+from .paper import OnPage
 from .theme import (EMBER, FAINT, GILT, GILT_BRIGHT, GILT_DEEP, GOLD, GOLD_SOFT, HAIR, HOVER, INK, LEATHER_EDGE,
-                    LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, WARN,
-                    WARN_DEEP, WHITE, Theme, fit, geometry, round_corners, screen_area)
+                    LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, VEIL,
+                    VEIL_FAINT, VEIL_HOVER, WARN, WARN_DEEP, WHITE, Theme, fit, geometry, round_corners, screen_area)
 
 
 def rounded(canvas: tk.Canvas, x0: float, y0: float, x1: float, y1: float, radius: float, **options) -> int:
@@ -94,12 +96,17 @@ class Tooltip:
             self.window = None
 
 
-class IconButton(tk.Label):
-    """A flat image button: fires on release inside it, and does nothing while disabled."""
+class IconButton(OnPage, tk.Canvas):
+    """A flat image button: fires on release inside it, and does nothing while disabled.  It lies on the
+    page, as big as a Label showing the image would be."""
 
     def __init__(self, parent: tk.Widget, images: dict[str, tk.PhotoImage], command: Callable[[], None],
                  tip: str = "", theme: Theme | None = None):
-        super().__init__(parent, image=images["normal"], bg=PAPER, borderwidth=0, cursor="hand2")
+        image = images["normal"]
+        width, height = image.width() + 2, image.height() + 2  # a Label's padding of a pixel all round
+        super().__init__(parent, width=width, height=height, bg=parent.cget("bg"), highlightthickness=0,
+                         borderwidth=0, cursor="hand2")
+        self.face = self.create_image(width / 2, height / 2, image=image)
         self.images, self.command = images, command
         self.enabled, self.inside, self.pressed = True, False, False
         self.bind("<Enter>", lambda _: self.hover(True))
@@ -107,6 +114,8 @@ class IconButton(tk.Label):
         self.bind("<ButtonPress-1>", self.press)
         self.bind("<ButtonRelease-1>", self.release)
         self.tooltip = Tooltip(self, tip, theme) if tip and theme else None
+        if theme is not None:
+            self.take_page(theme)
 
     def set(self, images: dict[str, tk.PhotoImage] | None = None, enabled: bool | None = None) -> None:
         if images is not None:
@@ -118,10 +127,8 @@ class IconButton(tk.Label):
         self.redraw()
 
     def redraw(self) -> None:
-        if not self.enabled:
-            self.configure(image=self.images["disabled"])
-        else:
-            self.configure(image=self.images["hover" if self.inside else "normal"])
+        state = "disabled" if not self.enabled else "hover" if self.inside else "normal"
+        self.itemconfigure(self.face, image=self.images[state])
 
     def hover(self, inside: bool) -> None:
         self.inside = inside
@@ -137,8 +144,9 @@ class IconButton(tk.Label):
             self.command()
 
 
-class PillButton(tk.Canvas):
-    """A rounded button with a hairline edge ("ghost"), or filled orange ("primary") or red ("danger")."""
+class PillButton(OnPage, tk.Canvas):
+    """A rounded button with a hairline edge ("ghost"), or filled orange ("primary") or red ("danger").  On
+    the main window's page a ghost's face is a veil of white over the paper rather than paper of its own."""
 
     LOOKS = {  # state -> (fill, edge, text)
         "ghost": {"normal": (PAPER, HAIR, INK), "hover": (HOVER, GOLD_SOFT, INK), "disabled": (PAPER, HAIR, FAINT)},
@@ -147,6 +155,8 @@ class PillButton(tk.Canvas):
         "danger": {"normal": (WARN, WARN, WHITE), "hover": (WARN_DEEP, WARN_DEEP, WHITE),
                    "disabled": (PEACH, PEACH, WHITE)},
     }
+    ON_PAGE = {"normal": (VEIL, HAIR, INK), "hover": (VEIL_HOVER, GOLD_SOFT, INK),
+               "disabled": (VEIL_FAINT, HAIR, FAINT)}  # a ghost's looks on the page
 
     def __init__(self, parent: tk.Widget, theme: Theme, text: str, command: Callable[[], None],
                  kind: str = "ghost", chevron: bool = False, font: tuple | None = None, least: int = 0):
@@ -159,6 +169,7 @@ class PillButton(tk.Canvas):
         self._text = ""
         super().__init__(parent, width=self.tall, height=self.tall, bg=parent.cget("bg"), highlightthickness=0,
                          borderwidth=0, cursor="hand2", takefocus=False)
+        self.take_page(theme)
         self.bind("<Enter>", lambda _: self.hover(True))
         self.bind("<Leave>", lambda _: self.hover(False))
         self.bind("<ButtonPress-1>", self.press)
@@ -185,10 +196,12 @@ class PillButton(tk.Canvas):
 
     def look(self) -> tuple[str, str, str]:
         state = "disabled" if not self.enabled else "hover" if self.inside else "normal"
+        if self.page is not None and self.kind == "ghost":
+            return self.ON_PAGE[state]
         return self.LOOKS[self.kind][state]
 
     def redraw(self) -> None:
-        self.delete("all")
+        self.delete("!paper")
         fill, edge, ink = self.look()
         self.create_image(0, 0, anchor="nw", image=self.theme.pill(self.wide, self.tall, fill, edge))
         middle = self.tall / 2
@@ -598,7 +611,7 @@ class PopupMenu:
                 pass
 
 
-class ThinScrollbar(tk.Canvas):
+class ThinScrollbar(OnPage, tk.Canvas):
     """A slim round-ended thumb that is barely there until the pointer comes near."""
 
     def __init__(self, parent: tk.Widget, theme: Theme, command: Callable[..., object]):
@@ -606,8 +619,9 @@ class ThinScrollbar(tk.Canvas):
         self.first, self.last = 0.0, 1.0
         self.inside = False
         self.drag: tuple[int, float] | None = None
-        super().__init__(parent, width=theme.px(10), bg=PAPER, highlightthickness=0, borderwidth=0)
-        self.bind("<Configure>", lambda _: self.redraw())
+        super().__init__(parent, width=theme.px(10), bg=parent.cget("bg"), highlightthickness=0, borderwidth=0)
+        self.take_page(theme)
+        self.bind("<Configure>", lambda _: self.redraw(), add="+")
         self.bind("<Enter>", lambda _: self.hover(True))
         self.bind("<Leave>", lambda _: self.hover(False))
         self.bind("<ButtonPress-1>", self.press)
@@ -629,7 +643,7 @@ class ThinScrollbar(tk.Canvas):
         return top, bottom
 
     def redraw(self) -> None:
-        self.delete("all")
+        self.delete("!paper")
         busy = self.inside or self.drag is not None
         thick = self.theme.px(6 if busy else 4)
         top, bottom = self.thumb()
@@ -659,16 +673,17 @@ class ThinScrollbar(tk.Canvas):
         self.redraw()
 
 
-class Ornament(tk.Canvas):
+class Ornament(OnPage, tk.Canvas):
     """A hairline across, with a small gold ·◆· set in the middle."""
 
     def __init__(self, parent: tk.Widget, theme: Theme):
         self.theme = theme
-        super().__init__(parent, height=theme.px(10), bg=PAPER, highlightthickness=0, borderwidth=0)
-        self.bind("<Configure>", lambda _: self.redraw())
+        super().__init__(parent, height=theme.px(10), bg=parent.cget("bg"), highlightthickness=0, borderwidth=0)
+        self.take_page(theme)
+        self.bind("<Configure>", lambda _: self.redraw(), add="+")
 
     def redraw(self) -> None:
-        self.delete("all")
+        self.delete("!paper")
         width, middle = self.winfo_width(), self.winfo_height() / 2
         ornament = self.theme.fleuron(self.theme.px(7), GOLD)
         centre, gap = width / 2, ornament.width() / 2 + self.theme.px(6)
@@ -681,21 +696,22 @@ class WritingLine(tk.Frame):
     """A place to write on a single gold-and-hair line, with a hint in faint ink while it is empty."""
 
     def __init__(self, parent: tk.Widget, theme: Theme, hint: str = "", icon: Callable[[int], object] | None = None,
-                 text: str = ""):
-        super().__init__(parent, bg=PAPER)
+                 text: str = "", bg: str = PAPER):
+        """``bg`` is what it is written on: a dialog's paper, or the even head of the window's page."""
+        super().__init__(parent, bg=bg)
         self.theme = theme
         self.value = tk.StringVar(master=self, value=text)
-        row = tk.Frame(self, bg=PAPER)
+        row = tk.Frame(self, bg=bg)
         row.pack(fill="x")
         if icon is not None:
             size = theme.px(13)
-            tk.Label(row, image=theme.icon(icon.__name__, size, MUTED, icon, GOLD), bg=PAPER).pack(
+            tk.Label(row, image=theme.icon(icon.__name__, size, MUTED, icon, GOLD), bg=bg).pack(
                 side="left", padx=(0, theme.px(6)))
         self.entry = tk.Entry(row, textvariable=self.value, font=theme.fonts.body, relief="flat", borderwidth=0,
-                              bg=PAPER, fg=INK, insertbackground=INK, insertwidth=max(1, theme.px(1)),
+                              bg=bg, fg=INK, insertbackground=INK, insertwidth=max(1, theme.px(1)),
                               highlightthickness=0, selectbackground=HOVER, selectforeground=INK)
         self.entry.pack(side="left", fill="x", expand=True, ipady=theme.px(3))
-        self.hint = tk.Label(row, text=hint, font=theme.fonts.body, bg=PAPER, fg=FAINT, cursor="xterm")
+        self.hint = tk.Label(row, text=hint, font=theme.fonts.body, bg=bg, fg=FAINT, cursor="xterm")
         self.hint.bind("<Button-1>", lambda _: self.entry.focus_set())
         self.line = tk.Frame(self, bg=HAIR, height=max(1, theme.px(1)))
         self.line.pack(fill="x")
@@ -714,6 +730,80 @@ class WritingLine(tk.Frame):
             self.hint.place_forget()
         else:
             self.hint.place(in_=self.entry, x=0, rely=0.5, anchor="w")
+
+
+class Sheet(OnPage, tk.Canvas):
+    """A stretch of the page that holds other pieces, as a Frame would, with the paper showing between them.
+
+    A canvas asks for its own ``width`` and ``height`` again whenever it is configured, over what its packed
+    pieces asked for, so a sheet that holds pieces is left alone once they are in it."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, **options):
+        options = {"width": 1, "height": 1, "bg": parent.cget("bg"), "highlightthickness": 0, "borderwidth": 0,
+                   **options}
+        super().__init__(parent, **options)
+        self.take_page(theme)
+
+
+class Words(OnPage, tk.Canvas):
+    """Words written straight on the page, standing in for a tk.Label: ``configure`` and ``cget`` answer for
+    ``text``, ``fg``, ``font`` and ``wraplength`` as a Label's would, and it is as big as that Label would
+    be, padding and all, so the window keeps its spacing."""
+
+    PAD = 3  # a Label's border and padding, in pixels at any scale
+    OWN = ("text", "fg", "font", "wraplength", "anchor", "justify")
+
+    def __init__(self, parent: tk.Misc, theme: Theme, text: str = "", fg: str = INK, font: tuple | None = None,
+                 anchor: str = "w", justify: str = "left", wraplength: int = 0):
+        self.theme = theme
+        self.words = {"text": text, "fg": fg, "font": font or theme.fonts.body, "anchor": anchor,
+                      "justify": justify, "wraplength": wraplength}
+        super().__init__(parent, width=1, height=1, bg=parent.cget("bg"), highlightthickness=0, borderwidth=0)
+        self.take_page(theme)
+        self.bind("<Configure>", lambda _: self.redraw(), add="+")
+        self.redraw()
+
+    def configure(self, cnf=None, **options):  # type: ignore[override]
+        own = {key: options.pop(key) for key in self.OWN if key in options}
+        result = super().configure(cnf, **options) if cnf or options else None
+        if own and any(self.words[key] != value for key, value in own.items()):
+            self.words.update(own)
+            self.redraw()
+        return result
+
+    config = configure  # type: ignore[assignment]
+
+    def cget(self, key: str):  # type: ignore[override]
+        return self.words[key] if key in self.words else super().cget(key)
+
+    def redraw(self) -> None:
+        self.delete("!paper")
+        words, pad = self.words, self.PAD
+        wrap = max(int(words["wraplength"] or 0) - 2 * pad, 0)
+        item = self.create_text(pad, pad, text=words["text"], font=words["font"], fill=words["fg"], anchor="nw",
+                                width=wrap, justify=words["justify"])
+        line = int(self.tk.call("font", "metrics", words["font"], "-linespace"))
+        box = self.bbox(item) if words["text"] else None
+        wide = max(box[2] - box[0] - 2, 0) if box else 0  # a text's box has a pixel to spare either side
+        tall = max(box[3] - box[1] if box else 0, line)
+        need = (wide + 2 * pad, tall + 2 * pad)
+        if (int(super().cget("width")), int(super().cget("height"))) != need:
+            super().configure(width=need[0], height=need[1])
+        width = self.winfo_width() if self.winfo_width() > 1 else need[0]
+        height = self.winfo_height() if self.winfo_height() > 1 else need[1]
+        x = {"w": pad, "e": width - pad - wide}.get(words["anchor"], (width - wide) / 2)
+        self.coords(item, x, (height - tall) / 2)
+
+
+class Picture(OnPage, tk.Canvas):
+    """An image on the page, standing in for a tk.Label showing it (with a Label's padding)."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, image: tk.PhotoImage, pad: int = 3):
+        width, height = image.width() + 2 * pad, image.height() + 2 * pad
+        super().__init__(parent, width=width, height=height, bg=parent.cget("bg"), highlightthickness=0,
+                         borderwidth=0)
+        self.create_image(width / 2, height / 2, image=image)
+        self.take_page(theme)
 
 
 class TitleBar(tk.Canvas):

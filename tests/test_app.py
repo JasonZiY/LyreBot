@@ -305,6 +305,20 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.crest.master.pack_slaves()[0], app.crest)
         self.assertNotIn("TitleBar", [type(child).__name__ for child in app.root.winfo_children()])
 
+    def test_the_list_scrolls_over_a_page_that_stays_still(self):
+        from lyrebot.app import App
+        self.write_scores(*[f"OST/蒙德/曲{index:02d}.txt" for index in range(40)])
+        app = App(self.window(), self.scores, self.midi)
+        browser = app.browser
+        browser.toggle(self.cell(app, "region", "蒙德"))
+        app.page.refresh()
+        browser.yview_scroll(5, "units")
+        top = browser.canvasy(0)
+        self.assertGreater(top, 0)
+        x, y = app.page.offset(browser)
+        self.assertEqual(browser.coords(browser.find_withtag("paper")[0]), [-x, top - y])
+        self.assertEqual(app.search_field.entry.cget("bg"), app.page.head)  # the field sits in the even head
+
     def test_unless_asked_the_window_keeps_the_system_title_bar(self):
         from lyrebot.app import App
         self.write_scores("甲.txt")
