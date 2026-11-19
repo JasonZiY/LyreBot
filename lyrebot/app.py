@@ -75,7 +75,7 @@ GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 LIST_FONT, SMALL_FONT, TITLE_FONT = 9, 8, 10  # points
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
-WINDOW_WIDTH = 400  # the window's width when it opens, and the narrowest it goes, likewise
+WINDOW_WIDTH = 330  # the window's width when it opens, and the narrowest it goes, likewise
 
 
 def parse_speed(text: str) -> float | None:
@@ -474,14 +474,14 @@ class SongBrowser(tk.Canvas):
     """The song list: unfiled scores across the top, then OST by region and 歌曲.
 
     The shelves start open and the regions closed.  An open region's songs
-    run down two columns beside the narrow column of regions, and the 歌曲
-    shelf's two columns share all the width after the shelf's name.
+    run down two columns on the lines under its name, as wide as the 歌曲
+    shelf's two, which share all the width after the shelf's name.
     """
 
     def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
                  on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
         px = lambda n: max(1, round(n * scale))  # noqa: E731
-        self.row, self.shelf_width, self.region_width, self.pad = px(ROW_HEIGHT), px(52), px(76), px(6)
+        self.row, self.shelf_width, self.pad = px(ROW_HEIGHT), px(52), px(6)
         self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
@@ -520,8 +520,6 @@ class SongBrowser(tk.Canvas):
         if library is None:
             return
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
-        regions_end = self.shelf_width + self.region_width
-        beside_region = self.column_edges(regions_end, width)
         across_shelf = self.column_edges(self.shelf_width, width)
         row = self.row
         cells: list[Cell] = []
@@ -552,10 +550,10 @@ class SongBrowser(tk.Canvas):
         if is_open:
             for name, paths in library.regions:
                 expanded = name in self.open_regions
-                box = (self.shelf_width, y, regions_end, y + row)
-                cells.append(Cell("region", name, box, opener(expanded, name)))
-                height = run_down(paths, beside_region, y) if expanded else 0
-                y += max(height, row)
+                cells.append(Cell("region", name, (self.shelf_width, y, width, y + row), opener(expanded, name)))
+                y += row
+                if expanded:
+                    y += run_down(paths, across_shelf, y)
         else:
             y += row
         rules.append(y)
