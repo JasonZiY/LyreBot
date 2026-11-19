@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import time
 import unittest
 
-from lyrebot.app import (IN_ORDER, REGIONS, REPEAT, SETTLE, SHUFFLE, SINGLE, in_columns, midi_for, name_problem, next_match,
+from lyrebot.app import (IN_ORDER, REGIONS, REPEAT, SETTLE, SHUFFLE, SINGLE, in_rows, midi_for, name_problem, next_match,
                          next_song,
                          pending_audio, pending_midi, read_library, recording_name, score_name, song_files)
 
@@ -374,11 +375,48 @@ class Folders(unittest.TestCase):
         for _ in range(30):
             self.assertEqual(next_song(library.playlist(first), first, SHUFFLE), last)
 
-    def test_columns_run_down_and_the_first_are_longer(self):
-        self.assertEqual([len(column) for column in in_columns(tuple(range(7)), 2)], [4, 3])
-        self.assertEqual([len(column) for column in in_columns(tuple(range(13)), 3)], [5, 4, 4])
-        self.assertEqual(in_columns(tuple(range(3)), 2), [(0, 1), (2,)])
-        self.assertEqual(in_columns((), 3), [(), (), ()])
+    def test_songs_fill_rows_across_then_down(self):
+        self.assertEqual(in_rows(tuple(range(5)), 2), [(0, 1), (2, 3), (4,)])
+        self.assertEqual(in_rows(tuple(range(4)), 2), [(0, 1), (2, 3)])
+        self.assertEqual(in_rows((), 2), [])
+
+    def test_a_group_reads_english_names_first_then_pinyin_across_the_rows(self):
+        from lyrebot.app import App
+        self.write_scores("歌曲/春日影-演奏.txt", "歌曲/Lemon-演奏.txt", "歌曲/东南苦行山.txt", "歌曲/despacito.txt",
+                          "歌曲/Seeuagain.txt")
+        app = App(self.window(), self.scores, self.midi)
+        app.browser.closed_shelves.discard("歌曲")
+        app.browser.lay_out()
+        songs = [cell for cell in app.browser.cells if cell.path is not None]
+        rows = sorted({cell.box[1] for cell in songs})
+        read = [cell.path.stem for top in rows for cell in sorted((c for c in songs if c.box[1] == top),
+                                                                 key=lambda c: c.box[0])]
+        if sys.platform == "win32":  # Windows' Chinese collation: letters before Han, Han by pinyin
+            self.assertEqual(read, ["despacito", "Lemon-演奏", "Seeuagain", "春日影-演奏", "东南苦行山"])
+        self.assertEqual(read, [cell.path.stem for cell in songs])  # the list's own order, row by row
+        self.assertEqual([len([c for c in songs if c.box[1] == top]) for top in rows], [2, 2, 1])
+
+    def test_the_arrows_move_by_position(self):
+        from lyrebot.app import App
+        names = ["歌曲/a.txt", "歌曲/b.txt", "歌曲/c.txt", "歌曲/d.txt", "歌曲/e.txt"]
+        paths = self.write_scores(*names)
+        app = App(self.window(), self.scores, self.midi)
+        app.browser.closed_shelves.discard("歌曲")
+        app.browser.lay_out()
+        a, b, c, d, e = sorted(paths, key=lambda path: path.stem)  # rows: a b / c d / e
+        app.browser.choose(b)
+        app.browser.step_rows(1)
+        self.assertEqual(app.selected(), d)  # straight down
+        app.browser.step_rows(1)
+        self.assertEqual(app.selected(), e)  # the short last row: the nearest one
+        app.browser.step_rows(1)
+        self.assertEqual(app.selected(), e)  # nothing further down
+        app.browser.step_rows(-1)
+        self.assertEqual(app.selected(), c)
+        app.browser.step(1)
+        self.assertEqual(app.selected(), d)  # right: the next one
+        app.browser.step_rows(-8)
+        self.assertEqual(app.selected(), b)  # a page up stops at the top
 
     def click(self, app, cell, double=False):
         browser = app.browser
