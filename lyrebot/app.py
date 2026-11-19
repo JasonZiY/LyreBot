@@ -28,7 +28,7 @@ from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
 from .midi import MidiError
 from .notate import notate
-from .paper import OnPage, Page
+from .paper import OnPage, Page, fade
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
@@ -436,7 +436,8 @@ class SongBrowser(OnPage, tk.Canvas):
     edge; chevrons are old gold; the chosen song sits on a rounded breath of
     orange with an orange edge, and the song being played shows three small
     orange bars keeping time.  The page shows through it all, and stays
-    still while the list scrolls over it.
+    still while the list scrolls over it; at an edge with more songs beyond
+    it, the last lines sink into the paper instead of being cut off.
     """
 
     def __init__(self, parent: tk.Widget, theme: Theme, locked: Callable[[], object],
@@ -468,6 +469,11 @@ class SongBrowser(OnPage, tk.Canvas):
         self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_edge = self.create_rectangle(0, 0, 0, 0, fill=ORANGE, width=0, state="hidden")
+        self.fade_top = self.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
+        self.fade_bottom = self.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
+        self.fades: tuple[tk.PhotoImage | None, tk.PhotoImage | None] = (None, None)
+        self.faded_for: tuple | None = None  # the page and place the fades were made for
+        self.extent = 0  # how tall the list is, all of it
         self.bind("<Configure>", lambda _: self.lay_out())
         self.bind("<Button-1>", self.click)
         self.bind("<Double-Button-1>", self.double_click)
@@ -478,6 +484,41 @@ class SongBrowser(OnPage, tk.Canvas):
         self.bind("<Return>", lambda _: None if self.locked() else self.on_play())
         self.bind("<Delete>", lambda _: None if self.locked() else self.on_delete())
         self.take_page(theme)
+
+    def lay_paper(self, image: tk.PhotoImage, x: int, y: int) -> None:  # type: ignore[override]
+        super().lay_paper(image, x, y)
+        self.fade_edges(image, x, y)
+
+    def fade_edges(self, image: tk.PhotoImage, x: int, y: int) -> None:
+        """At the top, once the list has scrolled, and at the foot, while there is more below, a strip of the
+        page clearing away from the edge lies over the songs (``paper.fade``), so that the lines there sink
+        into the paper.  The strips are made again only when the page or the list's place changes."""
+        width, height = self.winfo_width(), self.winfo_height()
+        if width <= 1 or height <= 1:
+            return
+        if self.page is not None and self.page.later is not None:  # being resized: the fades step aside,
+            self.faded_for = None  # to be made once it holds still and the page is washed for its size
+            self.itemconfigure("fade", state="hidden")
+            return
+        tall = min(self.theme.px(18), height // 4)
+        if self.faded_for != (str(image), x, y, width, height):
+            self.faded_for = (str(image), x, y, width, height)
+            self.fades = (fade(self, image, x, y, width, tall, solid_at_top=True),
+                          fade(self, image, x, y + height - tall, width, tall, solid_at_top=False))
+        top = self.canvasy(0)
+        above, below = self.edges(top, height)
+        for item, strip, at, show in ((self.fade_top, self.fades[0], top, above),
+                                      (self.fade_bottom, self.fades[1], top + height - tall, below)):
+            if strip is None:
+                self.itemconfigure(item, state="hidden")
+                continue
+            self.coords(item, self.canvasx(0), at)
+            self.itemconfigure(item, image=strip, state="normal" if show else "hidden")
+        self.tag_raise("fade")
+
+    def edges(self, top: float, height: int) -> tuple[bool, bool]:
+        """Whether there are songs above the view (it has scrolled) and below it."""
+        return top > 0, top + height < self.extent
 
     def yview(self, *args):  # type: ignore[override]
         result = super().yview(*args)
@@ -579,7 +620,8 @@ class SongBrowser(OnPage, tk.Canvas):
             self.create_image(width / 2, y + self.theme.px(28) + size / 2, image=art, tags="content")
             bottom = y + self.theme.px(40) + size
         self.configure(scrollregion=(0, 0, width, max(bottom, 1)))
-        self.follow_page()  # a new scroll region may have moved the view
+        self.extent = max(bottom, 1)
+        self.follow_page()  # a new scroll region may have moved the view (and the fades go over the new lines)
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
         if self.find_withtag("beat") and not self.beat_job:
@@ -970,6 +1012,7 @@ class App:
                                    top + max(0, bottom - top - height) // 2, width, height))
         if chrome.adopt(root, self.frame, see_through=(root, self.backdrop, bar)):
             round_corners(root, border=None)  # rounded, with the system's shadow, and no outline
+            root.lyrebot_frame = self.frame  # type: ignore[attr-defined]  # (its dialogs dress to match)
             return True
         bar.destroy()
         self.frame = self.title_bar = None

@@ -1,5 +1,7 @@
 """LyreBot's own dialogs, in place of the system's: a question set in the serif, a gold rule under it,
 the details, and rounded buttons, the one Enter presses in orange (red when something is deleted).
+Where the window they belong to wears LyreBot's own leather title bar, so do they: the lyre, the title
+and × in gilt, a bar to move the dialog by.
 
 Each waits for an answer, as ``tkinter.simpledialog`` and ``tkinter.messagebox`` do.
 """
@@ -8,9 +10,9 @@ from __future__ import annotations
 
 import tkinter as tk
 
-from . import icons
-from .theme import GOLD_SOFT, INK, MUTED, PAPER, WARN, Theme, dress, geometry, screen_area
-from .widgets import PillButton, WritingLine
+from . import chrome, icons
+from .theme import GOLD_SOFT, INK, MUTED, PAPER, WARN, Theme, dress, geometry, round_corners, screen_area
+from .widgets import PillButton, TitleBar, WritingLine
 
 
 def ask_text(title: str, prompt: str, initialvalue: str = "", parent: tk.Misc | None = None) -> str | None:
@@ -49,10 +51,15 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
     window.title(title)
     window.configure(bg=PAPER)
     window.resizable(False, False)
-    if owner.winfo_viewable():
+    leather = chrome.available() and getattr(owner, "lyrebot_frame", None) is not None
+    if owner.winfo_viewable() and not leather:
         window.transient(owner)
     answer: list[object] = [None, ""]
     cancel = buttons[0][2] if len(buttons) > 1 else default
+    if leather:  # the owner's dress: a title bar of leather, × alone on it
+        edges = chrome.Frame(edge=0, caption=0)  # (no edges to size it by: a press on the bar moves it)
+        bar = TitleBar(window, theme, edges, title, "", None, lambda: finish(cancel))
+        bar.pack(fill="x")
 
     frame = tk.Frame(window, bg=PAPER)
     frame.pack(fill="both", padx=px(24), pady=(px(20), px(18)))
@@ -94,8 +101,13 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
 
     window.update_idletasks()
     window.geometry(geometry(*_place(owner, window.winfo_reqwidth(), window.winfo_reqheight())))
-    window.deiconify()
-    dress(window)
+    if leather and chrome.adopt(window, edges, see_through=(window, bar), owner=owner):
+        round_corners(window, border=None)
+    else:
+        if leather:  # Windows would not lend the frame after all: its own bar, as other dialogs have
+            bar.destroy()
+        window.deiconify()
+        dress(window)
     try:
         window.grab_set()
     except tk.TclError:

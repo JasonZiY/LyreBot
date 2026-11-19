@@ -33,7 +33,7 @@ WM_NCDESTROY, WM_NCCALCSIZE, WM_NCHITTEST, WM_SYSCOMMAND = 0x0082, 0x0083, 0x008
 WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN = 0x00A1, 0x00A4
 WM_DPICHANGED = 0x02E0
 SC_MINIMIZE, SC_MAXIMIZE = 0xF020, 0xF030
-GWL_EXSTYLE, GWL_STYLE, GWLP_WNDPROC = -20, -16, -4
+GWL_EXSTYLE, GWL_STYLE, GWLP_WNDPROC, GWLP_HWNDPARENT = -20, -16, -4, -8
 WS_CAPTION, WS_SYSMENU, WS_THICKFRAME = 0x00C00000, 0x00080000, 0x00040000
 WS_MINIMIZEBOX, WS_MAXIMIZEBOX = 0x00020000, 0x00010000
 WS_EX_TOOLWINDOW, WS_EX_APPWINDOW = 0x00000080, 0x00040000
@@ -160,10 +160,14 @@ def stand_aside(frame: Frame, widgets: Iterable[tk.Misc]) -> None:
         _subclass(widget.winfo_id(), aside)
 
 
-def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Misc] = ()) -> bool:
+def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Misc] = (),
+          owner: tk.Misc | None = None) -> bool:
     """Give ``window`` its own frame, laid out by ``frame``; ``see_through`` are the widgets that reach
     the window's edges or its title bar.  Call it before the window is first shown.  False, with the
-    window as it was, where it cannot be done."""
+    window as it was, where it cannot be done.
+
+    With an ``owner`` it is a dialog: kept over its owner's window and out of the taskbar, and neither
+    resized nor minimised.  (Tk gives a window without a frame no owner of its own, so Windows is told.)"""
     if not available():
         return False
     try:
@@ -176,9 +180,14 @@ def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Mi
             window.update_idletasks()
             hwnd = int(window.wm_frame(), 16)
             _user32.ShowWindow(hwnd, SW_HIDE)
-        style = _user32.GetWindowLongPtrW(hwnd, GWL_STYLE)
-        style = (style | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX) & ~WS_MAXIMIZEBOX
-        extended = (_user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE) | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+        style = _user32.GetWindowLongPtrW(hwnd, GWL_STYLE) | WS_CAPTION | WS_SYSMENU
+        extended = _user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & ~WS_EX_TOOLWINDOW
+        if owner is None:  # a window of its own: a taskbar button, edges to size it by, minimising
+            style, extended = style | WS_THICKFRAME | WS_MINIMIZEBOX, extended | WS_EX_APPWINDOW
+        else:
+            style &= ~(WS_THICKFRAME | WS_MINIMIZEBOX)
+            _user32.SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, int(owner.wm_frame(), 16))
+        style &= ~WS_MAXIMIZEBOX
         frame.hwnd = hwnd
 
         def own(message: int, wparam: int, lparam: int) -> int | None:

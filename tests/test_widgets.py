@@ -234,6 +234,20 @@ class Pieces(unittest.TestCase):
         self.type_into(line, "Home")
         self.assertEqual(line.shift, 0)  # and back to its start
 
+    def test_a_dialogs_title_bar_has_its_close_button_alone(self):
+        frame = chrome.Frame(edge=0, caption=0)
+        closed = []
+        bar = TitleBar(self.root, self.theme, frame, "命名", "", None, lambda: closed.append(True))
+        with mock.patch.object(bar, "winfo_width", return_value=300), mock.patch.object(bar, "winfo_x", return_value=0), \
+                mock.patch.object(bar, "winfo_y", return_value=0):
+            bar.redraw()
+        [close] = frame.buttons
+        self.assertEqual(close[2], 300 - self.theme.px(8))
+        middle = SimpleNamespace(x=(close[0] + close[2]) / 2, y=(close[1] + close[3]) / 2)
+        bar.press(middle)
+        bar.release(middle)
+        self.assertEqual(closed, [True])
+
     def test_a_window_may_have_its_corners_rounded_without_an_edge(self):
         from lyrebot import theme
         with mock.patch.object(theme, "_windows_11", return_value=True), \
@@ -421,6 +435,23 @@ class Dialogs(unittest.TestCase):
         self.assertEqual(dialogs.ask_text("命名", "叫什么？", initialvalue="旧名", parent=self.root), "新名")
         self.answer("命名", lambda d: d.event_generate("<Escape>"))
         self.assertIsNone(dialogs.ask_text("命名", "叫什么？", parent=self.root))
+
+    def test_a_dialog_wears_the_leather_bar_its_window_wears(self):
+        self.root.lyrebot_frame = chrome.Frame(edge=5, caption=40)  # as App.take_frame leaves it
+        seen = {}
+
+        def look(dialog):
+            [bar] = [child for child in dialog.winfo_children() if isinstance(child, TitleBar)]
+            seen["commands"], seen["title"] = list(bar.commands), bar.title
+            bar.commands["close"]()  # × answers as "no" would
+        with mock.patch.object(chrome, "available", return_value=True), \
+                mock.patch.object(chrome, "adopt", return_value=True) as adopt, \
+                mock.patch.object(dialogs, "round_corners") as corners:
+            self.answer("删除", look)
+            self.assertFalse(dialogs.confirm("删除", "删除「歌」？", parent=self.root, yes="删除", danger=True))
+        self.assertEqual(seen, {"commands": ["close"], "title": "删除"})  # × alone: no minimising a dialog
+        self.assertIs(adopt.call_args.kwargs["owner"], self.root)  # kept over the window, out of the taskbar
+        corners.assert_called_once()
 
     def test_a_dangerous_question_says_no_to_enter(self):
         self.answer("删除", lambda d: d.event_generate("<Return>"))

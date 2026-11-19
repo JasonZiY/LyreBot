@@ -378,6 +378,17 @@ class Folders(unittest.TestCase):
         [laid] = app.search_entry.find_withtag("paper")  # the search field's words lie on the page too
         self.assertEqual(app.search_entry.coords(laid), [-v for v in app.page.offset(app.search_entry)])
 
+    def test_the_list_fades_only_at_an_edge_with_more_beyond_it(self):
+        from lyrebot.app import App
+        self.write_scores("甲.txt")
+        app = App(self.window(), self.scores, self.midi)
+        app.browser.extent = 900
+        self.assertEqual(app.browser.edges(0, 400), (False, True))  # at the top: more below
+        self.assertEqual(app.browser.edges(250, 400), (True, True))  # in the middle
+        self.assertEqual(app.browser.edges(500, 400), (True, False))  # at the bottom: more above
+        app.browser.extent = 300
+        self.assertEqual(app.browser.edges(0, 400), (False, False))  # all of it in sight
+
     def test_unless_asked_the_window_keeps_the_system_title_bar(self):
         from lyrebot.app import App
         self.write_scores("甲.txt")

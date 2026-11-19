@@ -1057,13 +1057,13 @@ class TitleBar(tk.Canvas):
 
     It tells ``frame`` (a ``chrome.Frame``) how tall it is and where its buttons are, so that a press
     on the rest of it moves the window and a press near the edges resizes it, as Windows' own bar
-    would; only presses on the buttons reach it."""
+    would; only presses on the buttons reach it.  A dialog's bar has × alone (``minimise`` None)."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, frame, title: str, note: str,
-                 minimise: Callable[[], None], close: Callable[[], None]):
+                 minimise: Callable[[], None] | None, close: Callable[[], None]):
         px = theme.px
         self.theme, self.frame, self.title, self.note = theme, frame, title, note
-        self.commands = {"minimise": minimise, "close": close}
+        self.commands = {"close": close, **({"minimise": minimise} if minimise is not None else {})}
         self.bar_height = px(34)
         super().__init__(parent, height=self.bar_height, bg=LEATHER_TOP, highlightthickness=0, borderwidth=0)
         size = self.button_size = px(24)
@@ -1111,7 +1111,7 @@ class TitleBar(tk.Canvas):
             self.create_text(right + px(8), middle, text=self.note, font=self.theme.fonts.small, fill=EMBER, anchor="w")
         size = self.button_size
         close = width - px(8) - size / 2
-        for name, centre in (("close", close), ("minimise", close - size - px(4))):
+        for name, centre in (("close", close), ("minimise", close - size - px(4)))[:len(self.commands)]:
             self.boxes[name] = (centre - size / 2, middle - size / 2, centre + size / 2, middle + size / 2)
             self.create_image(centre, middle, image=self.faces[name][self.inside == name], tags=name)
         dx, dy = self.winfo_x(), self.winfo_y()

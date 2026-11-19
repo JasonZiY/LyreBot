@@ -180,6 +180,21 @@ class OnThePage(unittest.TestCase):
         self.assertLessEqual(len(drawn), 2)  # caught up with where it had got to, not each step
         self.assertEqual(page.size, (100, 340))
 
+    def test_a_fade_is_the_paper_at_one_edge_clearing_to_nothing_at_the_other(self):
+        page = self.page()
+        strip = paper.fade(self.root, page.image, 4, 20, 30, 10, solid_at_top=False)  # at a list's foot
+        png = strip.tk.call(strip, "data", "-format", "png")
+        width, height, depth, rgba = paper._pixels(png if isinstance(png, bytes) else bytes(png, "latin-1"))
+        self.assertEqual((width, height, depth), (30, 10, 4))
+        alpha = [rgba[row * width * 4 + 3] for row in range(height)]
+        self.assertEqual(alpha, sorted(alpha))  # clearer towards the list, paper at the edge
+        self.assertGreater(alpha[-1], 240)
+        self.assertLess(alpha[0], 15)
+        self.assertGreaterEqual(min(alpha), 1)  # never wholly clear, for Tk's sake
+        foot = tuple(rgba[(9 * width + 5) * 4:(9 * width + 5) * 4 + 3])
+        self.assertEqual(foot, tuple(page.image.get(4 + 5, 20 + 9)))  # the very paper that lies there
+        self.assertIsNone(paper.fade(self.root, page.image, 4, 10_000, 30, 10, solid_at_top=True))  # off the page
+
     def test_words_answer_and_measure_as_a_label_would(self):
         font = self.theme.fonts.body
         words = Words(self.root, self.theme, text="选择乐曲", fg="#123456", font=font)

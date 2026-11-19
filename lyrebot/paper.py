@@ -211,6 +211,62 @@ def _photo(root: tk.Misc, data: bytes) -> tk.PhotoImage:
     return tk.PhotoImage(master=root, data=base64.b64encode(data).decode("ascii"))
 
 
+def _pixels(png: bytes) -> tuple[int, int, int, bytes]:
+    """Width, height, bytes per pixel and the pixels, row after row, of an 8-bit RGB or RGBA PNG."""
+    width, height = struct.unpack(">II", png[16:24])
+    depth = {2: 3, 6: 4}[png[25]]
+    data, at = b"", 8
+    while at < len(png):
+        length, kind = struct.unpack(">I4s", png[at:at + 8])
+        if kind == b"IDAT":
+            data += png[at + 8:at + 8 + length]
+        at += 12 + length
+    raw, stride = zlib.decompress(data), width * depth
+    out = bytearray()
+    above = bytearray(stride)
+    for row in range(height):
+        kind, line = raw[row * (stride + 1)], bytearray(raw[row * (stride + 1) + 1:(row + 1) * (stride + 1)])
+        for i in range(stride if kind else 0):  # undo the row's filter (Tk writes none, but a PNG may have any)
+            left = line[i - depth] if i >= depth else 0
+            up, corner = above[i], above[i - depth] if i >= depth else 0
+            if kind == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif kind == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif kind == 3:
+                line[i] = (line[i] + (left + up) // 2) & 0xFF
+            elif kind == 4:
+                guess = left + up - corner
+                near = min((abs(guess - left), 0, left), (abs(guess - up), 1, up), (abs(guess - corner), 2, corner))
+                line[i] = (line[i] + near[2]) & 0xFF
+        out += line
+        above = line
+    return width, height, depth, bytes(out)
+
+
+def fade(master: tk.Misc, image: tk.PhotoImage, left: int, top: int, width: int, height: int,
+         solid_at_top: bool) -> tk.PhotoImage | None:
+    """A strip of the page ``image`` from (left, top), ``width`` by ``height``: the paper itself along one
+    edge (the top, or the foot), clearing to nothing along the other.  Laid over a list that runs on past
+    that edge, its last lines sink into the paper rather than being cut off.  None where the strip is not
+    on the page."""
+    try:
+        png = image.tk.call(image, "data", "-format", "png", "-from", left, top, left + width, top + height)
+        across, down, depth, rgb = _pixels(png if isinstance(png, bytes) else bytes(png, "latin-1"))
+    except (tk.TclError, KeyError, ValueError, struct.error, zlib.error):
+        return None
+    raw = bytearray()
+    for row in range(down):
+        t = (row + 0.5) / down
+        clear = round(255 * _smooth(0.0, 1.0, 1 - t if solid_at_top else t))  # how much of the paper shows
+        line = bytearray(4 * across)
+        for channel in range(3):
+            line[channel::4] = rgb[row * across * depth + channel:(row + 1) * across * depth:depth]
+        line[3::4] = bytes((max(clear, 1),)) * across  # never wholly clear (see ``grain``)
+        raw += b"\x00" + line
+    return _photo(master, _png(across, down, bytes(raw), 6))
+
+
 class Page:
     """The paper under one window, and the canvases that lay it."""
 
@@ -285,6 +341,7 @@ class Page:
     def settled(self) -> None:
         self.later = None
         self.catch_up()
+        self.schedule()  # whatever stepped aside while the window was being resized comes back
 
     def catch_up(self) -> None:
         width, height = self.wanted
