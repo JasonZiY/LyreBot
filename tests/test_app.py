@@ -421,7 +421,7 @@ class Folders(unittest.TestCase):
         self.assertTrue(app.next_button.enabled)
         with mock.patch.object(app, "start") as start:
             app.play_next()
-        start.assert_called_once_with(second)
+        start.assert_called_once_with(second, from_top=True)
 
     def test_playing_on_finishes_a_region_before_the_next(self):
         from unittest import mock
@@ -439,6 +439,110 @@ class Folders(unittest.TestCase):
             if kind == "song":
                 played.append(value[0])
         self.assertEqual(played, [first, second, third])
+
+    def three_bars(self):
+        """A song of three bars of four seconds each at 100%, with another beside it."""
+        path, other = self.write_scores("歌曲/三小节.txt", "歌曲/别的.txt")
+        path.write_text("speed=60\na-s-d-f-\ng-h-j-q-\nw-e-r-t-\n", encoding="utf-8")
+        return path, other
+
+    def stopped_at(self, app, path, seconds, reason="stopped"):
+        """Play ``path`` in ``app`` until ``seconds`` in, stopped there by F8 (or a window switch)."""
+        from unittest import mock
+
+        def play(timeline, keyboard, target, cancel, progress, start=0.0):
+            progress(seconds)
+            return reason
+        with mock.patch("lyrebot.app.Keyboard"), mock.patch("lyrebot.app.play", side_effect=play), \
+                mock.patch("lyrebot.app.foreground_title_and_pid", return_value=("游戏", os.getpid() + 1)):
+            app.run(path, mock.Mock(duration=12.0), 0.0, 1.0, SINGLE, [], 0.0)
+        app.poll()
+
+    def started(self, app, **how):
+        """What ``app.start`` hands to the player: (song, start in seconds, countdown)."""
+        from unittest import mock
+        app.quiet_until = 0  # past the half second after a stop in which clicks start nothing
+        with mock.patch.object(app, "run") as run:
+            app.start(**how)
+            app.worker.join(5)
+        app.worker = None
+        app.set_playing(False)
+        args = run.call_args.args
+        return args[0], args[2], args[6]
+
+    def test_a_song_stopped_part_way_goes_on_from_the_start_of_its_bar(self):
+        from lyrebot.app import App
+        path, other = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        app.select(path)
+        self.stopped_at(app, path, 5.5)  # in the second bar, which starts at 4 s
+        self.assertEqual(app.resume, (path, 1))
+        self.assertIn("从第 2 小节接着弹", app.status_label.cget("text"))
+        self.assertAlmostEqual(app.fraction, 4 / 12)
+        app.show_selected()  # the list redrawn: still remembered
+        self.assertIn("停在第 2 小节", app.status_label.cget("text"))
+        self.assertEqual(self.started(app), (path, 4.0, None))  # ▶ goes on, after the countdown
+        self.assertIsNone(app.resume)  # and then it is used up
+
+        self.stopped_at(app, path, 9.0, reason="focus")
+        app.speed.set("200%")
+        self.assertEqual(self.started(app), (path, 4.0, None))  # bar 3, at twice the speed
+        self.stopped_at(app, path, 5.0)
+        self.assertEqual(self.started(app, from_top=True), (path, 0.0, None))  # ↺
+        self.stopped_at(app, path, 5.0)
+        self.assertEqual(self.started(app, fraction=0.5)[1], 3.0)  # a click on the bar goes where it says
+        self.stopped_at(app, path, 5.0)
+        app.select(other)  # another song chosen: no going on with the first
+        self.assertIsNone(app.resume)
+        app.select(path)
+        self.assertEqual(self.started(app)[1], 0.0)
+
+    def test_restart_is_live_when_play_is(self):
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.assertEqual((app.button.enabled, app.restart_button.enabled), (False, False))  # nothing chosen
+        app.select(path)
+        self.assertEqual((app.button.enabled, app.restart_button.enabled), (True, True))
+        app.set_playing(True)
+        self.assertEqual((app.button.enabled, app.restart_button.enabled), (False, False))
+        app.set_playing(False)
+        self.assertTrue(app.restart_button.enabled)
+
+    def test_f7_plays_at_once_as_play_would(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        with mock.patch.object(app, "start") as start, \
+                mock.patch("lyrebot.app.start_pressed", side_effect=[True, False]):
+            app.watch_start_key()  # nothing chosen: nothing to play
+            app.watch_start_key()
+        start.assert_not_called()
+        app.select(path)
+        with mock.patch.object(app, "start") as start, \
+                mock.patch("lyrebot.app.start_pressed", side_effect=[True, True, False, True]):
+            for _ in range(4):
+                app.watch_start_key()
+        self.assertEqual(start.call_args_list, [mock.call(countdown=0.0)] * 2)  # once per press, held or not
+        app.worker = object()
+        with mock.patch.object(app, "start") as start, mock.patch("lyrebot.app.start_pressed", side_effect=[False, True]):
+            app.watch_start_key()
+            app.watch_start_key()
+        start.assert_not_called()  # not while something plays
+        app.worker = None
+
+    def test_f7_in_lyrebot_itself_plays_nothing(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        with mock.patch("lyrebot.app.Keyboard"), mock.patch("lyrebot.app.play") as play, \
+                mock.patch("lyrebot.app.foreground_title_and_pid", return_value=("LyreBot", os.getpid())):
+            app.run(path, mock.Mock(duration=12.0), 0.0, 1.0, SINGLE, [], 0.0)
+        play.assert_not_called()
+        app.poll()
+        self.assertEqual(app.status_label.cget("text"), "按 F7 时前台是 LyreBot，没有演奏")
 
     def test_repeat_plays_the_same_song_again(self):
         from unittest import mock
@@ -545,7 +649,7 @@ class Folders(unittest.TestCase):
         opened.assert_called_once_with(self.scores / "OST" / "须弥")
         self.assertTrue((self.scores / "OST" / "须弥").is_dir())
         self.assertEqual(self.labels(self.right_click(app, self.cell(app, "shelf", "歌曲"))), ["打开「歌曲」文件夹"])
-        self.assertEqual(self.labels(self.right_click(app)), ["打开曲谱文件夹（txt）"])  # below the list
+        self.assertIsNone(self.right_click(app))  # below the list: no menu
 
         self.click(app, self.cell(app, "region", "蒙德"))
         menu = self.right_click(app, self.cell(app, "song", "甲"))

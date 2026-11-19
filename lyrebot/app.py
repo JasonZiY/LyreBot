@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 import ctypes
 from dataclasses import dataclass
+from fractions import Fraction
 import math
 import os
 from pathlib import Path
@@ -20,7 +22,7 @@ from . import icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .collate import pinyin_key
 from .jianpu import export as export_jianpu
-from .keyboard import Keyboard, foreground_title_and_pid
+from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
 from .midi import MidiError
 from .notate import notate
@@ -38,7 +40,6 @@ TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
-TXT_FOLDER = "打开曲谱文件夹（txt）"
 OST, SONGS = "OST", "歌曲"  # the two folders of txt that are playlists; other scores are unfiled
 OTHER_REGION = "其他"  # the last region of OST, which also takes scores not in any region's folder
 REGIONS = ("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬", "夏日", OTHER_REGION)
@@ -50,7 +51,8 @@ NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没
             "把它们放进 LyreBot 文件夹里的 tools 文件夹，或与 LyreBot 文件夹并排的 LyreBot-tools 文件夹。"
             "下载地址和放法见 docs 文件夹里的「从录音生成曲谱-安装说明」。")
 ICON = PROJECT / "assets" / "lyrebot.ico"
-COUNTDOWN = 2.0
+COUNTDOWN = 2.0  # seconds to switch to the game after starting a song from the window; F7 needs none
+HOTKEY_POLL = 30  # milliseconds between looks at F7
 FAMILY = "Microsoft YaHei UI"
 
 # Claude's palette: warm paper, ink, and one orange accent.
@@ -253,6 +255,21 @@ def next_match(songs: list[Path], query: str, after: Path | None = None) -> Path
         return None
     start = songs.index(after) if after in songs else -1
     return songs[next((index for index in found if index > start), found[0])]
+
+
+def bar_seconds(score: Score, bar: int, speed: float) -> float:
+    """When bar ``bar`` (from 0) starts, in seconds of the song played at ``speed``."""
+    if not score.bars:
+        return 0.0
+    start = score.bars[min(max(bar, 0), len(score.bars) - 1)]
+    return float(score.tempo_map(speed).seconds(Fraction(start)))
+
+
+def bar_at(score: Score, seconds: float, speed: float) -> int:
+    """The bar (from 0) being played ``seconds`` into the song played at ``speed``."""
+    tempo = score.tempo_map(speed)
+    starts = [float(tempo.seconds(Fraction(start))) for start in score.bars]
+    return max(bisect_right(starts, seconds + 1e-6) - 1, 0)
 
 
 def arranged_from(scores_dir: Path) -> dict[str, Path]:
@@ -752,6 +769,8 @@ class App:
         self.bad: frozenset[Path] = frozenset()
         self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
         self.last_search = ""  # searching for it again goes on to the next song that matches
+        self.resume: tuple[Path, int] | None = None  # a song stopped part way, and the bar it stopped in
+        self.start_held = False  # F7, at the last look
         self.menu_folder = scores_dir
         self.told_empty = False
         # A note such as "just arranged" kept in front of a song's details while it stays selected:
@@ -818,8 +837,8 @@ class App:
         self.song_menu.add_command(label="导出简谱", command=self.export_jianpu)
         self.song_menu.add_separator()
         self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete)
-        self.folder_menu = tk.Menu(root, **look)  # for OST, 歌曲, a region, or the empty list below them
-        self.folder_menu.add_command(label=TXT_FOLDER, command=lambda: self.open_folder(self.menu_folder))
+        self.folder_menu = tk.Menu(root, **look)  # for OST, 歌曲 or a region
+        self.folder_menu.add_command(label="", command=lambda: self.open_folder(self.menu_folder))
 
         rule = tk.Frame(root, bg=LINE, height=1)
 
@@ -857,6 +876,8 @@ class App:
         self.next_button.pack(side="right")
         self.button = IconButton(controls, self.play_images, self.start)
         self.button.pack(side="right", padx=(0, px(6)))
+        self.restart_button = IconButton(controls, self.restart_images, self.restart)
+        self.restart_button.pack(side="right", padx=(0, px(4)))
         self.record_button = IconButton(controls, self.record_images, self.record)
         self.record_button.pack(side="right", padx=(0, px(6)))
         self.keys_button = IconButton(controls, self.keys_images, self.listen)
@@ -874,6 +895,17 @@ class App:
         root.after(300, self.arrange_next)
         root.after(600, self.transcribe_next)
         root.after(2000, self.watch)
+        root.after(HOTKEY_POLL, self.watch_start_key)
+
+    def watch_start_key(self) -> None:
+        """F7 plays the chosen song at once, in whatever window is in front, as ▶ would."""
+        if self.closing:
+            return
+        held = start_pressed()
+        if held and not self.start_held and not self.worker and self.selected() is not None:
+            self.start(countdown=0.0)
+        self.start_held = held
+        self.root.after(HOTKEY_POLL, self.watch_start_key)
 
     def build_images(self, big: int, small: int) -> None:
         def image(size: int, layers) -> tk.PhotoImage:
@@ -900,6 +932,10 @@ class App:
         def keys(color: str, back: str) -> list:
             body, *holes = icons.keyboard(small)
             return [(color, body)] + [(back, hole) for hole in holes]
+        turn = lambda color: [(color, shape) for shape in icons.restart(small)]  # noqa: E731
+        self.restart_images = {"normal": image(small, turn(INK)),
+                               "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + turn(INK)),
+                               "disabled": image(small, turn(FAINT))}
         self.keys_images = {"normal": image(small, keys(INK, PAPER)),
                             "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + keys(INK, HOVER)),
                             "disabled": image(small, keys(FAINT, PAPER))}
@@ -1018,6 +1054,7 @@ class App:
         chosen = self.selected()
         if not busy:
             self.button.set(enabled=chosen is not None)
+            self.restart_button.set(enabled=chosen is not None)
         alone = chosen is not None and not self.playlist(chosen)
         if alone and self.held_mode is None and self.mode.get() not in ON_ITS_OWN:
             self.held_mode = self.mode.get()
@@ -1066,11 +1103,19 @@ class App:
         self.set_fraction(0.0)
         if self.notice and self.notice[0] != path:
             self.notice = None
+        if self.resume and self.resume[0] != path:
+            self.resume = None  # another song chosen: the next one starts from its top
         if isinstance(score, ScoreError):
             self.time_label.configure(text="")
             self.say(f"曲谱有误：{score}", warn=True)
             return
         self.time_label.configure(text=clock(score.duration_seconds / self.speed_factor()))
+        if self.resume:
+            bar = self.resume[1]
+            if score.duration_seconds:
+                self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds)
+            self.say(f"停在第 {bar + 1} 小节 · 点 ▶ 或按 F7 从这里接着弹，点 ↺ 从头弹")
+            return
         self.say(self.notice[1] if self.notice else "")
 
     def open_folder(self, folder: Path) -> None:
@@ -1078,14 +1123,13 @@ class App:
         os.startfile(folder)  # type: ignore[attr-defined]
 
     def context_menu(self, event: tk.Event) -> None:
-        """A song's menu on a song; on OST, 歌曲 or a region, one to open its folder (txt's, below them)."""
+        """A song's menu on a song; on OST, 歌曲 or a region, one to open its folder; nothing elsewhere."""
         cell = self.browser.cell_at(event)
-        if cell is None or cell.path is None:
-            self.menu_folder, label = self.scores_dir, TXT_FOLDER
-            if cell is not None:
-                self.menu_folder = self.scores_dir / (cell.name if cell.kind == "shelf" else Path(OST, cell.name))
-                label = f"打开「{cell.name}」文件夹"
-            self.folder_menu.entryconfigure(0, label=label)
+        if cell is None:
+            return
+        if cell.path is None:
+            self.menu_folder = self.scores_dir / (cell.name if cell.kind == "shelf" else Path(OST, cell.name))
+            self.folder_menu.entryconfigure(0, label=f"打开「{cell.name}」文件夹")
             self.folder_menu.tk_popup(event.x_root, event.y_root)
             return
         if not self.worker:
@@ -1394,7 +1438,10 @@ class App:
             self.arrange_one(target, "刚从录音编配好")
 
     # ---- playing ----
-    def start(self, path: Path | None = None, fraction: float = 0.0) -> None:
+    def start(self, path: Path | None = None, fraction: float | None = None, countdown: float | None = None,
+              from_top: bool = False) -> None:
+        """Play ``path`` (the chosen song): from ``fraction`` of the way through; else, if it was stopped
+        part way, from the start of the bar it stopped in; else from the top."""
         # The click that pulls focus back to LyreBot stops the song; it must not start one too.
         if self.worker or time.monotonic() < self.quiet_until:
             return
@@ -1409,21 +1456,44 @@ class App:
             return
         speed = self.speed_factor()
         timeline = compile_timeline(score, speed)
+        if fraction is not None:
+            begin = fraction * timeline.duration
+        elif not from_top and self.resume and self.resume[0] == path:
+            begin = bar_seconds(score, self.resume[1], speed)
+        else:
+            begin = 0.0
+        self.resume = None
         self.select(path)
         self.duration = timeline.duration
-        self.set_fraction(fraction)
+        self.set_fraction(begin / timeline.duration if timeline.duration else 0.0)
         self.cancel = threading.Event()
         self.set_playing(True)
-        args = (path, timeline, fraction * timeline.duration, speed, self.mode.get(), self.playlist(path))
+        args = (path, timeline, begin, speed, self.mode.get(), self.playlist(path), countdown)
         self.worker = threading.Thread(target=self.run, args=args, daemon=True)
         self.worker.start()
+
+    def restart(self) -> None:
+        """↺: the chosen song from the top, whatever bar it stopped in."""
+        self.start(from_top=True)
 
     def play_next(self) -> None:
         if self.worker:
             return
         songs = self.playlist(self.selected())
         if songs:
-            self.start(next_song(songs, self.selected(), self.mode.get()))
+            self.start(next_song(songs, self.selected(), self.mode.get()), from_top=True)
+
+    def interrupted(self, path: Path, reached: float, speed: float, why: str) -> None:
+        """Remember the bar a song was stopped in, to go on from there."""
+        score = self.read(path)
+        if isinstance(score, ScoreError) or path not in self.songs:
+            self.say(why)
+            return
+        bar = bar_at(score, reached, speed)
+        self.resume = (path, bar)
+        self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds if score.duration_seconds else 0.0)
+        self.time_label.configure(text=f"{clock(bar_seconds(score, bar, speed))} / {clock(score.duration_seconds / speed)}")
+        self.say(f"{why} · 点 ▶ 或按 F7 从第 {bar + 1} 小节接着弹")
 
     def seek(self, event: tk.Event) -> None:
         if self.worker:
@@ -1434,6 +1504,7 @@ class App:
     def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
         busy = playing or recording or listening
         self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
+        self.restart_button.set(enabled=not busy)
         self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
         self.search_button.set_enabled(not busy)
@@ -1445,11 +1516,13 @@ class App:
         if not busy:
             self.root.title(self.base_title)
 
-    def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path]) -> None:
+    def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path],
+            countdown: float | None = None) -> None:
         post = self.updates.put
+        countdown = COUNTDOWN if countdown is None else countdown
         try:
             keyboard = Keyboard()
-            end = time.perf_counter() + COUNTDOWN
+            end = time.perf_counter() + countdown
             while (left := end - time.perf_counter()) > 0:
                 if self.cancel.is_set() or keyboard.stop_pressed():
                     post(("status", "已取消"))
@@ -1459,14 +1532,22 @@ class App:
             target = keyboard.foreground()
             title, pid = foreground_title_and_pid(target)
             if not target or pid == os.getpid():
-                post(("status", "倒计时结束时前台还是 LyreBot，没有演奏"))
+                post(("status", "倒计时结束时前台还是 LyreBot，没有演奏" if countdown
+                      else "按 F7 时前台是 LyreBot，没有演奏"))
                 return
             while True:
                 post(("song", (path, timeline.duration)))
-                reason = play(timeline, keyboard, target, self.cancel,
-                              lambda t: post(("progress", t)), start=begin)
-                if reason != "done" or mode == SINGLE:
-                    post(("status", {"done": "演奏完成", "stopped": "已停止", "focus": "切换了窗口，已停止"}[reason]))
+                reached = [begin]
+
+                def progress(at: float) -> None:
+                    reached[0] = at
+                    post(("progress", at))
+                reason = play(timeline, keyboard, target, self.cancel, progress, start=begin)
+                if reason in ("stopped", "focus"):
+                    post(("interrupted", (path, reached[0], speed, "已停止" if reason == "stopped" else "切换了窗口，已停止")))
+                    return
+                if mode == SINGLE:
+                    post(("status", "演奏完成"))
                     return
                 if mode == REPEAT:  # the same song again, as the file is now
                     try:
@@ -1517,6 +1598,8 @@ class App:
                 self.title_label.configure(text=path.stem)
                 self.time_label.configure(text=f"0:00 / {clock(self.duration)}")
                 self.root.title(f"{path.stem} · LyreBot")
+            elif kind == "interrupted":
+                self.interrupted(*value)
             elif kind == "progress":
                 self.set_fraction(value / self.duration if self.duration else 0)
                 self.time_label.configure(text=f"{clock(value)} / {clock(self.duration)}")

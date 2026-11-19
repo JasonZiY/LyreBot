@@ -7,6 +7,7 @@ a grid and blended with the background colour.
 
 from __future__ import annotations
 
+import math
 from typing import Callable
 
 Shape = Callable[[float, float], bool]
@@ -86,6 +87,34 @@ def next_track(size: int) -> list[Shape]:
     left = c - (w + gap + bar) / 2
     return [polygon((left, c - h / 2), (left + w, c), (left, c + h / 2)),
             rect(left + w + gap, c - h / 2, left + w + gap + bar, c + h / 2, radius=bar * 0.3)]
+
+
+def triangle(a: tuple[float, float], b: tuple[float, float], c: tuple[float, float]) -> Shape:
+    """A triangle with its corners in any order."""
+    turn = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    return polygon(a, b, c) if turn >= 0 else polygon(a, c, b)
+
+
+def restart(size: int) -> list[Shape]:
+    """↺: a ring open near the top right, its arrowhead at about two o'clock pointing up, anticlockwise."""
+    c = size / 2
+    radius, thick = size * 0.21, size * 0.075
+    gap = (math.radians(-85), math.radians(-25))  # screen angles, clockwise from three o'clock
+
+    def ring(x: float, y: float) -> bool:
+        if not (radius - thick / 2) ** 2 <= (x - c) ** 2 + (y - c) ** 2 <= (radius + thick / 2) ** 2:
+            return False
+        return not gap[0] < math.atan2(y - c, x - c) < gap[1]
+
+    at = gap[1]
+    point = (c + radius * math.cos(at), c + radius * math.sin(at))
+    ahead = (math.sin(at), -math.cos(at))  # the way an anticlockwise turn goes from there
+    out = (math.cos(at), math.sin(at))
+    half, length = thick * 1.45, size * 0.15
+    head = triangle((point[0] + out[0] * half, point[1] + out[1] * half),
+                    (point[0] - out[0] * half, point[1] - out[1] * half),
+                    (point[0] + ahead[0] * length, point[1] + ahead[1] * length))
+    return [ring, head]
 
 
 def keyboard(size: int) -> list[Shape]:

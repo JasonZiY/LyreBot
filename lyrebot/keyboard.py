@@ -16,6 +16,7 @@ SCAN_CODES = {
     "z": 0x2C, "x": 0x2D, "c": 0x2E, "v": 0x2F, "b": 0x30, "n": 0x31, "m": 0x32,
 }
 STOP_KEY = 0x77  # F8
+START_KEY = 0x76  # F7
 KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_SCANCODE = 0x0008
 
@@ -104,6 +105,19 @@ class Keyboard:
             except KeyboardError:
                 pass
         self.held.clear()
+
+
+_watcher: _User32 | None = None
+
+
+def start_pressed() -> bool:
+    """Whether F7 is held down now, whichever window has the focus; never on other systems."""
+    global _watcher
+    if sys.platform != "win32":
+        return False
+    if _watcher is None:
+        _watcher = _User32()
+    return _watcher.key_held(START_KEY)
 
 
 def foreground_title_and_pid(hwnd: int) -> tuple[str, int]:
