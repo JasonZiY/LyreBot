@@ -249,7 +249,9 @@ class Choice(PillButton):
             self.menu.add_separator()
         for label, command, icon in actions:
             self.menu.add_command(label=label, command=command, icon=icon)
-        variable.trace_add("write", lambda *_: self.set_text(self.variable.get()))
+        watch = variable.trace_add("write", lambda *_: self.set_text(self.variable.get()))
+        # The variable outlives the choice when the window is drawn again: stop watching it then.
+        self.bind("<Destroy>", lambda event: event.widget is self and variable.trace_remove("write", watch), add="+")
 
     def allow(self, allowed: tuple[str, ...] | None) -> None:
         """Grey out the options not in ``allowed``; None allows them all."""

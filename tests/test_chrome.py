@@ -1,4 +1,5 @@
 import ctypes
+import ctypes.wintypes
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -49,6 +50,20 @@ class Hits(unittest.TestCase):
             self.assertEqual(self.frame.at(point(-700, 120)), HTCAPTION)
             self.assertEqual(self.frame.at(point(-898, 500)), HTLEFT)
             self.assertEqual(self.frame.at(point(-700, 500)), HTCLIENT)
+
+
+class Scaling(unittest.TestCase):
+    def test_on_a_screen_scaled_otherwise_it_takes_the_size_windows_suggests(self):
+        if chrome._user32 is None:
+            self.skipTest("Windows only")
+        frame = Frame(edge=6, caption=40)
+        frame.hwnd = 77
+        suggested = ctypes.wintypes.RECT(-1500, 60, -1150, 760)
+        moved = []
+        with mock.patch.object(chrome, "_user32", SimpleNamespace(SetWindowPos=lambda *args: moved.append(args))):
+            frame.dpi_changed(96 | (96 << 16), ctypes.addressof(suggested))
+        self.assertEqual(moved[0][:6], (77, None, -1500, 60, 350, 700))
+        self.assertEqual((frame.dpi, frame.rescaled), (96, 1))
 
 
 class Adopting(unittest.TestCase):

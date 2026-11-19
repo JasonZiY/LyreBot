@@ -64,6 +64,48 @@ def press(widget, sequence):
     widget.tk.call(command, *["0"] * 10, "", "0", "", "0", str(widget), "2", "0", "0", "0")
 
 
+class Place(unittest.TestCase):
+    """Where the window was left, read back for the screen it is on now."""
+
+    def setUp(self):
+        self.path = Path(tempfile.mkdtemp()) / "window.json"
+        self.addCleanup(shutil.rmtree, self.path.parent, ignore_errors=True)
+
+    def read(self, screen):
+        from unittest import mock
+        from lyrebot.app import read_place
+        with mock.patch("lyrebot.app.screen_holding", return_value=screen) as holding:
+            found = read_place(self.path)
+        return found, holding
+
+    def test_the_window_opens_where_it_was_left(self):
+        from lyrebot.app import write_place
+        write_place((-1500, 80, 438, 900), 120, self.path)
+        found, holding = self.read((120, (-1920, 0, 0, 1040)))
+        self.assertEqual(found, (-1500, 80, 438, 900, 120))
+        holding.assert_called_once_with(-1500, 80, -1062, 980)
+
+    def test_on_a_screen_scaled_otherwise_it_keeps_its_size_to_the_eye(self):
+        from lyrebot.app import write_place
+        write_place((100, 100, 500, 1000), 120, self.path)  # left at 125%
+        found, _ = self.read((96, (0, 0, 1920, 1040)))  # that screen is at 100% now
+        self.assertEqual(found, (100, 100, 400, 800, 96))  # 500 x 1000 at 125% is 400 x 800 at 100%
+
+    def test_it_is_no_smaller_than_the_window_may_be_and_all_on_the_screen(self):
+        from lyrebot.app import WINDOW_WIDTH, write_place
+        write_place((1800, 1000, 100, 100), 96, self.path)
+        found, _ = self.read((96, (0, 0, 1920, 1040)))
+        self.assertEqual(found, (1920 - WINDOW_WIDTH, 1040 - 360, WINDOW_WIDTH, 360, 96))
+
+    def test_nothing_kept_or_a_screen_gone_or_a_spoilt_note_opens_it_afresh(self):
+        from lyrebot.app import write_place
+        self.assertEqual(self.read((96, (0, 0, 1920, 1040)))[0], None)  # nothing kept
+        write_place((-1500, 80, 438, 900), 120, self.path)
+        self.assertEqual(self.read(None)[0], None)  # the screen it was on is gone
+        self.path.write_text("{", encoding="utf-8")
+        self.assertEqual(self.read((96, (0, 0, 1920, 1040)))[0], None)
+
+
 class NextSong(unittest.TestCase):
     def test_in_order_wraps_around(self):
         self.assertEqual(next_song(SONGS, SONGS[1], IN_ORDER), SONGS[2])
@@ -768,6 +810,53 @@ class Folders(unittest.TestCase):
                 mock.patch.object(app.root, "focus_set") as leave:
             app.click_away(SimpleNamespace(widget=app.backdrop))  # not in it: nothing to leave
         leave.assert_not_called()
+
+    def test_moved_to_a_screen_scaled_otherwise_the_window_is_drawn_again_showing_the_same(self):
+        from lyrebot.app import App
+        first, second = self.write_scores("OST/蒙德/风息的离别诗.txt", "OST/蒙德/白日梦的涟漪.txt")
+        app = App(self.window(), self.scores, self.midi)
+        scaling = app.root.tk.call("tk", "scaling")
+        self.addCleanup(app.root.tk.call, "tk", "scaling", scaling)  # (one interpreter for every test)
+        app.browser.toggle(self.cell(app, "region", "蒙德"))
+        app.select(first)
+        app.search_entry.insert(0, "风")
+        app.say("刚从录音编配好")
+        old_browser, dpi = app.browser, 96 if app.dpi != 96 else 144
+        app.rescale(dpi)
+        self.assertEqual(app.dpi, dpi)
+        self.assertEqual(app.bar_height, round(14 * dpi / 96))  # every piece at the new scale
+        self.assertFalse(old_browser.winfo_exists())
+        self.assertEqual(app.selected(), first)  # what it showed, it shows
+        self.assertIn("蒙德", app.browser.open_regions)
+        self.assertIn(second, app.browser.visible_songs())
+        self.assertEqual(app.search_entry.get(), "风")
+        self.assertEqual(app.status_label.cget("text"), "刚从录音编配好")
+        self.assertEqual(app.title_label.cget("text"), first.stem)
+        self.assertEqual(len(app.speed.trace_info()), 1)  # the old choices stopped watching
+        self.assertEqual(app.root.bind("<Configure>").count("moved"), 1)  # one page lays the paper
+
+    def test_the_window_notices_a_new_screen_scaling_and_waits_out_a_dialog(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        dpi = 96 if app.dpi != 96 else 144
+        with mock.patch.object(app, "rescale") as rescale:
+            app.poll()
+            rescale.assert_not_called()
+            app.frame.dpi, app.frame.rescaled = dpi, app.frame.rescaled + 1  # what the frame hears from Windows
+            with mock.patch.object(app.root, "grab_current", return_value=app.root):
+                app.poll()
+            rescale.assert_not_called()  # a dialog is open: not under it
+            app.poll()
+            rescale.assert_called_once_with(dpi)
+            app.poll()
+            rescale.assert_called_once_with(dpi)
+
+    def test_closing_keeps_the_place(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        with mock.patch.object(app, "keep_place") as keep:
+            app.close()
+        keep.assert_called_once_with()
 
     def test_a_press_on_the_title_bar_leaves_the_search_line_too(self):
         from unittest import mock

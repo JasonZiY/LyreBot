@@ -31,6 +31,7 @@ HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMR
 
 WM_NCDESTROY, WM_NCCALCSIZE, WM_NCHITTEST, WM_SYSCOMMAND = 0x0082, 0x0083, 0x0084, 0x0112
 WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN = 0x00A1, 0x00A4
+WM_DPICHANGED = 0x02E0
 SC_MINIMIZE, SC_MAXIMIZE = 0xF020, 0xF030
 GWL_EXSTYLE, GWL_STYLE, GWLP_WNDPROC = -20, -16, -4
 WS_CAPTION, WS_SYSMENU, WS_THICKFRAME = 0x00C00000, 0x00080000, 0x00040000
@@ -51,6 +52,8 @@ class Frame:
         self.buttons: list[Box] = []  # on the title bar, but Tk's to press
         self.hwnd = 0  # the window Windows sees (Tk's wrapper), once adopted
         self.presses = 0  # presses on the title bar and the edges, which Windows has and Tk never hears of
+        self.dpi = 0  # the scaling of the screen the window is on, once Windows has said it changed
+        self.rescaled = 0  # counts those changes, for the window to notice and draw itself again
 
     def hit(self, x: int, y: int, width: int, height: int) -> int:
         """What a press at (x, y) does in a window ``width`` by ``height``: one of the HT codes."""
@@ -76,6 +79,15 @@ class Frame:
         if not _user32.GetWindowRect(self.hwnd, ctypes.byref(box)):
             return HTCLIENT
         return self.hit(x - box.left, y - box.top, box.right - box.left, box.bottom - box.top)
+
+    def dpi_changed(self, wparam: int, lparam: int) -> None:
+        """The window is now mostly on a screen of another scaling (WM_DPICHANGED): take the size and place
+        Windows suggests for it there at once, as it expects, and leave the drawing again to the window."""
+        suggested = wintypes.RECT.from_address(lparam)
+        _user32.SetWindowPos(self.hwnd, None, suggested.left, suggested.top, suggested.right - suggested.left,
+                             suggested.bottom - suggested.top, SWP_NOZORDER | SWP_NOACTIVATE)
+        self.dpi = wparam & 0xFFFF
+        self.rescaled += 1
 
     def minimise(self) -> None:
         """Down to the taskbar, as the system's own button would (Tk will not iconify a window without
@@ -136,6 +148,18 @@ def _subclass(hwnd: int, handle: Callable[[int, int, int], int | None]) -> None:
     _user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(callback, ctypes.c_void_p).value)
 
 
+def stand_aside(frame: Frame, widgets: Iterable[tk.Misc]) -> None:
+    """Have ``widgets`` (pieces that reach the window's edges or its title bar) leave presses there to the
+    frame.  A piece made again, when the window is drawn anew, is told again."""
+    def aside(message: int, _: int, lparam: int) -> int | None:
+        if message == WM_NCHITTEST and frame.at(lparam) != HTCLIENT:
+            return HTTRANSPARENT
+        return None
+
+    for widget in widgets:
+        _subclass(widget.winfo_id(), aside)
+
+
 def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Misc] = ()) -> bool:
     """Give ``window`` its own frame, laid out by ``frame``; ``see_through`` are the widgets that reach
     the window's edges or its title bar.  Call it before the window is first shown.  False, with the
@@ -166,16 +190,13 @@ def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Mi
                 frame.presses += 1  # (and Windows goes on to move, size or show the menu)
             if message == WM_SYSCOMMAND and wparam & 0xFFF0 == SC_MAXIMIZE:
                 return 0  # no maximising (Win+Up, the system menu): a frameless window would spill off the screen
-            return None
-
-        def aside(message: int, _: int, lparam: int) -> int | None:
-            if message == WM_NCHITTEST and frame.at(lparam) != HTCLIENT:
-                return HTTRANSPARENT
+            if message == WM_DPICHANGED:
+                frame.dpi_changed(wparam, lparam)
+                return 0
             return None
 
         _subclass(hwnd, own)
-        for widget in see_through:
-            _subclass(widget.winfo_id(), aside)
+        stand_aside(frame, see_through)
         _user32.SetWindowLongPtrW(hwnd, GWL_STYLE, style)
         _user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, extended)
         _user32.SetWindowPos(hwnd, None, 0, 0, 0, 0,

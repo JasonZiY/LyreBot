@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from bisect import bisect_right
 import ctypes
+from ctypes import wintypes
 from dataclasses import dataclass
 from fractions import Fraction
+import json
 import math
 import os
 from pathlib import Path
@@ -30,8 +32,9 @@ from .paper import OnPage, Page
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
-from .theme import (CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER,
-                    PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
+from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
+                    ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dpi_at, dress, geometry, round_corners, screen_area,
+                    screen_holding)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
 from .widgets import (Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar,
@@ -758,8 +761,12 @@ class SongBrowser(OnPage, tk.Canvas):
 
 class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
-                 tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR, own_frame: bool = False):
+                 tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR, own_frame: bool = False,
+                 place: tuple[int, int, int, int] | None = None):
+        """``place`` is where the window was left (see ``read_place``), on a screen whose scaling ``tk scaling``
+        is already set for."""
         self.root = root
+        self.place = place
         self.scores_dir = scores_dir
         self.midi_dir = midi_dir
         self.jianpu_dir = jianpu_dir
@@ -795,20 +802,47 @@ class App:
         self.closing = False
         self.quiet_until = 0.0
         self.base_title = "LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）"
-
-        self.theme = theme = Theme(root)
-        self.scale = theme.scale
-        px, fonts = theme.px, theme.fonts
+        self.frame: chrome.Frame | None = None  # LyreBot's own frame, once Windows lends it (``take_frame``)
+        self.rescaled = 0  # the frame's count of changes of screen scaling, as last drawn for
+        self.frame_presses = 0  # and of presses on its title bar and edges, as last seen
+        self.title_bar: TitleBar | None = None
         root.title(self.base_title)
-        root.geometry(f"{px(WINDOW_WIDTH)}x{px(640)}")  # opens as narrow as it may be
-        root.minsize(px(WINDOW_WIDTH), px(360))
         root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
-        # The page under it all (``paper``): lamplight at the head, where the search field's solid ground
-        # sits, evening at the foot.  The head is as tall as a title bar and the search row.
+        # A press anywhere in the window but on the search line takes the keyboard from it (the window's
+        # own binding sees its pieces' presses; one on the title bar or an edge is counted by the frame).
+        root.bind("<ButtonPress>", self.click_away, add="+")
+        self.speed = tk.StringVar(master=root, value="100%")
+        self.mode = tk.StringVar(master=root, value=SINGLE)
+
+        self.build()
+        self.refresh()
+        self.show_selected()  # nothing is chosen yet: it asks for a song
+        if not (own_frame and self.take_frame(self.panel)):
+            dress(root)
+        root.after(30, self.poll)
+        root.after(300, self.arrange_next)
+        root.after(600, self.transcribe_next)
+        root.after(2000, self.watch)
+        root.after(HOTKEY_POLL, self.watch_start_key)
+
+    def build(self, size: tuple[int, int] | None = None) -> None:
+        """Make the window's pieces at the present scaling (``tk scaling``): at the start, and again when the
+        window moves to a screen of another scaling (``rescale``), then for its ``size`` there."""
+        root = self.root
+        self.theme = theme = Theme(root)
+        self.scale = theme.scale
+        self.dpi = round(theme.scale * 96)
+        px, fonts = theme.px, theme.fonts
+        width, height = size or (px(WINDOW_WIDTH), px(640))
+        if size is None:
+            root.geometry(f"{width}x{height}")  # opens as narrow as it may be
+        root.minsize(px(WINDOW_WIDTH), px(360))
+        # The page under it all (``paper``): lamplight at the head, under the title bar, and evening at the
+        # foot, over the player.
         theme.page = self.page = Page(root, flat=px(110))
-        self.page.lay(px(WINDOW_WIDTH), px(640))
+        self.page.lay(width, height)
         self.backdrop = Sheet(root, theme)  # the paper between the pieces
         self.backdrop.place(x=0, y=0, relwidth=1, relheight=1)
         tk.Misc.lower(self.backdrop)  # under every other piece (a canvas's own lower() moves its items)
@@ -830,10 +864,6 @@ class App:
         self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
         self.search_entry.bind("<Return>", lambda _: self.search())
-        # A press anywhere else in the window takes the keyboard from it (the window's own binding sees
-        # its pieces' presses; a press on the title bar or an edge is counted by the frame, see ``poll``).
-        root.bind("<ButtonPress>", self.click_away, add="+")
-        self.frame_presses = 0
 
         # ---- song list ----
         top = Sheet(root, theme)
@@ -884,8 +914,6 @@ class App:
 
         controls = Sheet(panel, theme)
         controls.pack(fill="x", pady=(px(8), 0))
-        self.speed = tk.StringVar(master=root, value="100%")
-        self.mode = tk.StringVar(master=root, value=SINGLE)
         self.speed_choice = Choice(controls, theme, self.speed, SPEEDS, self.show_selected,
                                    ((CUSTOM_SPEED, self.ask_speed, icons.pen_nib),))
         self.speed_choice.pack(side="left")
@@ -910,40 +938,84 @@ class App:
         rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
         finder.pack(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(8), 0))
+        self.panel = panel
+        if self.frame is not None:  # drawn again: the title bar with the rest
+            chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
 
-        self.refresh()
-        self.show_selected()  # nothing is chosen yet: it asks for a song
-        self.title_bar: TitleBar | None = None
-        if not (own_frame and self.take_frame(panel)):
-            dress(root)
-        root.after(30, self.poll)
-        root.after(300, self.arrange_next)
-        root.after(600, self.transcribe_next)
-        root.after(2000, self.watch)
-        root.after(HOTKEY_POLL, self.watch_start_key)
+    def make_title_bar(self, first: tk.Widget) -> TitleBar:
+        """The leather title bar, over ``first``, laid out for ``self.frame``; the lyre moves up into it."""
+        assert self.frame is not None
+        self.frame.edge = self.theme.px(5)
+        bar = TitleBar(self.root, self.theme, self.frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
+                       self.frame.minimise, self.close)
+        bar.pack(side="top", fill="x", before=first)
+        self.crest.grid_remove()
+        self.title_bar = bar
+        return bar
 
     def take_frame(self, first: tk.Widget) -> bool:
-        """Draw the title bar in LyreBot's own leather and gilt instead of Windows' (see ``chrome``): the lyre
-        moves up into it, and the window opens in the middle of the screen the pointer is on."""
+        """Draw the title bar in LyreBot's own leather and gilt instead of Windows' (see ``chrome``).  The
+        window opens where it was left, or else in the middle of the screen the pointer is on."""
         if not chrome.available():
             return False
         root, px = self.root, self.theme.px
-        frame = chrome.Frame(edge=px(5), caption=0)
-        bar = TitleBar(root, self.theme, frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
-                       frame.minimise, self.close)
-        bar.pack(side="top", fill="x", before=first)
-        self.crest.grid_remove()
-        width, height = px(WINDOW_WIDTH), px(640)
-        left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
-        root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
-                               width, height))
-        if chrome.adopt(root, frame, see_through=(root, self.backdrop, bar)):
+        self.frame = chrome.Frame(edge=px(5), caption=0)
+        bar = self.make_title_bar(first)
+        if self.place is not None:
+            root.geometry(geometry(*self.place))
+        else:
+            width, height = px(WINDOW_WIDTH), px(640)
+            left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
+            root.geometry(geometry(left + max(0, right - left - width) // 2,
+                                   top + max(0, bottom - top - height) // 2, width, height))
+        if chrome.adopt(root, self.frame, see_through=(root, self.backdrop, bar)):
             round_corners(root, border=None)  # rounded, with the system's shadow, and no outline
-            self.title_bar = bar
             return True
         bar.destroy()
+        self.frame = self.title_bar = None
         self.crest.grid()
         return False
+
+    def rescale(self, dpi: int) -> None:
+        """Draw the window again for the screen it has moved to, whose scaling is ``dpi`` (Windows has made it
+        the right size there already), showing what it showed: the same songs open, chosen and in view, the
+        same search, the same words under the player, the same buttons live."""
+        root, browser = self.root, self.browser
+        shown = (set(browser.closed_shelves), set(browser.open_regions), browser.chosen, browser.playing,
+                 browser.yview()[0])
+        search = self.search_entry.get()
+        labels = [(label.cget("text"), label.cget("fg"))
+                  for label in (self.title_label, self.time_label, self.bar_label, self.status_label)]
+        for job in (browser.beat_job, self.breath_job):
+            if job:
+                root.after_cancel(job)
+        browser.beat_job = self.breath_job = None
+        self.page.close()
+        for child in root.winfo_children():
+            child.destroy()
+        root.tk.call("tk", "scaling", dpi / 72.0)
+        self.build(size=(root.winfo_width(), root.winfo_height()))
+        browser = self.browser
+        browser.closed_shelves, browser.open_regions, browser.chosen, browser.playing, top = shown
+        if self.library is not None:
+            browser.show(self.library, self.bad)
+        browser.yview_moveto(top)
+        self.search_entry.insert(0, search)
+        for label, (text, ink) in zip((self.title_label, self.time_label, self.bar_label, self.status_label), labels):
+            label.configure(text=text, fg=ink)
+        busy = self.worker is not None
+        self.set_playing(busy and not (self.recording or self.listening), self.recording, self.listening)
+        if self.recording or self.listening:
+            self.breathe()
+        self.draw_bar()
+
+    def keep_place(self) -> None:
+        """Write down where the window is, for it to open there next time (see ``read_place``)."""
+        if self.frame is None or not self.frame.hwnd:
+            return
+        box = wintypes.RECT()
+        if ctypes.windll.user32.GetWindowRect(self.frame.hwnd, ctypes.byref(box)):
+            write_place((box.left, box.top, box.right - box.left, box.bottom - box.top), self.dpi)
 
     def watch_start_key(self) -> None:
         """F7 plays the chosen song at once, in whatever window is in front, as ▶ would."""
@@ -1739,9 +1811,14 @@ class App:
             self.root.focus_set()
 
     def poll(self) -> None:
-        if self.title_bar is not None and self.title_bar.frame.presses != self.frame_presses:
-            self.frame_presses = self.title_bar.frame.presses  # pressed on the title bar or an edge
+        frame = self.frame
+        if frame is not None and frame.presses != self.frame_presses:
+            self.frame_presses = frame.presses  # pressed on the title bar or an edge
             self.leave_search()
+        if frame is not None and frame.rescaled != self.rescaled and self.root.grab_current() is None:
+            self.rescaled = frame.rescaled  # (with a dialog open, once it has closed)
+            if frame.dpi and frame.dpi != self.dpi:
+                self.rescale(frame.dpi)
         while True:
             try:
                 kind, value = self.updates.get_nowait()
@@ -1815,6 +1892,7 @@ class App:
         self.root.after(30, self.poll)
 
     def close(self) -> None:
+        self.keep_place()
         self.closing = True
         self.stop()
         self.stop_transcribing.set()
@@ -1822,13 +1900,64 @@ class App:
             self.root.destroy()
 
 
+PLACE = CACHE_ROOT.parent / "window.json"  # where the window was left
+
+
+def take_screen_scaling() -> None:
+    """Tell Windows LyreBot draws for each screen's own scaling (per-monitor DPI awareness, v2), so that on a
+    screen scaled unlike the main one it is drawn afresh, crisp, rather than stretched as a picture."""
+    try:
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):  # PER_MONITOR_AWARE_V2
+            return
+    except (AttributeError, OSError):
+        return
+    for level in (2, 1):  # older Windows: per monitor, else the main screen's scaling
+        try:
+            if ctypes.windll.shcore.SetProcessDpiAwareness(level) == 0:
+                return
+        except (AttributeError, OSError):
+            return
+
+
+def write_place(box: tuple[int, int, int, int], dpi: int, path: Path | None = None) -> None:
+    """Keep the window's place, ``box`` (left, top, width, height in the screen's pixels) on a screen
+    scaled to ``dpi``."""
+    path = path or PLACE
+    left, top, width, height = box
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"left": left, "top": top, "width": width, "height": height, "dpi": dpi}),
+                        encoding="utf-8")
+    except OSError:
+        pass
+
+
+def read_place(path: Path | None = None) -> tuple[int, int, int, int, int] | None:
+    """Where the window was left, as (left, top, width, height, dpi) for the screen it is on now: its size
+    made over for that screen's scaling, no smaller than the window may be, and the whole of it on the
+    screen.  None when nothing was kept, or the screen it was on is gone."""
+    path = path or PLACE
+    try:
+        kept = json.loads(path.read_text(encoding="utf-8"))
+        left, top, width, height, was = (int(kept[key]) for key in ("left", "top", "width", "height", "dpi"))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    found = screen_holding(left, top, left + width, top + height)
+    if found is None or was <= 0:
+        return None
+    dpi, (area_left, area_top, area_right, area_bottom) = found
+    width = max(round(width * dpi / was), round(WINDOW_WIDTH * dpi / 96))
+    height = max(round(height * dpi / was), round(360 * dpi / 96))
+    width, height = min(width, area_right - area_left), min(height, area_bottom - area_top)
+    left = min(max(left, area_left), area_right - width)
+    top = min(max(top, area_top), area_bottom - height)
+    return left, top, width, height, dpi
+
+
 def main() -> None:
     if sys.platform == "win32" and not is_admin() and relaunch_as_admin():
         return  # the elevated copy takes over
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    except (AttributeError, OSError):
-        pass
+    take_screen_scaling()
     try:  # own taskbar entry, so Windows doesn't borrow another pythonw app's icon
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("LyreBot")
     except (AttributeError, OSError):
@@ -1838,8 +1967,12 @@ def main() -> None:
         root.iconbitmap(default=str(ICON))
     except tk.TclError:
         pass
+    place = read_place()
+    # Drawn at the scaling of the screen it opens on: where it was left, or where the pointer is.
+    dpi = place[4] if place else dpi_at(*root.winfo_pointerxy())
+    root.tk.call("tk", "scaling", dpi / 72.0)
     try:
-        App(root, own_frame=True)
+        App(root, own_frame=True, place=place[:4] if place else None)
     except Exception:
         if sys.stderr is not None:
             raise
