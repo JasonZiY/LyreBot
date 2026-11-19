@@ -497,6 +497,30 @@ class Folders(unittest.TestCase):
         app.select(path)
         self.assertEqual(self.started(app)[1], 0.0)
 
+    def test_the_bar_being_played_shows_beside_the_time(self):
+        from lyrebot.app import App
+        path, other = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.assertEqual(app.bar_label.cget("text"), "")  # nothing chosen
+        app.select(path)
+        self.assertEqual(app.bar_label.cget("text"), "1/3")  # where it would start
+        app.updates.put(("song", (path, 12.0)))
+        app.updates.put(("progress", 5.5))
+        app.poll()
+        self.assertEqual(app.bar_label.cget("text"), "2/3")
+        app.updates.put(("progress", 12.0))
+        app.poll()
+        self.assertEqual(app.bar_label.cget("text"), "3/3")
+        self.stopped_at(app, path, 5.5)
+        self.assertEqual(app.bar_label.cget("text"), "2/3")  # where it will go on from
+        app.show_selected()
+        self.assertEqual(app.bar_label.cget("text"), "2/3")
+        app.speed.set("200%")
+        app.updates.put(("song", (path, 6.0)))
+        app.updates.put(("progress", 4.5))  # twice as fast: 4.5 s in is bar 3
+        app.poll()
+        self.assertEqual(app.bar_label.cget("text"), "3/3")
+
     def test_restart_is_live_when_play_is(self):
         from lyrebot.app import App
         path, _ = self.three_bars()

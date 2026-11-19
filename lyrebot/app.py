@@ -771,6 +771,7 @@ class App:
         self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
         self.last_search = ""  # searching for it again goes on to the next song that matches
         self.resume: tuple[Path, int] | None = None  # a song stopped part way, and the bar it stopped in
+        self.bar_starts: list[float] = []  # of the song playing, in seconds
         self.start_held = False  # F7, at the last look
         self.menu_folder = scores_dir
         self.told_empty = False
@@ -849,6 +850,8 @@ class App:
         heading.pack(fill="x")
         self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))
         self.time_label.pack(side="right", anchor="s")
+        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))  # 2/20: bar 2 of 20
+        self.bar_label.pack(side="right", anchor="s", padx=(0, px(10)))
         self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, TITLE_FONT, "bold"), anchor="w")
         self.title_label.pack(side="left", fill="x", expand=True)
 
@@ -1014,6 +1017,7 @@ class App:
             self.told_empty = True
             self.title_label.configure(text="还没有曲谱")
             self.time_label.configure(text="")
+            self.bar_label.configure(text="")
             self.say("把 .txt 曲谱放进 txt 文件夹（右键列表的空白处可以打开它），或把 MIDI 放进 midi 文件夹，"
                      "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")
 
@@ -1097,6 +1101,7 @@ class App:
             if self.songs:
                 self.title_label.configure(text="选择乐曲")
                 self.time_label.configure(text="")
+                self.bar_label.configure(text="")
                 self.set_fraction(0.0)
             return
         score = self.read(path)
@@ -1108,9 +1113,11 @@ class App:
             self.resume = None  # another song chosen: the next one starts from its top
         if isinstance(score, ScoreError):
             self.time_label.configure(text="")
+            self.bar_label.configure(text="")
             self.say(f"曲谱有误：{score}", warn=True)
             return
         self.time_label.configure(text=clock(score.duration_seconds / self.speed_factor()))
+        self.show_bar(self.resume[1] if self.resume else 0, score)  # where it would start
         if self.resume:
             bar = self.resume[1]
             if score.duration_seconds:
@@ -1311,6 +1318,7 @@ class App:
         self.set_playing(False, recording=True)
         self.title_label.configure(text=name)
         self.time_label.configure(text="")
+        self.bar_label.configure(text="")
         self.set_fraction(0.0)
         self.root.title(f"{name} · 录音 · LyreBot")
         self.say("等待声音：播放想编配的音乐，录完点 ■ 结束")
@@ -1363,6 +1371,7 @@ class App:
         self.set_playing(False, listening=True)
         self.title_label.configure(text=name)
         self.time_label.configure(text="")
+        self.bar_label.configure(text="")
         self.set_fraction(0.0)
         self.root.title(f"{name} · 记录演奏 · LyreBot")
         self.say("切换到游戏弹琴，弹完按 F8 或回来点 ■ 结束")
@@ -1473,6 +1482,10 @@ class App:
         self.worker = threading.Thread(target=self.run, args=args, daemon=True)
         self.worker.start()
 
+    def show_bar(self, bar: int, score: Score) -> None:
+        """Show bar ``bar`` (from 0) of all the score's bars, as 2/20."""
+        self.bar_label.configure(text=f"{bar + 1}/{len(score.bars)}" if score.bars else "")
+
     def restart(self) -> None:
         """↺: the chosen song from the top, whatever bar it stopped in."""
         self.start(from_top=True)
@@ -1494,6 +1507,7 @@ class App:
         self.resume = (path, bar)
         self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds if score.duration_seconds else 0.0)
         self.time_label.configure(text=f"{clock(bar_seconds(score, bar, speed))} / {clock(score.duration_seconds / speed)}")
+        self.show_bar(bar, score)
         self.say(f"{why} · 点 ▶ 或按 F7 从第 {bar + 1} 小节接着弹")
 
     def seek(self, event: tk.Event) -> None:
@@ -1598,12 +1612,18 @@ class App:
                 self.select(path)
                 self.title_label.configure(text=path.stem)
                 self.time_label.configure(text=f"0:00 / {clock(self.duration)}")
+                score = self.read(path)
+                tempo = None if isinstance(score, ScoreError) else score.tempo_map(self.speed_factor())
+                self.bar_starts = [float(tempo.seconds(Fraction(start))) for start in score.bars] if tempo else []
                 self.root.title(f"{path.stem} · LyreBot")
             elif kind == "interrupted":
                 self.interrupted(*value)
             elif kind == "progress":
                 self.set_fraction(value / self.duration if self.duration else 0)
                 self.time_label.configure(text=f"{clock(value)} / {clock(self.duration)}")
+                if self.bar_starts:
+                    bar = max(bisect_right(self.bar_starts, value + 1e-6), 1)
+                    self.bar_label.configure(text=f"{bar}/{len(self.bar_starts)}")
                 self.say("正在演奏 · 按 F8 或切换窗口停止")
             elif kind == "error":
                 self.say("出错，已停止", warn=True)
