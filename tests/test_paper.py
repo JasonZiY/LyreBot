@@ -33,9 +33,12 @@ def pixels(data: bytes) -> tuple[int, int, bytes]:
 class Drawing(unittest.TestCase):
     def test_lamplight_at_the_head_evening_at_the_foot(self):
         width, height, rgb = pixels(paper.wash(80, 320, 40))
-        step = paper.STEP
-        self.assertEqual((width, height), (-(-(80 + paper.MARGIN) // step), -(-(320 + paper.MARGIN) // step)))
-        at = lambda x, y: tuple(rgb[((y // step) * width + x // step) * 3:((y // step) * width + x // step) * 3 + 3])  # noqa: E731
+        across, down = paper.STEP, paper.STEP_DOWN
+        self.assertEqual((width, height), (-(-(80 + paper.MARGIN) // across), -(-(320 + paper.MARGIN) // down)))
+
+        def at(x, y):
+            spot = ((y // down) * width + x // across) * 3
+            return tuple(rgb[spot:spot + 3])
         lifted = tuple(round(value + paper.LIFT) for value in paper.HEAD)  # the grain takes that back
         for x, y in ((0, 0), (79, 10), (40, 31)):
             self.assertEqual(at(x, y), lifted, (x, y))  # the head: one colour
@@ -47,9 +50,18 @@ class Drawing(unittest.TestCase):
 
     def test_the_clouds_keep_still_while_the_window_is_resized(self):
         narrow, wide = pixels(paper.wash(80, 320, 40)), pixels(paper.wash(200, 320, 40))
-        for row in range(10, 22):  # clouded, and above the evening's mauve, which follows the width
-            start = 3 * row
-            self.assertEqual(narrow[2][start * narrow[0]:(start + 30)], wide[2][start * wide[0]:(start + 30)])
+        clouded = [row for row in range(narrow[1]) if 88 < (row + 0.5) * paper.STEP_DOWN < 192]  # under the
+        self.assertGreater(len(clouded), 20)  # lamplight's edge, above the evening's mauve, which follows the width
+        for row in clouded:
+            first, second = narrow[2][3 * row * narrow[0]:][:30], wide[2][3 * row * wide[0]:][:30]
+            self.assertEqual(first, second, row)
+        self.assertGreater(len(set(narrow[2][3 * clouded[0] * narrow[0]:][:3 * narrow[0]])), 3)  # and clouded
+
+    def test_down_the_page_the_colours_change_by_less_than_a_level_a_step(self):
+        width, height, rgb = pixels(paper.wash(80, 800, 110))
+        column = [rgb[3 * row * width:3 * row * width + 3] for row in range(height)]
+        steps = [max(abs(a - b) for a, b in zip(upper, lower)) for upper, lower in zip(column, column[1:])]
+        self.assertLessEqual(max(steps), 1)  # where the lamplight gives way to the paper too: no bands
 
     def test_the_grain_darkens_by_a_level_or_two_with_a_few_fibres(self):
         size, _, rgba = pixels(paper.grain(64))
@@ -122,25 +134,51 @@ class OnThePage(unittest.TestCase):
         mean = tuple(sum(pixel[k] for pixel in head) / len(head) for k in range(3))
         self.assertTrue(all(abs(m - h) < 0.6 for m, h in zip(mean, paper.HEAD)), mean)  # the grain evens out
 
-    def test_a_window_dragged_larger_keeps_paper_under_it(self):
-        page = self.page()
-        page.lay(100, 100)
+    def drag(self, page, sizes):
+        """Drag the window through ``sizes``, letting each quick wash happen; the washes made, in order."""
         drawn = []
         washing = paper.wash
-        with mock.patch.object(paper, "wash", side_effect=lambda *a: drawn.append(a) or washing(*a)):
-            for step in range(1, 31):
-                size = (100 + 12 * step, 100 + 15 * step)
+        with mock.patch.object(paper, "wash", side_effect=lambda *a: drawn.append(a[:2]) or washing(*a)):
+            for size in sizes:
                 page.moved(SimpleNamespace(widget=self.root, width=size[0], height=size[1]))
                 deadline = time.monotonic() + 0.5
                 while page.soon is not None and time.monotonic() < deadline:
                     self.root.update()
                 self.assertGreaterEqual(page.image.width(), size[0])  # paper reaches the right
                 self.assertGreaterEqual(page.image.height(), size[1])  # and the foot, all the way
-            self.assertLess(len(drawn), 10)  # washed now and then, not on every change
             deadline = time.monotonic() + 1.0
             while page.later is not None and time.monotonic() < deadline:
                 self.root.update()
-        self.assertEqual(page.size, (460, 550))  # and once more for the size it came to
+        return drawn
+
+    def test_dragged_wider_the_paper_is_washed_only_now_and_then(self):
+        page = self.page()
+        page.lay(100, 300)
+        drawn = self.drag(page, [(100 + 12 * step, 300) for step in range(1, 31)])
+        self.assertLess(len(drawn), 6)  # when it outgrows the margin, and once it has settled
+        self.assertEqual(page.size, (460, 300))
+
+    def test_dragged_taller_the_colours_stretch_with_it(self):
+        page = self.page()
+        page.lay(100, 300)
+        heights = [300 + 9 * step for step in range(1, 21)] + [480 - 11 * step for step in range(1, 21)]
+        drawn = self.drag(page, [(100, height) for height in heights])
+        self.assertEqual([height for _, height in drawn], heights)  # a wash for each height, as it went
+        self.assertEqual(page.size, (100, 260))
+
+    def test_a_quick_drag_is_washed_at_most_so_often(self):
+        page = self.page()
+        page.lay(100, 300)
+        drawn = []
+        washing = paper.wash
+        with mock.patch.object(paper, "wash", side_effect=lambda *a: drawn.append(a[:2]) or washing(*a)):
+            for height in range(301, 341):  # forty heights before the window has a moment to wash
+                page.moved(SimpleNamespace(widget=self.root, width=100, height=height))
+            deadline = time.monotonic() + 1.0
+            while (page.soon is not None or page.later is not None) and time.monotonic() < deadline:
+                self.root.update()
+        self.assertLessEqual(len(drawn), 2)  # caught up with where it had got to, not each step
+        self.assertEqual(page.size, (100, 340))
 
     def test_words_answer_and_measure_as_a_label_would(self):
         font = self.theme.fonts.body

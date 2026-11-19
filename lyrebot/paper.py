@@ -4,10 +4,12 @@ and mauve of an evening sky at its foot, with a fine grain, a little clouding an
 Tk's widgets cannot be see-through, so every part of the window that shows the page is a canvas laying
 its own slice of one picture of the paper under what it draws (``OnPage``).  The picture is made of:
 
-- the wash: the colours, and the clouding in them.  They change slowly, so the wash is drawn at an
-  eighth of the window's size (some 10 ms in pure Python) and enlarged by Tk.  It runs on a little
-  past the window's right and foot, so a window being dragged larger keeps paper under it; it is
-  washed anew when the drag outgrows that margin, and once more for the size the window settles at;
+- the wash: the colours, and the clouding in them.  They change slowly across the page, faster down
+  it, so the wash is drawn at an eighth of the window's width and a quarter of its height (some 10 ms
+  in pure Python) and enlarged by Tk.  It runs on a little past the window's right and foot, so a
+  window being dragged larger keeps paper under it.  The colours are laid out by the window's height,
+  so while it is dragged taller or shorter the page is washed anew as it goes, the colours stretching
+  with it; dragged only wider, it is washed when it outgrows the margin, and once more when it settles;
 - the grain: a fine grain and a few fibres, darkening the wash by a level or two.  It does not depend
   on the window's size, so it is one square tile, drawn once and kept on disk beside the icons, which
   Tk lays over the wash, tile by tile from the window's top left corner, as the picture is made.
@@ -36,13 +38,14 @@ CREAM = (250, 245, 236)  # the middle of the page, the paper itself
 ROSE = (244, 219, 208)  # the evening at its foot
 MAUVE = (234, 219, 230)  # the sky going violet, to the right of the foot
 CLOUDING = 2.5  # how far the paper's clouding strays from the even colour, in levels
-STEP = 8  # the wash is drawn at 1/STEP of the window's size
+STEP = 8  # the wash is drawn at 1/STEP of the window's width (the colours change slowly across)
+STEP_DOWN = 4  # and 1/STEP_DOWN of its height: down the page they change fast, and a coarser step would show
 MARGIN = 96  # how far the wash runs on past the window's right and foot
 TILE = 512  # the grain's square
 GRAIN = 2  # the grain darkens each pixel by 1 to 1 + GRAIN levels (never 0: see ``grain``), which the wash
 LIFT = 1 + GRAIN / 2  # adds back on average
 FIBRE = 4  # and a fibre by this much more
-QUICK = 0.05  # seconds: while the window is being dragged larger than its wash, a new wash at most this often
+QUICK = 0.03  # seconds: while the window is being dragged taller or shorter, a new wash at most this often
 SETTLE = 120  # milliseconds after the last change of size: the wash for the size it has come to
 
 
@@ -77,11 +80,47 @@ def colour(x: float, y: float, width: int, height: int, flat: int) -> str:
 
 
 # Two sizes of soft blotch for the clouding, as fixed grids of values that wrap around: the clouds
-# belong to the window's coordinates, so a resize does not stir them.
+# belong to the window's coordinates, so a resize does not stir them, and a row of them, once worked out,
+# is kept for every wash after.
 _CLOUDS = []
 _random = random.Random(7)
 for _cell, _weight in ((140, 0.7), (50, 0.3)):
     _CLOUDS.append((_cell, _weight, [[_random.uniform(-1.0, 1.0) for _ in range(32)] for _ in range(32)]))
+_cloud_rows: dict[int, list[float]] = {}
+
+
+def _cloud_row(row: int, across: int) -> list[float]:
+    """The clouds at the wash's samples along its row ``row``, at least ``across`` of them."""
+    found = _cloud_rows.get(row)
+    if found is not None and len(found) >= across:
+        return found
+    across = -(-across // 64) * 64  # a little to spare, so a wider window does not mean working it out again
+    y = (row + 0.5) * STEP_DOWN
+    total = [0.0] * across
+    for cell, weight, grid in _CLOUDS:
+        fy = y / cell
+        v = _ease(fy - int(fy))
+        above, below = grid[int(fy) % 32], grid[(int(fy) + 1) % 32]
+        line = [(a + (b - a) * v) * weight for a, b in zip(above, below)]
+        for i in range(across):
+            fx = (i + 0.5) * STEP / cell
+            k = int(fx)
+            total[i] += line[k % 32] + (line[(k + 1) % 32] - line[k % 32]) * _ease(fx - k)
+    _cloud_rows[row] = total
+    return total
+
+
+QUARTERS = round(4 * CLOUDING)  # the clouds, at full strength, in quarter levels either side of nothing
+_cloud_steps: dict[int, bytes] = {}
+
+
+def _cloud_index(row: int, across: int) -> bytes:
+    """The clouds along row ``row`` at full strength, as a byte per sample: quarter levels, 0 the darkest."""
+    found = _cloud_steps.get(row)
+    if found is None or len(found) < across:
+        found = bytes(QUARTERS + round(4 * CLOUDING * c) for c in _cloud_row(row, across))
+        _cloud_steps[row] = found
+    return found
 
 
 def _png(width: int, height: int, raw: bytes, kind: int) -> bytes:
@@ -89,40 +128,40 @@ def _png(width: int, height: int, raw: bytes, kind: int) -> bytes:
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
     header = struct.pack(">IIBBBBB", width, height, 8, kind, 0, 0, 0)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw, 6))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw, 1))
             + chunk(b"IEND", b""))
 
 
 def wash(width: int, height: int, flat: int) -> bytes:
     """The colours of the page for a window ``width`` by ``height``, and a margin past it, at 1/STEP of
-    the size, as an RGB PNG.  Its rows above ``flat`` are one colour.  What depends on the row alone or
-    the column alone is worked out once for it, which keeps a wash to a few milliseconds."""
-    across, down = -(-(width + MARGIN) // STEP), -(-(height + MARGIN) // STEP)
-    xs = [(i + 0.5) * STEP for i in range(across)]
-    toward_right = [_smooth(0.2, 1.0, x / max(1, width - 1)) for x in xs]
-    spots = [[(int(x / cell) % 32, (int(x / cell) + 1) % 32, _ease(x / cell - int(x / cell))) for x in xs]
-             for cell, _, _ in _CLOUDS]
-    lift = LIFT  # what the grain takes away on average, given back here
+    the width and 1/STEP_DOWN of the height, as an RGB PNG.  Its rows above ``flat`` are one colour.
+    What depends on the row alone or the column alone is worked out once for it, and the clouds are
+    kept from wash to wash, which keeps a wash to a few milliseconds."""
+    across, down = -(-(width + MARGIN) // STEP), -(-(height + MARGIN) // STEP_DOWN)
+    toward_right = [_smooth(0.2, 1.0, (i + 0.5) * STEP / max(1, width - 1)) for i in range(across)]
     raw = bytearray()
     for j in range(down):
-        y = (j + 0.5) * STEP
-        red, green, blue = (value + lift for value in _row(y, height, flat))
+        y = (j + 0.5) * STEP_DOWN
+        red, green, blue = (value + LIFT + 0.5 for value in _row(y, height, flat))  # LIFT: what the grain takes
         low = _smooth(0.6, 1.0, y / max(1, height - 1)) * 0.8
-        dr, dg, db = (MAUVE[0] - red) * low, (MAUVE[1] - green) * low, (MAUVE[2] - blue) * low
         cloudy = CLOUDING * _smooth(flat, flat + 0.15 * height, y)
-        shade = [0.0] * across
-        if cloudy:
-            for (cell, weight, grid), spot in zip(_CLOUDS, spots):
-                fy = y / cell
-                v = _ease(fy - int(fy))
-                above, below = grid[int(fy) % 32], grid[(int(fy) + 1) % 32]
-                line = [(a + (b - a) * v) * weight * cloudy for a, b in zip(above, below)]
-                shade = [s + line[i] + (line[k] - line[i]) * u for s, (i, k, u) in zip(shade, spot)]
-        red, green, blue = red + 0.5, green + 0.5, blue + 0.5
-        row = bytearray(3 * across)
-        row[0::3] = bytes(min(255, int(red + dr * k + s)) for k, s in zip(toward_right, shade))
-        row[1::3] = bytes(min(255, int(green + dg * k + s)) for k, s in zip(toward_right, shade))
-        row[2::3] = bytes(min(255, int(blue + db * k + s)) for k, s in zip(toward_right, shade))
+        row = bytearray(3 * across)  # (no colour comes past 255: 250 at most, a lift of 2 and clouds of 2.5)
+        if low:  # the evening's mauve, which follows the window's width
+            clouds = [c * cloudy for c in _cloud_row(j, across)[:across]] if cloudy else [0.0] * across
+            dr, dg, db = (MAUVE[0] - red) * low, (MAUVE[1] - green) * low, (MAUVE[2] - blue) * low
+            row[0::3] = bytes(int(red + dr * k + c) for k, c in zip(toward_right, clouds))
+            row[1::3] = bytes(int(green + dg * k + c) for k, c in zip(toward_right, clouds))
+            row[2::3] = bytes(int(blue + db * k + c) for k, c in zip(toward_right, clouds))
+        elif cloudy == CLOUDING:  # most of the page: a colour and the clouds, put together by bytes.translate
+            steps = _cloud_index(j, across)[:across]
+            for start, value in enumerate((red, green, blue)):
+                table = bytes(int(value + (k - QUARTERS) / 4) for k in range(2 * QUARTERS + 1))
+                row[start::3] = steps.translate(table.ljust(256, bytes(1)))
+        else:  # the lamplight, and the clouds coming into it
+            clouds = [c * cloudy for c in _cloud_row(j, across)[:across]] if cloudy else [0.0] * across
+            row[0::3] = bytes(int(red + c) for c in clouds)
+            row[1::3] = bytes(int(green + c) for c in clouds)
+            row[2::3] = bytes(int(blue + c) for c in clouds)
         raw += b"\x00" + row
     return _png(across, down, bytes(raw), 2)
 
@@ -194,7 +233,7 @@ class Page:
         """Make the paper for a window of this size and lay it under every surface, now."""
         if self.grain is None:
             self.grain = _photo(self.root, grain_tile())
-        image = _photo(self.root, wash(width, height, self.flat)).zoom(STEP)
+        image = _photo(self.root, wash(width, height, self.flat)).zoom(STEP, STEP_DOWN)
         image.tk.call(image, "copy", self.grain, "-to", 0, 0, image.width(), image.height(),
                       "-compositingrule", "overlay")  # the grain, tiled over the wash
         old, self.image = self.image, image
@@ -214,8 +253,10 @@ class Page:
     def moved(self, event: tk.Event) -> None:
         """The window (or a part of it: a toplevel's bindings see its children's events too) changed.
 
-        While it is being resized the wash it has stays, a little off in its colours but covering it,
-        until the window grows past the wash's margin; once it holds still, it is washed for its size."""
+        Dragged taller or shorter, it is washed anew as it goes (at most every QUICK seconds), so the
+        colours, laid out by its height, stretch with it.  Dragged only wider, the wash it has stays, its
+        evening's mauve a little off but the paper covering it, until the window outgrows the margin.
+        Either way, once it holds still it is washed for the size it came to."""
         if event.widget is not self.root:
             return
         self.wanted = event.width, event.height
@@ -223,13 +264,14 @@ class Page:
             if self.later is not None:
                 self.root.after_cancel(self.later)
             self.later = self.root.after(SETTLE, self.settled)
+            stretched = event.height != self.size[1]  # the colours follow the height: wash as it goes
             outgrown = event.width > self.size[0] + MARGIN or event.height > self.size[1] + MARGIN
-            if outgrown and self.soon is None:
+            if (stretched or outgrown) and self.soon is None:
                 wait = max(QUICK - (time.monotonic() - self.washed_at), 0.0)
                 self.soon = self.root.after(max(1, round(wait * 1000)), self.grown)
         self.schedule()
 
-    def grown(self) -> None:
+    def grown(self) -> None:  # the quick wash while a drag goes on
         self.soon = None
         self.catch_up()
 
