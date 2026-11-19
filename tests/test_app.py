@@ -498,6 +498,13 @@ class Folders(unittest.TestCase):
         app.select(path)
         self.assertEqual(self.started(app)[1], 0.0)
 
+    def test_an_empty_library_says_how_to_add_songs(self):
+        from lyrebot.app import App, EMPTY
+        app = App(self.window(), self.scores, self.midi)
+        self.assertEqual(app.title_label.cget("text"), "还没有曲谱")
+        self.assertEqual(app.status_label.cget("text"), EMPTY)
+        self.assertNotIn("右键", EMPTY)  # a right click below the list opens nothing
+
     def test_the_bar_being_played_shows_beside_the_time(self):
         from lyrebot.app import App
         path, other = self.three_bars()
