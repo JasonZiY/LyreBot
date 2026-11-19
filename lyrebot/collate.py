@@ -1,8 +1,9 @@
-"""Sort Chinese names by pinyin, the way Windows does for zh-CN.
+"""Sort song names: English ones first, alphabetically, then Chinese ones by pinyin.
 
-Windows' zh-CN locale orders Han characters by pinyin, and numbers by value
-("2" before "10").  Without Windows (or if the call fails) names fall back to
-plain string order.
+Windows' zh-CN locale orders Han characters by pinyin, letters alphabetically
+whatever their case, and numbers by value ("2" before "10"); it puts letters
+before Han too, but LyreBot says so itself rather than leave it to the locale.
+Without Windows (or if the call fails) names fall back to plain string order.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ def _windows_key(text: str) -> bytes | None:
     return buffer.raw[:size]
 
 
-def pinyin_key(text: str) -> tuple[bytes, str]:
-    """A sort key: pinyin order first, the raw name to break ties."""
-    return (_windows_key(text) or text.encode("utf-16-be"), text)
+def pinyin_key(text: str) -> tuple[int, bytes, str]:
+    """A sort key: names that begin with an English letter or a digit first, then the rest; each in
+    Windows' zh-CN order; the raw name to break ties."""
+    first = text[:1]
+    return (0 if first.isascii() and first.isalnum() else 1, _windows_key(text) or text.encode("utf-16-be"), text)

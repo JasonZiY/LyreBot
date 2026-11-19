@@ -226,10 +226,15 @@ def read_library(scores_dir: Path) -> Library:
     return Library(sort(unfiled), tuple((name, sort(regions[name])) for name in order), sort(songs))
 
 
-def in_rows(paths: tuple[Path, ...], count: int) -> list[tuple[Path, ...]]:
-    """``paths`` in rows of ``count``, read across and then down, as a page is: in a group sorted English
-    names first and then pinyin, the English ones fill the first rows."""
-    return [paths[start:start + count] for start in range(0, len(paths), count)]
+def in_columns(paths: tuple[Path, ...], count: int) -> list[tuple[Path, ...]]:
+    """``paths`` run down ``count`` columns, as even as they go, the first ones longer."""
+    size, longer = divmod(len(paths), count)
+    columns, start = [], 0
+    for column in range(count):
+        end = start + size + (column < longer)
+        columns.append(paths[start:end])
+        start = end
+    return columns
 
 
 def next_match(songs: list[Path], query: str, after: Path | None = None) -> Path | None:
@@ -421,11 +426,8 @@ class SongBrowser(OnPage, tk.Canvas):
 
     Everything starts at one left edge and opens downwards: a shelf's
     regions (or 歌曲's songs) on the lines under its name, a region's songs
-    under its own.  Songs sit two to a row, read across and then down, so a
-    group's English names (sorted first) fill its first rows.  The arrows
-    move by position: up and down to the song above or below, left and right
-    to the one before or after.  It starts with OST open, its regions closed,
-    and 歌曲 closed.
+    under its own.  Songs run down two columns.  It starts with OST open,
+    its regions closed, and 歌曲 closed.
 
     A shelf's title is set in the serif with a hairline running on to the
     edge; chevrons are old gold; the chosen song sits on a rounded breath of
@@ -468,10 +470,8 @@ class SongBrowser(OnPage, tk.Canvas):
         self.bind("<Double-Button-1>", self.double_click)
         self.bind("<Motion>", self.hover)
         self.bind("<Leave>", lambda _: self.itemconfigure(self.hover_box, state="hidden"))
-        for key, step in (("Left", -1), ("Right", 1), ("Home", -10 ** 6), ("End", 10 ** 6)):  # in reading order
+        for key, step in (("Up", -1), ("Down", 1), ("Prior", -8), ("Next", 8), ("Home", -10 ** 6), ("End", 10 ** 6)):
             self.bind(f"<KeyPress-{key}>", lambda _, step=step: self.step(step))
-        for key, rows in (("Up", -1), ("Down", 1), ("Prior", -8), ("Next", 8)):  # to the song above or below
-            self.bind(f"<KeyPress-{key}>", lambda _, rows=rows: self.step_rows(rows))
         self.bind("<Return>", lambda _: None if self.locked() else self.on_play())
         self.bind("<Delete>", lambda _: None if self.locked() else self.on_delete())
         self.take_page(theme)
@@ -534,12 +534,12 @@ class SongBrowser(OnPage, tk.Canvas):
         def song(path: Path, left: float, top: int, right: float) -> None:
             cells.append(Cell("song", "", (left, top, right, top + row), path.stem, path))
 
-        def run_across(paths: tuple[Path, ...], edges: list[float], top: int) -> int:
-            rows = in_rows(paths, SONG_COLUMNS)
-            for line, songs in enumerate(rows):
-                for index, path in enumerate(songs):
+        def run_down(paths: tuple[Path, ...], edges: list[float], top: int) -> int:
+            columns = in_columns(paths, SONG_COLUMNS)
+            for index, column in enumerate(columns):
+                for line, path in enumerate(column):
                     song(path, edges[index], top + line * row, edges[index + 1])
-            return len(rows) * row
+            return max(map(len, columns), default=0) * row
 
         y = 0
         for path in library.unfiled:
@@ -556,14 +556,14 @@ class SongBrowser(OnPage, tk.Canvas):
                 cells.append(Cell("region", name, (left, y, right, y + row), name, count=len(paths), is_open=expanded))
                 y += row
                 if expanded:
-                    y += run_across(paths, columns, y)
+                    y += run_down(paths, columns, y)
         y += self.shelf_gap
         is_open = SONGS not in self.closed_shelves
         cells.append(Cell("shelf", SONGS, (left, y, right, y + row), SONGS, count=len(library.songs),
                           is_open=is_open))
         y += row
         if is_open:
-            y += run_across(library.songs, columns, y)
+            y += run_down(library.songs, columns, y)
 
         self.cells, self.total = cells, y
         self.delete("content")
@@ -742,26 +742,6 @@ class SongBrowser(OnPage, tk.Canvas):
             self.itemconfigure(self.hover_box, state="hidden")
         else:
             self.ground(self.hover_box, HOVER_TINT, cell.box)
-
-    def step_rows(self, by: int) -> str:
-        """Up or down ``by`` rows: to the song in the same column there, or the nearest one on that row (the
-        last row of a group may be short)."""
-        cells = [cell for cell in self.cells if cell.path is not None]
-        here = self.cell_of(self.chosen) if self.chosen else None
-        if here is None or self.locked():
-            return self.step(1 if by > 0 else -1)  # nothing chosen yet: the first song, or the last
-        target = here
-        for _ in range(abs(by)):
-            tops = sorted({cell.box[1] for cell in cells if (cell.box[1] > target.box[1]) == (by > 0)
-                           and cell.box[1] != target.box[1]})
-            if not tops:
-                break
-            top = tops[0] if by > 0 else tops[-1]
-            target = min((cell for cell in cells if cell.box[1] == top), key=lambda cell: abs(cell.box[0] - here.box[0]))
-        if target is not here:
-            self.choose(target.path)
-            self.on_select()
-        return "break"
 
     def step(self, by: int) -> str:
         songs = self.visible_songs()
