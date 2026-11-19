@@ -297,8 +297,12 @@ class Folders(unittest.TestCase):
         from unittest import mock
         from lyrebot.app import App
         self.write_scores("甲.txt")
-        with mock.patch("lyrebot.app.chrome.available", return_value=True),                 mock.patch("lyrebot.app.chrome.adopt", return_value=adopted) as adopt:
-            return App(self.window(), self.scores, self.midi, own_frame=True), adopt
+        with mock.patch("lyrebot.app.chrome.available", return_value=True), \
+                mock.patch("lyrebot.app.chrome.adopt", return_value=adopted) as adopt, \
+                mock.patch("lyrebot.app.round_corners") as corners:
+            app = App(self.window(), self.scores, self.midi, own_frame=True)
+        self.corners = corners
+        return app, adopt
 
     def test_the_window_may_draw_its_own_title_bar_and_lend_it_the_lyre(self):
         app, adopt = self.framed_app(True)
@@ -307,6 +311,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.crest.winfo_manager(), "")  # the lyre went up into the bar
         self.assertIs(adopt.call_args.args[1], app.title_bar.frame)
         self.assertIn(app.title_bar, adopt.call_args.kwargs["see_through"])
+        self.corners.assert_called_once_with(app.root, border=None)  # rounded and shadowed, with no outline
 
     def test_where_windows_will_not_lend_its_frame_the_window_stays_as_it_was(self):
         app, _ = self.framed_app(False)
@@ -718,6 +723,8 @@ class Folders(unittest.TestCase):
         halves = [row.grid_columnconfigure(column) for column in (0, 1)]
         self.assertEqual([(half["weight"], half["uniform"]) for half in halves], [(1, "half"), (1, "half")])
         self.assertFalse([child for child in row.winfo_children() if isinstance(child, PillButton)])
+        self.assertEqual(app.search_field.hint.cget("text"), "")  # no words in it while it is empty
+        self.assertEqual(app.search_field.hint.winfo_manager(), "")
 
     def test_the_search_box_jumps_to_each_match(self):
         from lyrebot.app import App

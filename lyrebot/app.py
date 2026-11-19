@@ -31,7 +31,7 @@ from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
 from .theme import (CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER,
-                    PEACH, RIM, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
+                    PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
 from .widgets import (Choice, IconButton, Ornament, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar, Words,
@@ -825,7 +825,8 @@ class App:
             finder.columnconfigure(column, weight=1, uniform="half")
         self.crest = Picture(finder, theme, theme.icon("lyre", px(20), GOLD, icons.lyre))
         self.crest.grid(row=0, column=0, sticky="w")
-        self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier, bg=self.page.head)
+        self.search_field = WritingLine(finder, theme, icon=icons.magnifier, bg=self.page.head)  # no hint: the
+        # magnifier says what it is for
         self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
         self.search_entry.configure(width=1)  # as wide as its half, whatever that is
@@ -934,7 +935,7 @@ class App:
         root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
                                width, height))
         if chrome.adopt(root, frame, see_through=(root, self.backdrop, bar)):
-            round_corners(root, border=RIM)
+            round_corners(root, border=None)  # rounded, with the system's shadow, and no outline
             self.title_bar = bar
             return True
         bar.destroy()

@@ -43,7 +43,6 @@ WHITE = "#FFFFFF"
 LEATHER_TOP, LEATHER_FOOT = "#4A3B31", "#3A2E27"  # the leather lit from above
 LEATHER_EDGE = "#2E241E"  # where the cover meets the page
 LEATHER_HOVER = "#5E4C40"  # a button's leather under the pointer
-RIM = "#705A49"  # the cover's worn edge: the window's outline
 GILT = "#D9BC82"  # gold stamped into leather
 GILT_BRIGHT = "#E8D2A0"  # the title, where the gold catches the light
 GILT_DEEP = "#B58F50"  # the fillet along the cover's foot
@@ -234,6 +233,7 @@ def geometry(x: int, y: int, width: int | None = None, height: int | None = None
 
 DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE = 34, 35, 36, 33
 ROUND, ROUND_SMALL = 2, 3
+NO_COLOR = 0xFFFFFFFE  # DWMWA_COLOR_NONE: no edge drawn at all
 
 
 def _windows_11() -> bool:
@@ -266,11 +266,11 @@ def dress(window: tk.Misc, caption: str = PAPER, text: str = INK, border: str = 
     return done
 
 
-def round_corners(window: tk.Misc, border: str = GOLD, small: bool = False) -> bool:
-    """Rounded corners, an edge of ``border`` and a soft shadow for a borderless window, where Windows
-    can draw them (Windows 11); False where the window must draw its own edge."""
+def round_corners(window: tk.Misc, border: str | None = GOLD, small: bool = False) -> bool:
+    """Rounded corners, an edge of ``border`` (None: no edge) and a soft shadow for a borderless window,
+    where Windows can draw them (Windows 11); False where the window must draw its own edge."""
     if not _windows_11():
         return False
     window.update_idletasks()
     return _set(window, DWMWA_WINDOW_CORNER_PREFERENCE, ROUND_SMALL if small else ROUND) and \
-        _set(window, DWMWA_BORDER_COLOR, _colorref(border))
+        _set(window, DWMWA_BORDER_COLOR, NO_COLOR if border is None else _colorref(border))

@@ -149,13 +149,23 @@ class Pieces(unittest.TestCase):
         line.entry.delete(0, "end")
         self.assertTrue(line.hint.winfo_manager())
 
+    def test_a_window_may_have_its_corners_rounded_without_an_edge(self):
+        from lyrebot import theme
+        with mock.patch.object(theme, "_windows_11", return_value=True), \
+                mock.patch.object(theme, "_set", return_value=True) as setting:
+            self.assertTrue(theme.round_corners(self.root, border=None))
+            theme.round_corners(self.root, border="#B08D57")
+        edges = [call.args[2] for call in setting.call_args_list if call.args[1] == theme.DWMWA_BORDER_COLOR]
+        self.assertEqual(edges, [theme.NO_COLOR, 0x578DB0])  # none at all; then old gold, as Windows reads it
+
     def test_the_title_bar_shows_the_frame_its_buttons_and_presses_them(self):
         pressed = []
         frame = chrome.Frame(edge=5, caption=0)
         bar = TitleBar(self.root, self.theme, frame, "LyreBot", "未以管理员身份运行",
                        lambda: pressed.append("minimise"), lambda: pressed.append("close"))
         px = self.theme.px
-        with mock.patch.object(bar, "winfo_width", return_value=400), mock.patch.object(bar, "winfo_x", return_value=0),                 mock.patch.object(bar, "winfo_y", return_value=0):
+        with mock.patch.object(bar, "winfo_width", return_value=400), mock.patch.object(bar, "winfo_x", return_value=0), \
+                mock.patch.object(bar, "winfo_y", return_value=0):
             bar.redraw()
         self.assertEqual(frame.caption, bar.bar_height)
         close, minimise = frame.buttons
