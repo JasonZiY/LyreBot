@@ -688,12 +688,22 @@ class Folders(unittest.TestCase):
             app.worker = None
         self.assertEqual(self.started(app, bar=1), (path, 4.0, None))  # None: the 2 s countdown
 
-    def heard(self, app, path, *plays, begin=0.0):
-        """Hear ``path`` in ``app`` as ``audition`` would, the player doing each of ``plays`` in turn (each
+    def leaf(self, app, path):
+        """Choose ``path`` and turn to its 简谱 page, as a click on the ribbon does."""
+        app.select(path)
+        app.turn_page()
+        self.assertTrue(app.leaf)
+        return app.score_view
+
+    def note_at(self, app, seconds):
+        """The note of the 简谱 page that sounds ``seconds`` into its song."""
+        return next(index for index, note in enumerate(app.score_view.notes) if abs(note.at - seconds) < 1e-9)
+
+    def heard(self, app, *plays, begin=0.0):
+        """Hear the 简谱 page's song as ``audition`` would, the player doing each of ``plays`` in turn (each
         given the backend, its start and the progress callback, and answering how it ended), with no sound:
         the synthesizer is a stand-in.  Returns the stand-ins made."""
         from unittest import mock
-        from lyrebot.timeline import compile_ringing
         made = []
         turns = iter(plays)
 
@@ -706,123 +716,178 @@ class Folders(unittest.TestCase):
         def play(timeline, synth, target, cancel, progress, start=0.0):
             self.assertEqual(target, 0)
             return next(turns)(synth, start, progress)
-        timeline = compile_ringing(app.read(path))
+        path, _, _, timeline, speed = app.leaf_song
         app.auditioning = True
         with mock.patch("lyrebot.app.Audition", side_effect=synthesizer), mock.patch("lyrebot.app.play", side_effect=play):
-            app.run_audition(path, timeline, begin, 1.0)
+            app.run_audition(path, timeline, begin, speed)
         app.poll()
         return made
 
-    def test_a_song_is_heard_from_its_menu_with_the_player_working_as_usual(self):
+    def begun(self, app, act):
+        """Where hearing begins when ``act`` is done (in seconds), or None if it does not begin."""
         from unittest import mock
-        from lyrebot.app import HALT_TIP, HEARING, PIANO, PLAY_TIP, App
-        path, other = self.three_bars()
-        app = App(self.window(), self.scores, self.midi)
-        app.select(path)
-        menu = self.right_click(app, app.browser.cell_of(path))
-        self.assertEqual((menu.entrycget(0, "label"), menu.entrycget(0, "state")), ("试听", "normal"))
         app.quiet_until = 0
         with mock.patch.object(app, "run_audition") as run:
-            menu.invoke(0)
+            act()
+            if app.worker is not None:
+                app.worker.join(5)
+        if not run.called:
+            return None
+        app.worker = None
+        app.auditioning = False
+        app.set_playing(False)
+        return run.call_args.args[2]
+
+    def test_the_ribbon_turns_to_the_chosen_songs_score_and_back(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from lyrebot.app import App, TO_HEAR
+        path, other = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        with mock.patch.object(app.callout, "say") as said:
+            app.turn_page()  # nothing chosen
+        self.assertFalse(app.leaf)
+        self.assertEqual(said.call_args.args[0], "先选一首曲子")
+
+        view = self.leaf(app, path)
+        self.assertEqual(app.leaf_panel.winfo_manager(), "pack")  # the 简谱 page in the songs' place
+        self.assertEqual(app.panel.winfo_manager(), "")
+        self.assertEqual(app.leaf_title.cget("text"), "三小节")
+        self.assertTrue(app.leaf_about.cget("text").startswith("1=C　4/4　♩=60"))
+        self.assertEqual(len(view.notes), 12)
+        self.assertEqual(sorted(note.at for note in view.notes), [float(n) for n in range(12)])
+        self.assertTrue(all(note.box[0] < note.box[2] and note.box[1] < note.box[3] for note in view.notes))
+        self.assertEqual((app.leaf_bar.cget("text"), app.leaf_time.cget("text")), ("1|3", "0:00 / 0:12"))
+        self.assertEqual(app.leaf_status.cget("text"), TO_HEAR)
+        self.assertEqual((app.hear_button.images, app.hear_button.enabled), (app.play_images, True))
+        self.assertEqual(app.root.title(), "三小节 · 简谱 · LyreBot")
+
+        app.turn_page()  # and back
+        self.assertFalse(app.leaf)
+        self.assertEqual((app.panel.winfo_manager(), app.leaf_panel.winfo_manager()), ("pack", ""))
+
+        app.worker = object()  # playing in the game (or recording): it stays with the songs
+        with mock.patch.object(app.callout, "say") as said:
+            app.turn_page()
+        self.assertFalse(app.leaf)
+        self.assertIn("结束后再看简谱", said.call_args.args[0])
+        app.worker = None
+        (self.scores / "坏.txt").write_text("speed=60\nk-\n", encoding="utf-8")
+        app.refresh()
+        app.select(self.scores / "坏.txt")
+        with mock.patch.object(app.callout, "say") as said:
+            app.turn_page()
+        self.assertFalse(app.leaf)
+        self.assertEqual(said.call_args.args[0], "曲谱有误，没有简谱可看")
+
+        # A press on the ribbon (its band, give or take a few pixels) turns the page, and nothing under it
+        # hears of the press; anywhere else, the press is the page's.
+        app.select(path)
+        root, px = app.root, app.theme.px
+        on = SimpleNamespace(x_root=root.winfo_rootx() + root.winfo_width() - px(59) + px(4),
+                             y_root=root.winfo_rooty() + app.head() + px(10), widget=app.browser)
+        off = SimpleNamespace(x_root=on.x_root - px(30), y_root=on.y_root, widget=app.browser)
+        self.assertEqual((app.on_ribbon(on), app.on_ribbon(off)), (True, False))
+        self.assertIsNone(app.ribbon_press(off))
+        self.assertFalse(app.leaf)
+        self.assertEqual(app.ribbon_press(on), "break")
+        self.assertTrue(app.leaf)
+        self.assertEqual(app.browser.bindtags()[0], app.ribbon_tag)  # the pieces it lies over ask it first
+        self.assertEqual(app.score_view.bindtags()[0], app.ribbon_tag)
+
+    def test_a_song_is_heard_only_from_its_play_button_or_a_note_clicked(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from lyrebot.app import HALT_TIP, App
+        path, other = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.assertEqual(self.labels(app.song_menu), ["移到…", "—", "从 MIDI 重新编配", "导出简谱", "—", "删除"])
+        self.assertEqual(self.begun(app, app.press_play if hasattr(app, "press_play") else app.start), None)
+        view = self.leaf(app, path)
+
+        app.quiet_until = 0
+        with mock.patch.object(app, "run_audition") as run:
+            app.press_hear()
             app.worker.join(5)
-        path_heard, timeline, begin, speed = run.call_args.args
-        self.assertEqual((path_heard, begin, speed), (path, 0.0, 1.0))
-        self.assertEqual(timeline.duration, 12.0)
-        self.assertEqual(next(event.at for event in timeline.events if not event.down), 2.0)  # notes ring, not tap
-        # LyreBot stays in front while it is heard: the stop button in play's place is live, the knob can be
-        # taken hold of, and nothing else can start.
+        heard_path, timeline, begin, speed = run.call_args.args
+        self.assertEqual((heard_path, begin, speed), (path, 0.0, 1.0))
+        self.assertEqual(next(event.at for event in timeline.events if not event.down), 2.0)  # notes ring
+        # LyreBot stays in front while it is heard: the page's ■ is live, and nothing else can start.
         self.assertTrue(app.auditioning)
-        self.assertEqual((app.button.images, app.button.enabled), (app.halt_images, True))
-        self.assertEqual(app.button.tooltip.text, HALT_TIP)
-        self.assertEqual(str(app.bar.cget("cursor")), "hand2")
-        self.assertFalse(any((app.restart_button.enabled, app.next_button.enabled, app.record_button.enabled,
-                              app.keys_button.enabled, app.speed_choice.enabled, app.mode_choice.enabled)))
-        menu = self.right_click(app, app.browser.cell_of(path))
-        self.assertEqual(menu.entrycget(0, "state"), "disabled")
+        self.assertEqual((app.hear_button.images, app.hear_button.enabled), (app.halt_images, True))
+        self.assertEqual(app.hear_button.tooltip.text, HALT_TIP)
+        self.assertFalse(any((app.button.enabled, app.record_button.enabled, app.keys_button.enabled)))
         with mock.patch.object(app, "run") as play, mock.patch("lyrebot.app.dialogs.ask_text") as asked:
             app.start(path)
             app.record()
             app.listen()
-            app.audition(other)
+            app.audition(3.0)
         play.assert_not_called()
         asked.assert_not_called()
-        app.press_play()  # the stop button stops it
+        self.assertTrue(app.leaf)
+        app.press_hear()  # ■ stops it
         self.assertTrue(app.cancel.is_set())
-
-        app.worker = None
-        made = self.heard(app, path, lambda synth, start, progress: progress(5.5) or "done")
-        self.assertEqual(made[0].program, PIANO)  # unless another was chosen
-        self.assertEqual(app.title_label.cget("text"), path.stem)
-        self.assertEqual(app.bar_label.cget("text"), "2|3")
-        self.assertEqual(app.time_label.cget("text"), "0:06 / 0:12")
-        self.assertAlmostEqual(app.fraction, 5.5 / 12)
-        self.assertEqual(app.status_label.cget("text"), "试听完毕")  # heard once, whatever the mode
-        self.assertFalse(app.auditioning)
-        self.assertEqual((app.button.images, app.button.enabled), (app.play_images, True))
-        self.assertEqual(app.button.tooltip.text, PLAY_TIP)
-        self.assertIsNone(app.resume)
-        app.auditioning = True
-        app.updates.put(("heard", (app.hearing, 1.0)))
-        app.poll()
-        self.assertEqual(app.status_label.cget("text"), HEARING)
-
-    def test_a_song_stopped_while_heard_goes_on_from_its_bar(self):
-        from unittest import mock
-        from lyrebot.app import App
-        path, _ = self.three_bars()
-        app = App(self.window(), self.scores, self.midi)
-        app.select(path)
-        made = self.heard(app, path, lambda synth, start, progress: progress(5.5) or "stopped")
-        self.assertEqual(len(made), 1)
-        self.assertEqual(app.resume, (path, 1))
-        self.assertEqual(app.status_label.cget("text"), "已停止试听 · 点 ▶ 或按 F7 从该小节继续")
-        app.quiet_until = 0
-        with mock.patch.object(app, "run_audition") as run:
-            app.audition()
-            app.worker.join(5)
-        self.assertEqual(run.call_args.args[2], 4.0)  # heard again from the start of that bar
-        app.worker = None
+        app.worker, app.auditioning = None, False
         app.set_playing(False)
-        app.speed.set("200%")
-        app.quiet_until = 0
-        with mock.patch.object(app, "run_audition") as run:
-            app.audition(bar=2)
-            app.worker.join(5)
-        self.assertEqual(run.call_args.args[2:], (4.0, 2.0))  # bar 3 at twice the speed
-        app.worker = None
 
-    def test_letting_go_of_the_knob_while_heard_goes_on_from_its_bar(self):
-        from types import SimpleNamespace
-        from unittest import mock
+        index = self.note_at(app, 5.0)  # a note clicked: heard from it
+        left, top, right, bottom = view.notes[index].box
+        click = SimpleNamespace(x=(left + right) / 2 - view.canvasx(0), y=(top + bottom) / 2 - view.canvasy(0))
+        self.assertEqual(self.begun(app, lambda: view.click(click)), 5.0)
+        self.assertIsNone(self.begun(app, lambda: view.click(SimpleNamespace(x=-50, y=-50))))  # beside the notes
+
+    def test_hearing_lights_the_notes_and_goes_on_from_where_it_stopped(self):
+        from lyrebot.app import HEARING, PIANO, App
+        from lyrebot.theme import INK, ORANGE
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        view = self.leaf(app, path)
+        index = self.note_at(app, 5.0)
+        digit = next(item for item in view.find_withtag(f"n{index}") if view.type(item) == "text")
+        self.assertEqual(view.itemcget(digit, "fill"), INK)
+        app.auditioning = True
+        app.updates.put(("heard", (app.hearing, 5.5)))
+        app.updates.put(("heard", (app.hearing - 1, 9.5)))  # from a stretch cut short: not shown
+        app.poll()
+        self.assertEqual(view.lit, [index])
+        self.assertEqual(view.itemcget(digit, "fill"), ORANGE)
+        self.assertEqual((app.leaf_bar.cget("text"), app.leaf_time.cget("text")), ("2|3", "0:06 / 0:12"))
+        self.assertEqual(app.leaf_status.cget("text"), HEARING)
+
+        made = self.heard(app, lambda synth, start, progress: progress(5.5) or "stopped")
+        self.assertEqual(made[0].program, PIANO)  # unless another was chosen
+        self.assertEqual(app.leaf_from, 5.0)  # from the note lit when it stopped
+        self.assertEqual(app.leaf_status.cget("text"), "已停止 · 点 ▶ 从亮着的音接着听")
+        self.assertFalse(app.auditioning)
+        self.assertEqual((app.hear_button.images, app.hear_button.enabled), (app.play_images, True))
+        self.assertIsNone(app.resume)  # the game's place is its own
+        self.assertEqual(self.begun(app, app.press_hear), 5.0)
+
+        app.leaf_from = 5.0
+        self.heard(app, lambda synth, start, progress: progress(12.0) or "done")
+        self.assertIsNone(app.leaf_from)
+        self.assertEqual(view.lit, [])
+        self.assertEqual(view.itemcget(digit, "fill"), INK)
+        self.assertTrue(app.leaf_status.cget("text").startswith("试听完毕"))
+        self.assertEqual(self.begun(app, app.press_hear), 0.0)  # once it was heard to the end: from the top
+
+    def test_clicking_another_note_while_heard_goes_on_from_it(self):
         from lyrebot.app import App
         path, _ = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
-        app.select(path)
+        view = self.leaf(app, path)
         app.auditioning, app.worker = True, object()
-        app.updates.put(("song", (path, 12.0)))
-        app.poll()
-        with mock.patch.object(app, "track", return_value=(0.0, 120.0)), mock.patch.object(app, "start") as start:
-            app.pick_up(SimpleNamespace(x=10))
-            app.updates.put(("heard", (app.hearing, 1.0)))  # still heard where it was while the knob is held
-            app.slide(SimpleNamespace(x=95))
-            app.poll()
-            self.assertEqual(app.bar_label.cget("text"), "3|3")
-            app.let_go(SimpleNamespace(x=95))
-        start.assert_not_called()
+        before = app.hearing
+        index = self.note_at(app, 8.0)
+        app.hear_note(index)
         self.assertTrue(app.leaping.is_set())
-        self.assertEqual(app.leap_to, 8.0)
-        app.updates.put(("heard", (app.hearing - 1, 1.5)))  # what was still on its way from before
-        app.poll()
-        self.assertEqual(app.bar_label.cget("text"), "3|3")
-        app.updates.put(("heard", (app.hearing, 8.5)))
-        app.poll()
-        self.assertAlmostEqual(app.fraction, 8.5 / 12)
-
+        self.assertEqual((app.leap_to, app.hearing), (8.0, before + 1))
+        self.assertEqual(view.lit, [index])  # lit at once
         app.leaping.clear()
         app.worker = None
         starts = []
 
-        def leap(synth, start, progress):  # the knob let go in the third bar while the first is heard
+        def leap(synth, start, progress):  # another note clicked while the first is heard
             starts.append(start)
             self.assertFalse(synth.interrupt())
             app.leap_to = 8.0
@@ -832,15 +897,51 @@ class Folders(unittest.TestCase):
 
         def end(synth, start, progress):
             starts.append(start)
-            self.assertFalse(synth.interrupt())
             return "done"
-        made = self.heard(app, path, leap, end)
+        made = self.heard(app, leap, end)
         self.assertEqual(starts, [0.0, 8.0])
         self.assertEqual(len(made), 2)  # the synthesizer was closed and opened again
-        self.assertEqual(app.status_label.cget("text"), "试听完毕")
-        self.assertIsNone(app.resume)
+        self.assertTrue(app.leaf_status.cget("text").startswith("试听完毕"))
 
-    def test_the_instrument_is_chosen_from_the_menu_kept_and_heard_at_once(self):
+    def test_turning_back_stops_hearing_and_the_game_turns_back_to_the_songs(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.leaf(app, path)
+        app.auditioning, app.worker = True, object()
+        app.turn_page()
+        self.assertTrue(app.cancel.is_set())
+        self.assertFalse(app.leaf)
+        app.auditioning, app.worker = False, None
+        self.leaf(app, path)
+        app.quiet_until = 0
+        with mock.patch.object(app, "run") as run:  # F7 in the game, say
+            app.start(countdown=0)
+            app.worker.join(5)
+        app.worker = None
+        run.assert_called_once()
+        self.assertFalse(app.leaf)
+        self.assertEqual(app.panel.winfo_manager(), "pack")
+
+    def test_a_score_edited_while_open_is_drawn_again(self):
+        import os
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        view = self.leaf(app, path)
+        self.assertTrue(app.read_leaf())  # unchanged: left as it is
+        self.assertEqual(len(view.notes), 12)
+        path.write_text("speed=60\na-s-d-f-\ng-h-j-q-\nw-e-r-t-\nq---\n", encoding="utf-8")
+        os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 5))
+        self.assertTrue(app.read_leaf())
+        self.assertEqual(len(view.notes), 13)
+        self.assertEqual(app.leaf_bar.cget("text"), "1|4")
+        path.unlink()  # gone: back to the songs
+        self.assertFalse(app.read_leaf())
+        self.assertFalse(app.leaf)
+
+    def test_the_instrument_is_chosen_on_the_score_page_kept_and_heard_at_once(self):
         import json
         from unittest import mock
         from lyrebot.app import App, INSTRUMENTS, PIANO, read_timbre, write_timbre
@@ -848,25 +949,24 @@ class Folders(unittest.TestCase):
         settings = self.root / "settings.json"
         app = App(self.window(), self.scores, self.midi, settings=settings)
         self.assertEqual((app.timbre, app.timbre_name.get()), (PIANO, "钢琴"))  # the piano unless chosen
-        app.select(path)
-        menu = self.right_click(app, app.browser.cell_of(path))
-        self.assertEqual((menu.type(1), menu.entrycget(1, "label")), ("cascade", "试听音色"))
-        names = self.labels(app.timbre_menu)
+        self.leaf(app, path)
+        self.assertTrue(app.timbre_choice.text.startswith("钢琴"))
+        menu = app.timbre_choice.menu
+        names = self.labels(menu)
         self.assertEqual(names, [name for _, name in INSTRUMENTS])
-        app.timbre_menu.invoke(names.index("竖琴"))
+        menu.invoke(names.index("竖琴"))
         self.assertEqual(app.timbre, 47)
         self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"timbre": 47})
         self.assertEqual(read_timbre(settings), 47)  # chosen again next time
 
-        made = self.heard(app, path, lambda synth, start, progress: "done")
+        made = self.heard(app, lambda synth, start, progress: "done")
         self.assertEqual(made[0].program, 47)
-        app.worker = object()  # while a song is heard it may change, and is heard on the new one at once
-        app.synth = mock.Mock()
-        menu = self.right_click(app, app.browser.cell_of(path))
-        self.assertEqual((menu.entrycget(0, "state"), menu.entrycget(1, "state")), ("disabled", "normal"))
-        app.timbre_menu.invoke(names.index("筝"))
+        app.synth = mock.Mock()  # while a song is heard it may change, and is heard on the new one at once
+        app.auditioning = True
+        self.assertTrue(app.timbre_choice.enabled)
+        menu.invoke(names.index("筝"))
         app.synth.instrument.assert_called_once_with(108)
-        app.synth, app.worker = None, None
+        app.synth, app.auditioning = None, False
 
         app.timbre = 13
         made = []
@@ -883,7 +983,7 @@ class Folders(unittest.TestCase):
             return "done"
         with mock.patch("lyrebot.app.Audition", side_effect=factory), mock.patch("lyrebot.app.play", side_effect=play):
             app.auditioning = True
-            app.run_audition(path, mock.Mock(duration=12.0), 0.0, 1.0)
+            app.run_audition(path, app.leaf_song[3], 0.0, 1.0)
         self.assertEqual(made[0].program, 13)
         made[0].instrument.assert_called_once_with(16)  # so it plays on the one chosen
         self.assertIsNone(app.synth)  # closed with the song
@@ -908,22 +1008,17 @@ class Folders(unittest.TestCase):
     def test_a_synthesizer_that_will_not_open_says_why(self):
         from unittest import mock
         from lyrebot.app import App, AuditionError
+        from lyrebot.theme import WARN
         path, _ = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
-        app.select(path)
+        self.leaf(app, path)
         app.auditioning = True
         with mock.patch("lyrebot.app.Audition", side_effect=AuditionError("这台电脑没有可以发声的 MIDI 设备")):
-            app.run_audition(path, mock.Mock(duration=12.0), 0.0, 1.0)
+            app.run_audition(path, app.leaf_song[3], 0.0, 1.0)
         app.poll()
-        self.assertEqual(app.status_label.cget("text"), "不能试听：这台电脑没有可以发声的 MIDI 设备")
+        self.assertEqual(app.leaf_status.cget("text"), "不能试听：这台电脑没有可以发声的 MIDI 设备")
+        self.assertEqual(app.leaf_status.cget("fg"), WARN)
         self.assertFalse(app.auditioning)
-        (self.scores / "坏.txt").write_text("speed=60\nk-\n", encoding="utf-8")
-        app.refresh()
-        app.quiet_until = 0
-        with mock.patch("lyrebot.app.dialogs.error") as told:
-            app.audition(self.scores / "坏.txt")
-        self.assertEqual(told.call_args.args[0], "曲谱有误")
-        self.assertIsNone(app.worker)
 
     def test_an_empty_library_says_how_to_add_songs(self):
         from lyrebot.app import App, EMPTY
@@ -1168,8 +1263,7 @@ class Folders(unittest.TestCase):
 
         self.click(app, self.cell(app, "region", "蒙德"))
         menu = self.right_click(app, self.cell(app, "song", "甲"))
-        self.assertEqual(self.labels(menu), ["试听", "试听音色", "—", "移到…", "—", "从 MIDI 重新编配", "导出简谱", "—",
-                                            "删除"])
+        self.assertEqual(self.labels(menu), ["移到…", "—", "从 MIDI 重新编配", "导出简谱", "—", "删除"])
         self.assertEqual(app.selected(), self.scores / "OST" / "蒙德" / "甲.txt")
         places = self.labels(app.move_menu)
         self.assertEqual(places, ["未归类", "—", *REGIONS, "—", "歌曲"])
@@ -1228,7 +1322,7 @@ class Folders(unittest.TestCase):
         (self.scores / "小曲.txt").write_text("speed=90\na-s-d-f-|z----\n", encoding="utf-8")
         root = self.window()
         app = App(root, self.scores, self.midi, jianpu_dir=self.root / "jianpu_output")
-        self.assertEqual(app.song_menu.entrycget(6, "label"), "导出简谱")
+        self.assertEqual(app.song_menu.entrycget(3, "label"), "导出简谱")
         app.select(self.scores / "小曲.txt")
         with mock.patch.object(app, "open_file") as opened:
             target = app.export_jianpu()
@@ -1315,7 +1409,7 @@ class Folders(unittest.TestCase):
         (pages / "冰湖-录音.html").write_text("<html></html>", encoding="utf-8")
         (pages / "林中晨歌.html").write_text("<html></html>", encoding="utf-8")
         app = App(root, self.scores, self.midi, jianpu_dir=pages)
-        self.assertEqual(app.song_menu.entrycget(8, "label"), "删除")
+        self.assertEqual(app.song_menu.entrycget(5, "label"), "删除")
         app.select(recorded)
         gone = []
 

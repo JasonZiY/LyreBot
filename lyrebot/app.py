@@ -24,22 +24,24 @@ from . import chrome, dialogs, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .collate import pinyin_key
+from . import jianpu
 from .jianpu import export as export_jianpu
 from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
 from .midi import MidiError
 from .notate import notate
-from .paper import OnPage, Page, fade
+from .paper import Page, ScrollingPage
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
+from .scoreview import ScoreView
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
                     ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
                     screen_holding)
 from .timeline import compile_ringing, compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar,
-                      Words)
+from .widgets import (Callout, Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar,
+                      TitleBar, Words)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -65,8 +67,11 @@ HOTKEY_POLL = 30  # milliseconds between looks at F7
 READY = "请切换到游戏窗口，按 F7 立刻开始"  # under the bar once a song is chosen
 GO_ON = "点 ▶ 或按 F7 从该小节继续"  # once it was stopped part way: the bar counter shows which bar
 LET_GO = "松开后从该小节开始"  # while the knob is dragged: the bar counter shows which bar
-HEARING = "正在试听 · 点 ■ 或按 F8 停止，拖进度条换小节"  # while a song is heard on the computer
-PLAY_TIP, HALT_TIP = "播放（F7 立刻开始）", "停止试听（F8）"  # ▶, and the ■ in its place while hearing a song
+# The 简谱 page, behind the ribbon: a song is heard there on the computer, from ▶ or from a note clicked.
+HEARING = "正在试听 · 点 ■ 或按 F8 停止，点别的音从那里接着听"
+TO_HEAR = "点简谱上的任何一个音，从那里开始听"
+HEAR_TIP, HALT_TIP = "试听", "停止试听（F8）"
+TO_SCORE, TO_SONGS = "翻到简谱，试听", "翻回曲目"  # what the ribbon does, said when the pointer rests on it
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
@@ -429,7 +434,7 @@ class Cell:
     is_open: bool = False  # a shelf or region showing what is in it
 
 
-class SongBrowser(OnPage, tk.Canvas):
+class SongBrowser(ScrollingPage, tk.Canvas):
     """The song list: unfiled scores across the top, then OST by region and 歌曲.
 
     Everything starts at one left edge and opens downwards: a shelf's
@@ -474,10 +479,7 @@ class SongBrowser(OnPage, tk.Canvas):
         self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_edge = self.create_rectangle(0, 0, 0, 0, fill=ORANGE, width=0, state="hidden")
-        self.fade_top = self.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
-        self.fade_bottom = self.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
-        self.fades: tuple[tk.PhotoImage | None, tk.PhotoImage | None] = (None, None)
-        self.faded_for: tuple | None = None  # the page and place the fades were made for
+        self.make_fades()
         self.extent = 0  # how tall the list is, all of it
         self.bind("<Configure>", lambda _: self.lay_out())
         self.bind("<Button-1>", self.click)
@@ -489,57 +491,6 @@ class SongBrowser(OnPage, tk.Canvas):
         self.bind("<Return>", lambda _: None if self.locked() else self.on_play())
         self.bind("<Delete>", lambda _: None if self.locked() else self.on_delete())
         self.take_page(theme)
-
-    def lay_paper(self, image: tk.PhotoImage, x: int, y: int) -> None:  # type: ignore[override]
-        super().lay_paper(image, x, y)
-        self.fade_edges(image, x, y)
-
-    def fade_edges(self, image: tk.PhotoImage, x: int, y: int) -> None:
-        """At the top, once the list has scrolled, and at the foot, while there is more below, a strip of the
-        page clearing away from the edge lies over the songs (``paper.fade``), so that the lines there sink
-        into the paper.  The strips are made again only when the page or the list's place changes."""
-        width, height = self.winfo_width(), self.winfo_height()
-        if width <= 1 or height <= 1:
-            return
-        if self.page is not None and self.page.later is not None:  # being resized: the fades step aside,
-            self.faded_for = None  # to be made once it holds still and the page is washed for its size
-            self.itemconfigure("fade", state="hidden")
-            return
-        tall = min(self.theme.px(18), height // 4)
-        edition = self.page.edition if self.page is not None else 0  # (marks pressed in anew change the paper)
-        if self.faded_for != (str(image), edition, x, y, width, height):
-            self.faded_for = (str(image), edition, x, y, width, height)
-            self.fades = (fade(self, image, x, y, width, tall, solid_at_top=True),
-                          fade(self, image, x, y + height - tall, width, tall, solid_at_top=False))
-        top = self.canvasy(0)
-        above, below = self.edges(top, height)
-        for item, strip, at, show in ((self.fade_top, self.fades[0], top, above),
-                                      (self.fade_bottom, self.fades[1], top + height - tall, below)):
-            if strip is None:
-                self.itemconfigure(item, state="hidden")
-                continue
-            self.coords(item, self.canvasx(0), at)
-            self.itemconfigure(item, image=strip, state="normal" if show else "hidden")
-        self.tag_raise("fade")
-        self.tag_raise("over")  # the ribbon lies over the songs sinking into the paper too
-
-    def edges(self, top: float, height: int) -> tuple[bool, bool]:
-        """Whether there are songs above the view (it has scrolled) and below it."""
-        return top > 0, top + height < self.extent
-
-    def yview(self, *args):  # type: ignore[override]
-        result = super().yview(*args)
-        if args:
-            self.follow_page()
-        return result
-
-    def yview_moveto(self, fraction: float) -> None:  # type: ignore[override]
-        super().yview_moveto(fraction)
-        self.follow_page()
-
-    def yview_scroll(self, number: int, what: str) -> None:  # type: ignore[override]
-        super().yview_scroll(number, what)
-        self.follow_page()
 
     def ground(self, item: int, color: str, box: tuple[float, float, float, float]) -> None:
         """Lay the rounded tint ``color`` over ``box`` (less a pixel above and below) as ``item``.
@@ -845,9 +796,15 @@ class App:
         self.auditioning = False  # hearing a song on the computer (``audition``)
         self.timbre = read_timbre(settings) if settings else PIANO  # the General MIDI instrument it is heard on
         self.synth: Audition | None = None  # the synthesizer open while a song is heard
-        self.leaping = threading.Event()  # set when the knob is let go while hearing: go on from ``leap_to``
+        self.leaping = threading.Event()  # set when a note is clicked while hearing: go on from ``leap_to``
         self.leap_to = 0.0  # seconds into the song
         self.hearing = 0  # counts the stretches heard, so that progress from one cut short is not shown
+        self.leaf = False  # the 简谱 page is shown, not the songs
+        self.leaf_song: tuple[Path, float, Score, object, float] | None = None  # on it: file, its time, score,
+        self.leaf_from: float | None = None  # timeline, speed; and where ▶ goes on from (seconds), if stopped
+        self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
+        self.ribbon_inside = False
+        self.cursors: dict[str, str] = {}  # what a piece's pointer was before the ribbon made it a hand
         self.written: tuple[Path, str] | None = None  # a score just written from the keys played
         self.transcriber: threading.Thread | None = None
         self.stop_transcribing = threading.Event()
@@ -927,16 +884,9 @@ class App:
         self.scrollbar = ThinScrollbar(top, theme, self.browser.yview)
         self.browser.configure(yscrollcommand=self.scrolled)
         self.browser.bind("<Button-3>", self.context_menu)
-        root.bind("<MouseWheel>", self.browser.wheel)
+        root.bind("<MouseWheel>", self.wheel)
         self.song_menu = PopupMenu(root, theme)  # for a song
         self.move_menu = PopupMenu(root, theme)
-        self.timbre_menu = PopupMenu(root, theme)
-        for _, name in INSTRUMENTS:
-            self.timbre_menu.add_radiobutton(label=name, value=name, variable=self.timbre_name,
-                                             command=self.pick_timbre)
-        self.song_menu.add_command(label="试听", command=self.audition, icon=icons.headphones)
-        self.song_menu.add_cascade(label="试听音色", menu=self.timbre_menu, icon=icons.tuning_fork)
-        self.song_menu.add_separator()
         self.song_menu.add_cascade(label="移到…", menu=self.move_menu, icon=icons.move_to)
         self.song_menu.add_separator()
         self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange, icon=icons.quill)
@@ -985,7 +935,7 @@ class App:
         # (the game loses focus), and a live button would start it again on release.
         self.next_button = IconButton(controls, self.next_images, self.play_next, "下一首", theme)
         self.next_button.pack(side="right")
-        self.button = IconButton(controls, self.play_images, self.press_play, PLAY_TIP, theme)
+        self.button = IconButton(controls, self.play_images, self.start, "播放（F7 立刻开始）", theme)
         self.button.pack(side="right", padx=(0, px(6)))
         self.restart_button = IconButton(controls, self.restart_images, self.restart, "从头开始", theme)
         self.restart_button.pack(side="right", padx=(0, px(6)))  # as far from ▶ as ⏭, on the other side
@@ -996,11 +946,23 @@ class App:
 
         # From the foot up: the player, its rule and the search row go in first, so that a short window
         # takes its room from the list, which has the top.
-        panel.pack(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))
-        rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
-        finder.pack(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))
-        top.pack(fill="both", expand=True, padx=px(8), pady=(px(8), 0))
+        self.songs_page = [(panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
+                           (rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
+                           (finder, dict(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))),
+                           (top, dict(fill="both", expand=True, padx=px(8), pady=(px(8), 0)))]
+        for piece, how in self.songs_page:
+            piece.pack(**how)
         self.panel = panel
+        self.build_leaf()
+        # The ribbon is a bookmark: a click on it turns the page (the pieces it lies over hear of it first).
+        self.ribbon_image = theme.ribbon()
+        self.ribbon_tag = f"Ribbon{id(self)}"
+        for event, handler in (("<ButtonPress-1>", self.ribbon_press), ("<Double-Button-1>", self.ribbon_press),
+                               ("<Motion>", self.ribbon_motion), ("<Leave>", self.ribbon_leave)):
+            root.bind_class(self.ribbon_tag, event, handler)
+        for piece in (self.backdrop, top, self.browser, self.scrollbar, *self.leaf_pieces()):
+            piece.bindtags((self.ribbon_tag, *piece.bindtags()))
+        self.callout = Callout(root, theme)
         self.dress_page()
         if self.frame is not None:  # drawn again: the title bar with the rest
             chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
@@ -1108,7 +1070,7 @@ class App:
                             "disabled": picture("play-disabled", big, face(PEACH, HAIR, icons.play))}
         stop = picture("play-stop", big, face(PEACH, HAIR, icons.stop))
         self.stop_images = {"normal": stop, "hover": stop, "disabled": stop}
-        # While a song is heard on the computer LyreBot stays in front, so ■ is live, in ▶'s colours.
+        # While a song is heard on the 简谱 page LyreBot stays in front, so its ■ is live, in ▶'s colours.
         self.halt_images = {"normal": picture("halt-normal", big, face(ORANGE, GOLD, icons.stop)),
                             "hover": picture("halt-hover", big, face(ORANGE_DEEP, GOLD, icons.stop)),
                             "disabled": stop}
@@ -1165,6 +1127,8 @@ class App:
         self.refresh()
         self.arrange_next()
         self.transcribe_next()
+        if self.leaf and not self.auditioning:
+            self.read_leaf()
         self.root.after(2000, self.watch)
 
     # ---- small view helpers ----
@@ -1202,7 +1166,7 @@ class App:
             bar.create_image(at, middle, image=self.knob_images[self.bar_hover])
 
     def hover_bar(self, inside: bool) -> None:
-        self.bar_hover = (inside or self.dragging is not None) and (self.worker is None or self.auditioning)
+        self.bar_hover = (inside or self.dragging is not None) and self.worker is None
         self.draw_bar()
 
     def set_fraction(self, fraction: float) -> None:
@@ -1373,9 +1337,9 @@ class App:
         self.fill_move_menu(chosen)
         idle = "normal" if not self.worker else "disabled"
         can = not self.worker and midi_for(chosen, self.midi_dir) is not None
-        for index in (0, 3, 8):  # 试听, 移到…, 删除; 试听音色 can change while a song is heard
-            self.song_menu.entryconfigure(index, state=idle)
-        self.song_menu.entryconfigure(5, state="normal" if can else "disabled")
+        self.song_menu.entryconfigure(0, state=idle)
+        self.song_menu.entryconfigure(2, state="normal" if can else "disabled")
+        self.song_menu.entryconfigure(5, state=idle)
         self.song_menu.tk_popup(event.x_root, event.y_root)
 
     def places(self) -> list[tuple[str, Path] | None]:
@@ -1685,6 +1649,8 @@ class App:
         path = path or self.selected()
         if path is None:
             return
+        if self.leaf:  # (F7 pressed in the game): the songs' page shows what plays
+            self.show_songs()
         self.cache.pop(path, None)  # always play the file as it is now
         score = self.read(path)
         if isinstance(score, ScoreError):
@@ -1715,41 +1681,43 @@ class App:
         self.cancel = threading.Event()
         return begin
 
-    def press_play(self) -> None:
-        """▶ plays in the game; while a song is heard on the computer, ■ in its place stops it."""
+    def press_hear(self) -> None:
+        """The 简谱 page's ▶: hear the song from where it was stopped, else from the top; its ■ stops it."""
         if self.auditioning:
             self.stop()
         else:
-            self.start()
+            self.audition(self.leaf_from or 0.0)
 
-    def audition(self, path: Path | None = None, bar: int | None = None) -> None:
-        """Hear the chosen song through the computer's speakers, once, at the chosen speed: from bar ``bar``,
-        else from where it was stopped, else from the top.  LyreBot stays in front; ■ or F8 stops it."""
-        if self.worker or time.monotonic() < self.quiet_until:
+    def hear_note(self, index: int) -> None:
+        """A note clicked on the 简谱 page: hear the song from it, or, while it is heard, go on from it."""
+        note = self.score_view.notes[index]
+        if self.auditioning:
+            self.leap_to = note.start
+            self.hearing += 1  # what is still to come from before is not shown
+            self.leaping.set()
+            self.score_view.heard(note.at)
+            self.show_heard(note.at)
             return
-        path = path or self.selected()
-        if path is None:
+        self.audition(note.start)
+
+    def audition(self, begin: float = 0.0) -> None:
+        """Hear the song on the 简谱 page through the computer's speakers, once, from ``begin`` seconds in,
+        at the speed chosen on the songs' page.  LyreBot stays in front; ■ or F8 stops it."""
+        if self.worker or time.monotonic() < self.quiet_until or self.leaf_song is None:
             return
-        self.cache.pop(path, None)
-        score = self.read(path)
-        if isinstance(score, ScoreError):
-            dialogs.error("曲谱有误", f"{path.stem}：{score}", parent=self.root)
-            self.refresh()
-            return
-        speed = self.speed_factor()
-        timeline = compile_ringing(score, speed)
-        begin = self.begin_at(path, score, speed, bar)
-        self.duration = timeline.duration
-        self.set_fraction(begin / timeline.duration if timeline.duration else 0.0)
+        path, _, score, timeline, speed = self.leaf_song
         self.leaping.clear()
+        self.leaf_from = None
         self.auditioning = True
         self.set_playing(False, auditioning=True)
-        self.say("正在打开系统的 MIDI 合成器…")
+        self.leaf_status.configure(text="正在打开系统的 MIDI 合成器…", fg=MUTED)
+        self.root.title(f"{path.stem} · 试听 · LyreBot")
+        self.cancel = threading.Event()
         self.worker = threading.Thread(target=self.run_audition, args=(path, timeline, begin, speed), daemon=True)
         self.worker.start()
 
     def pick_timbre(self) -> None:
-        """The instrument chosen from the menu: kept for next time, and heard at once if a song is playing."""
+        """The instrument chosen on the 简谱 page: kept for next time, and heard at once if a song is playing."""
         self.timbre = dict((name, program) for program, name in INSTRUMENTS)[self.timbre_name.get()]
         if self.settings:
             write_timbre(self.timbre, self.settings)
@@ -1763,7 +1731,6 @@ class App:
     def run_audition(self, path: Path, timeline, begin: float, speed: float) -> None:
         post = self.updates.put
         try:
-            post(("song", (path, timeline.duration)))
             while True:
                 hearing = self.hearing
                 reached = [begin]
@@ -1779,14 +1746,11 @@ class App:
                     reason = play(timeline, synth, synth.foreground(), self.cancel, progress, start=begin)
                 finally:
                     self.synth = None
-                if self.leaping.is_set() and not self.cancel.is_set():  # the knob let go in another bar
+                if self.leaping.is_set() and not self.cancel.is_set():  # another note was clicked
                     self.leaping.clear()
                     begin = self.leap_to
                     continue
-                if reason == "done":
-                    post(("status", "试听完毕"))
-                else:
-                    post(("interrupted", (path, reached[0], speed, "已停止试听")))
+                post(("heard end", (reason, reached[0])))
                 return
         except AuditionError as error:
             post(("audition failed", str(error)))
@@ -1829,10 +1793,9 @@ class App:
         return bar_at(score, min(max((x - left) / (right - left), 0.0), 1.0) * score.duration_seconds, 1.0)
 
     def pick_up(self, event: tk.Event) -> None:
-        """Pressing the progress bar takes hold of its knob, which then follows the pointer a bar at a time.
-        While a song is heard on the computer, it goes on being heard until the knob is let go."""
+        """Pressing the progress bar takes hold of its knob, which then follows the pointer a bar at a time."""
         path = self.selected()
-        if (self.worker and not self.auditioning) or path is None:
+        if self.worker or path is None:
             return
         score = self.read(path)
         if isinstance(score, ScoreError) or not score.bars or not score.duration_seconds:
@@ -1855,19 +1818,11 @@ class App:
         self.say(LET_GO)
 
     def let_go(self, _: tk.Event) -> None:
-        """Letting go of the knob plays from the start of its bar, after the countdown, as ▶ does; while the
-        song is heard on the computer, it is heard on from there."""
+        """Letting go of the knob plays from the start of its bar, after the countdown, as ▶ does."""
         if self.dragging is None:
             return
-        path, score = self.dragging
+        path, _ = self.dragging
         self.dragging = None
-        if self.auditioning:
-            self.leap_to = bar_seconds(score, self.drag_bar, self.speed_factor())
-            self.hearing += 1  # what is still to come from before is not shown
-            self.leaping.set()
-            self.say(HEARING)
-            self.draw_bar()
-            return
         self.start(path, bar=self.drag_bar)
         self.bar_hover = self.worker is None  # the pointer is still on the bar, but not while it plays
         if self.worker is None:  # nothing started (let go just after a stop): the song as it was
@@ -1877,22 +1832,23 @@ class App:
     def set_playing(self, playing: bool, recording: bool = False, listening: bool = False,
                     auditioning: bool = False) -> None:
         busy = playing or recording or listening or auditioning
-        if auditioning:  # LyreBot stays in front: ■ is live, and the knob can be moved
-            self.button.set(self.halt_images, enabled=True)
-        else:
-            self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
-        if self.button.tooltip is not None:
-            self.button.tooltip.text = HALT_TIP if auditioning else PLAY_TIP
+        self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
         self.restart_button.set(enabled=not busy)
         self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
-        self.bar.configure(cursor="hand2" if auditioning or not busy else "arrow")
+        self.bar.configure(cursor="arrow" if busy else "hand2")
+        # On the 简谱 page, ▶ becomes a live ■ while the song is heard.
+        self.hear_button.set(self.halt_images if auditioning else self.play_images,
+                             enabled=auditioning or (not busy and self.leaf_song is not None))
+        if self.hear_button.tooltip is not None:
+            self.hear_button.tooltip.text = HALT_TIP if auditioning else HEAR_TIP
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,
                                enabled=recording or (not busy and self.transcriber is None))
         self.keys_button.set(self.recording_images if listening else self.keys_images, enabled=listening or not busy)
-        if not busy:
-            self.root.title(self.base_title)
+        if not busy:  # (while busy, the title says what plays)
+            leaf = self.leaf and self.leaf_song is not None
+            self.root.title(f"{self.leaf_song[0].stem} · 简谱 · LyreBot" if leaf else self.base_title)
 
     def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path],
             countdown: float | None = None) -> None:
@@ -1955,6 +1911,231 @@ class App:
         finally:
             post(("done", None))
 
+    # ---- the 简谱 page ----
+    def build_leaf(self) -> None:
+        """The page behind the ribbon, as big as the songs' page, with the same frame and ribbon: the chosen
+        song's title, its 简谱 to read and click, and at its foot, under the ·◆· rule, the instrument it is
+        heard on, the bar and time it has come to, and ▶."""
+        root, theme = self.root, self.theme
+        px, fonts = theme.px, theme.fonts
+        self.leaf_head = Sheet(root, theme)
+        self.leaf_title = Words(self.leaf_head, theme, fg=INK, font=fonts.title, anchor="center", justify="center")
+        self.leaf_title.pack(fill="x")
+        self.leaf_about = Words(self.leaf_head, theme, fg=MUTED, font=fonts.small, anchor="center", justify="center")
+        self.leaf_about.pack(fill="x")
+        self.leaf_head.bind("<Configure>", lambda event: [words.configure(wraplength=event.width)
+                                                          for words in (self.leaf_title, self.leaf_about)], add="+")
+        self.leaf_body = Sheet(root, theme)
+        self.score_view = ScoreView(self.leaf_body, theme, self.hear_note)
+        self.score_view.pack(side="left", fill="both", expand=True)
+        self.score_bar = ThinScrollbar(self.leaf_body, theme, self.scroll_score)
+        self.score_view.configure(yscrollcommand=self.score_scrolled)
+        self.leaf_rule = Ornament(root, theme)
+        self.leaf_panel = Sheet(root, theme)
+        row = Sheet(self.leaf_panel, theme)
+        row.pack(fill="x")
+        self.timbre_choice = Choice(row, theme, self.timbre_name, tuple(name for _, name in INSTRUMENTS),
+                                    self.pick_timbre)
+        self.timbre_choice.pack(side="left")
+        self.hear_button = IconButton(row, self.play_images, self.press_hear, HEAR_TIP, theme)
+        self.hear_button.pack(side="right")
+        self.leaf_time = Words(row, theme, fg=MUTED, font=fonts.figures)
+        self.leaf_time.pack(side="right", padx=(0, px(10)))
+        self.leaf_bar = Words(row, theme, fg=MUTED, font=fonts.figures)
+        self.leaf_bar.pack(side="right", padx=(0, px(10)))
+        self.leaf_status = Words(self.leaf_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.leaf_status.pack(fill="x", pady=(px(4), 0))
+        self.leaf_panel.bind("<Configure>", lambda event: self.leaf_status.configure(wraplength=event.width),
+                             add="+")
+        # From the foot up, as on the songs' page; the head keeps clear of the ribbon on either side.
+        self.leaf_page = [(self.leaf_panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
+                          (self.leaf_rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
+                          (self.leaf_head, dict(side="top", fill="x", padx=px(RIBBON_FROM_RIGHT + 6),
+                                                pady=(px(12), px(4)))),
+                          (self.leaf_body, dict(fill="both", expand=True, padx=(px(10), px(8)), pady=0))]
+
+    def leaf_pieces(self) -> list[tk.Misc]:
+        """The pieces of the 简谱 page the ribbon may lie over."""
+        return [self.leaf_head, self.leaf_title, self.leaf_about, self.leaf_body, self.score_view, self.score_bar]
+
+    def scroll_score(self, *args) -> None:
+        self.score_view.read_on()  # the reader took the scrollbar: leave the score where they put it
+        self.score_view.yview(*args)
+
+    def score_scrolled(self, first: str, last: str) -> None:
+        if float(first) <= 0 and float(last) >= 1:
+            self.score_bar.pack_forget()
+        else:
+            self.score_bar.pack(side="right", fill="y", before=self.score_view)
+        self.score_bar.set(first, last)
+
+    def wheel(self, event: tk.Event) -> None:
+        (self.score_view if self.leaf else self.browser).wheel(event)
+
+    def turn_page(self) -> None:
+        """The ribbon clicked: to the chosen song's 简谱, or back to the songs."""
+        if self.leaf:
+            self.show_songs()
+            return
+        path = self.selected()
+        if self.worker:
+            self.ribbon_says("正在演奏或录音，结束后再看简谱")
+        elif path is None:
+            self.ribbon_says("先选一首曲子")
+        elif self.read_leaf(path):
+            self.show_leaf()
+
+    def read_leaf(self, path: Path | None = None) -> bool:
+        """Read ``path`` (else the song on the 简谱 page, if its file has changed) for the 简谱 page and draw
+        it there.  Says so and answers False when it cannot be read."""
+        again = path is None
+        if again:
+            if self.leaf_song is None:
+                return False
+            path = self.leaf_song[0]
+        try:
+            changed = path.stat().st_mtime
+        except OSError:
+            changed = None
+        speed = self.speed_factor()
+        if again and changed is not None and changed == self.leaf_song[1]:
+            return True
+        if changed is None and again:  # moved or deleted while it was open
+            self.show_songs()
+            return False
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+            score = load_score(path)
+            sheet = jianpu.sheet_of(text, path.stem)
+        except (OSError, ScoreError, UnicodeDecodeError, ValueError) as error:
+            if not again:
+                self.ribbon_says("曲谱有误，没有简谱可看" if isinstance(error, ScoreError) else "读不了这份曲谱")
+            return False
+        same = (not again and self.leaf_song is not None and self.leaf_song[0] == path
+                and self.leaf_song[1] == changed)
+        timeline = compile_ringing(score, speed)
+        if not same:
+            self.score_view.show(sheet)
+            self.leaf_from = None
+            # 1=C, the meter and the tempo; under them, briefly, where the score came from and how it reads.
+            notes = [note.removeprefix("LyreBot ").split("，")[0] for note in sheet.notes
+                     if note != "速度随演奏起伏"]  # (the ≈ says as much)
+            about = "　".join(("1=C", f"{sheet.meter[0]}/{sheet.meter[1]}", sheet.tempo))
+            self.leaf_title.configure(text=sheet.title)
+            self.leaf_about.configure(text=about + ("\n" + " · ".join(notes) if notes else ""))
+        elif self.leaf_song[4] == speed:
+            timeline = self.leaf_song[3]
+        else:  # the same song at another speed: where it stopped is somewhere else in time
+            self.leaf_from = None
+        self.leaf_song = (path, changed, score, timeline, speed)
+        self.score_view.time(score, speed, sorted(event.at for event in timeline.events if event.down))
+        tempo = score.tempo_map(speed)
+        self.leaf_bars = [float(tempo.seconds(Fraction(start))) for start in score.bars]
+        self.show_heard(self.leaf_from or 0.0)
+        self.leaf_status.configure(text=TO_HEAR if self.leaf_from is None else "已停止 · 点 ▶ 从亮着的音接着听",
+                                   fg=MUTED)
+        if not self.worker:
+            self.set_playing(False)
+        return True
+
+    def show_leaf(self) -> None:
+        """Turn to the 简谱 page."""
+        for piece, _ in self.songs_page:
+            piece.pack_forget()
+        for piece, how in self.leaf_page:
+            piece.pack(**how)
+        self.leaf = True
+        self.ribbon_leave()
+        self.set_playing(False)
+
+    def show_songs(self) -> None:
+        """Turn back to the songs; a song being heard stops."""
+        if self.auditioning:
+            self.stop()
+        for piece, _ in self.leaf_page:
+            piece.pack_forget()
+        for piece, how in self.songs_page:
+            piece.pack(**how)
+        self.leaf = False
+        self.ribbon_leave()
+        if not self.worker:
+            self.root.title(self.base_title)
+        self.show_selected()
+
+    def show_heard(self, at: float) -> None:
+        """The 简谱 page's bar and time at ``at`` seconds into its song."""
+        if self.leaf_song is None:
+            return
+        duration = self.leaf_song[3].duration
+        self.leaf_time.configure(text=f"{clock(min(at, duration))} / {clock(duration)}")
+        if self.leaf_bars:
+            bar = max(bisect_right(self.leaf_bars, at + 1e-6), 1)
+            self.leaf_bar.configure(text=f"{bar}|{len(self.leaf_bars)}")
+
+    def heard_end(self, reason: str, reached: float) -> None:
+        """The song stopped being heard: at its end, or stopped part way, where ▶ will go on from."""
+        view = self.score_view
+        if reason == "done":
+            self.leaf_from = None
+            view.heard(None, follow=False)
+            self.show_heard(0.0)
+            self.leaf_status.configure(text="试听完毕 · 点 ▶ 从头再听，或点简谱上的音", fg=MUTED)
+            return
+        lit = view.sounding(reached) if view.notes else []
+        self.leaf_from = min((view.notes[index].start for index in lit), default=reached)
+        view.heard(reached, follow=False)
+        self.leaf_status.configure(text="已停止 · 点 ▶ 从亮着的音接着听", fg=MUTED)
+
+    # ---- the ribbon ----
+    def on_ribbon(self, event: tk.Event) -> bool:
+        """Whether the pointer of ``event`` is on the ribbon (its band, a little wider to be easy to hit)."""
+        root, px = self.root, self.theme.px
+        x, y = event.x_root - root.winfo_rootx(), event.y_root - root.winfo_rooty()
+        left, top = root.winfo_width() - px(RIBBON_FROM_RIGHT), self.head()
+        band = px(10.5)
+        return left - px(3) <= x < left + band + px(3) and top <= y < top + self.ribbon_image.height()
+
+    def ribbon_press(self, event: tk.Event) -> str | None:
+        if not self.on_ribbon(event):
+            return None
+        self.callout.hide()
+        self.turn_page()
+        return "break"
+
+    def ribbon_motion(self, event: tk.Event) -> str | None:
+        inside = self.on_ribbon(event)
+        widget = event.widget
+        if inside:
+            name = str(widget)
+            if name not in self.cursors:
+                self.cursors[name] = str(widget.cget("cursor"))
+            widget.configure(cursor="hand2")
+            if not self.ribbon_inside:
+                self.ribbon_inside = True
+                self.ribbon_says(TO_SONGS if self.leaf else TO_SCORE, wait=550)
+            return "break"  # (nor does the list light the song under it)
+        self.ribbon_leave(event)
+        return None
+
+    def ribbon_leave(self, event: tk.Event | None = None) -> None:
+        """The pointer is off the ribbon: the pieces get their own pointers back, and the words go."""
+        if self.ribbon_inside:
+            self.ribbon_inside = False
+            self.callout.hide()
+        for name, cursor in list(self.cursors.items()):
+            try:
+                self.root.nametowidget(name).configure(cursor=cursor)
+            except (KeyError, tk.TclError):
+                pass
+        self.cursors.clear()
+
+    def ribbon_says(self, text: str, wait: int = 0) -> None:
+        """A few words under the ribbon's tail."""
+        root, px = self.root, self.theme.px
+        x = root.winfo_rootx() + root.winfo_width() - px(RIBBON_FROM_RIGHT) + px(5)
+        y = root.winfo_rooty() + self.head() + self.ribbon_image.height()
+        self.callout.say(text, x, y, wait=wait)
+
     def show_progress(self, at: float) -> None:
         """The knob, the time and the bar counter at ``at`` seconds into the song playing."""
         self.set_fraction(at / self.duration if self.duration else 0)
@@ -2006,7 +2187,7 @@ class App:
                 score = self.read(path)
                 tempo = None if isinstance(score, ScoreError) else score.tempo_map(self.speed_factor())
                 self.bar_starts = [float(tempo.seconds(Fraction(start))) for start in score.bars] if tempo else []
-                self.root.title(f"{path.stem} · 试听 · LyreBot" if self.auditioning else f"{path.stem} · LyreBot")
+                self.root.title(f"{path.stem} · LyreBot")
             elif kind == "interrupted":
                 self.interrupted(*value)
             elif kind == "progress":
@@ -2014,9 +2195,12 @@ class App:
                 self.say("正在演奏 · 按 F8 或切换窗口停止")
             elif kind == "heard":
                 hearing, at = value
-                if hearing == self.hearing and self.dragging is None:  # not while the knob is held
-                    self.show_progress(at)
-                    self.say(HEARING)
+                if hearing == self.hearing:
+                    self.score_view.heard(at)
+                    self.show_heard(at)
+                    self.leaf_status.configure(text=HEARING, fg=MUTED)
+            elif kind == "heard end":
+                self.heard_end(*value)
             elif kind == "error":
                 self.say("出错，已停止", warn=True)
                 if not self.closing:
@@ -2034,7 +2218,7 @@ class App:
             elif kind == "record failed":
                 self.say(f"录音失败：{value}", warn=True)
             elif kind == "audition failed":
-                self.say(f"不能试听：{value}", warn=True)
+                self.leaf_status.configure(text=f"不能试听：{value}", fg=WARN)
             elif kind == "listening":
                 state, seconds, count = value
                 if state == "listening":

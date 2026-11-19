@@ -566,13 +566,13 @@ def _natural(points, length: Fraction) -> tuple[list[float], list[Fraction]]:
     return gaps, spans
 
 
-def layout_rows(sheet: Sheet) -> list[list[Bar]]:
-    """Bars packed into systems (at most four, or six short ones) and spread to the width."""
+def layout_rows(sheet: Sheet, left: float = LEFT, right: float = RIGHT) -> list[list[Bar]]:
+    """Bars packed into systems (at most four, or six short ones) and spread from ``left`` to ``right``."""
     natural = []
     for bar in sheet.bars:
         gaps, spans = _natural(_bar_points(bar), bar.length)
         natural.append((gaps, spans))
-    width = RIGHT - LEFT
+    width = right - left
     most = 6 if sheet.meter[0] * 4 / sheet.meter[1] <= 2 else 4
     rows: list[list[int]] = []
     row: list[int] = []
@@ -597,7 +597,7 @@ def layout_rows(sheet: Sheet) -> list[list[Bar]]:
         ratios.append(target / total if total else 1.0)
         time = sum(float(sum(natural[i][1])) for i in indexes) or 1.0
         extra = max(0.0, target - total)
-        x = float(LEFT)
+        x = float(left)
         for i in indexes:
             bar = sheet.bars[i]
             gaps, spans = natural[i]
@@ -700,9 +700,12 @@ def _draw_bar_staff(canvas: Canvas, bar: Bar, staff: int, box: StaffBox, row: in
                     previous: dict[int, tuple[int, Symbol]]) -> None:
     symbols = bar.staves[staff]
     baseline = box.baseline
+    note = getattr(canvas, "note", None)  # a canvas may want to know which symbol each thing belongs to
     for symbol in symbols:
         x = bar.x + bar.times[symbol.start]
         symbol.x = x
+        if note:
+            note(bar, staff, symbol)
         colour = "#111" if (symbol.struck or not symbol.keys) else GREY
         if symbol.keys:
             for height, key in enumerate(symbol.keys):
@@ -738,6 +741,8 @@ def _draw_bar_staff(canvas: Canvas, bar: Bar, staff: int, box: StaffBox, row: in
             canvas.path(f"M{start_x + 2:.1f},{top - 3:.1f} Q{(start_x + x) / 2:.1f},{top - 13:.1f} "
                         f"{x - 2:.1f},{top - 3:.1f}", 1.1)
         previous[staff] = (row, symbol)
+    if note:
+        note(bar, staff, None)
     _beams(canvas, bar, symbols, baseline)
     for index, (a, b) in enumerate(bar.tuplets[staff]):
         inside = [s for s in symbols if s.tuplet == index]
@@ -785,16 +790,69 @@ def _roll(canvas: Canvas, x: float, bottom: float, top: float, direction: int) -
         canvas.path(f"M{x - 3:.1f},{bottom - 3:.1f} L{x:.1f},{bottom + 2:.1f} L{x + 3:.1f},{bottom - 3:.1f}", 1.0)
 
 
-def _brace(canvas: Canvas, x: float, top: float, bottom: float) -> None:
+def _brace(canvas: Canvas, x: float, top: float, bottom: float, stroke: str = "#111") -> None:
     middle = (top + bottom) / 2
     w = 8
     canvas.path(f"M{x:.1f},{top:.1f} C{x - w:.1f},{top + 6:.1f} {x:.1f},{middle - 10:.1f} {x - w:.1f},{middle:.1f} "
-                f"C{x:.1f},{middle + 10:.1f} {x - w:.1f},{bottom - 6:.1f} {x:.1f},{bottom:.1f}", 2.2)
+                f"C{x:.1f},{middle + 10:.1f} {x - w:.1f},{bottom - 6:.1f} {x:.1f},{bottom:.1f}", 2.2, stroke)
 
 
 def _meter(canvas: Canvas, x: float, y: float, meter: tuple[int, int], size: float = 13) -> None:
     canvas.text(x, y - size * 0.15, str(meter[0]), size)
     canvas.text(x, y + size * 0.85, str(meter[1]), size)
+
+
+def _sizes(sheet: Sheet, system: list[Bar]) -> tuple[bool, list[tuple[float, float, int]]]:
+    marks = any(bar.tempo or bar.meter for bar in system)
+    return marks, [_measure_staff(system, staff, marks and staff == 0) for staff in range(sheet.staves)]
+
+
+def system_height(sheet: Sheet, system: list[Bar]) -> float:
+    """How tall a system is drawn, from its top to the foot of its last staff."""
+    _, sizes = _sizes(sheet, system)
+    return 18 + sum(above + below for above, below, _ in sizes) + 10 * (sheet.staves - 1)
+
+
+def draw_system(canvas, sheet: Sheet, system: list[Bar], row: int, y: float,
+                previous: dict[int, tuple[int, Symbol]], rule: str = "#111") -> float:
+    """Draw one system with its top at ``y``: its first bar's number, the brace, the staves and the bar
+    lines (in ``rule``), and the meter and tempo marks above.  Returns where the next system may begin.
+    ``previous`` carries each staff's last symbol on to the next system, for the ties."""
+    marks, sizes = _sizes(sheet, system)
+    left = system[0].x
+    canvas.text(left - 26, y + 12, f"({system[0].number})", 12, anchor="start", weight="normal")
+    top = y + 18
+    boxes = []
+    for above, below, lines in sizes:
+        baseline = top + above
+        boxes.append(StaffBox(baseline, top, baseline + below, lines))
+        top = baseline + below + 10
+    line_top = [box.top + (20 if marks and index == 0 else 0) + 4 for index, box in enumerate(boxes)]
+    line_bottom = [box.bottom - 2 for box in boxes]
+    if sheet.staves > 1:
+        _brace(canvas, left - 10, line_top[0], line_bottom[-1], rule)
+    canvas.line(left, line_top[0], left, line_bottom[-1], 1.4, rule)
+    for bar in system:
+        for staff, box in enumerate(boxes):
+            _draw_bar_staff(canvas, bar, staff, box, row, previous)
+        end = bar.x + bar.width
+        final = bar is sheet.bars[-1]
+        for staff in range(sheet.staves):
+            if final:
+                canvas.line(end - 5, line_top[staff], end - 5, line_bottom[staff], 1.3, rule)
+                canvas.line(end, line_top[staff], end, line_bottom[staff], 3.5, rule)
+            else:
+                canvas.line(end, line_top[staff], end, line_bottom[staff], 1.3, rule)
+        above = boxes[0].top + 14
+        label_x = bar.x + 8
+        if bar.meter:
+            _meter(canvas, label_x + 4, above, bar.meter, 12)
+            label_x += 18
+        if bar.tempo:
+            first = bar.staves[0][0] if bar.staves[0] else None
+            at = bar.x + (bar.times[first.start] if first else 20)
+            canvas.text(max(at - 6, label_x), above + 4, bar.tempo, 14, anchor="start", weight="normal")
+    return top + 20
 
 
 def render_pages(sheet: Sheet) -> list[str]:
@@ -812,46 +870,10 @@ def render_pages(sheet: Sheet) -> list[str]:
     y = 236.0
     previous: dict[int, tuple[int, Symbol]] = {}
     for row, system in enumerate(systems):
-        marks = any(bar.tempo or bar.meter for bar in system)
-        sizes = [_measure_staff(system, staff, marks and staff == 0) for staff in range(sheet.staves)]
-        height = 18 + sum(above + below for above, below, _ in sizes) + 10 * (sheet.staves - 1)
-        if y + height > PAGE_H - 70:
+        if y + system_height(sheet, system) > PAGE_H - 70:
             pages.append(Canvas())
             y = 70.0
-        canvas = pages[-1]
-        canvas.text(LEFT - 26, y + 12, f"({system[0].number})", 12, anchor="start", weight="normal")
-        top = y + 18
-        boxes = []
-        for above, below, lines in sizes:
-            baseline = top + above
-            boxes.append(StaffBox(baseline, top, baseline + below, lines))
-            top = baseline + below + 10
-        line_top = [box.top + (20 if marks and index == 0 else 0) + 4 for index, box in enumerate(boxes)]
-        line_bottom = [box.bottom - 2 for box in boxes]
-        if sheet.staves > 1:
-            _brace(canvas, LEFT - 10, line_top[0], line_bottom[-1])
-        canvas.line(LEFT, line_top[0], LEFT, line_bottom[-1], 1.4)
-        for bar in system:
-            for staff, box in enumerate(boxes):
-                _draw_bar_staff(canvas, bar, staff, box, row, previous)
-            end = bar.x + bar.width
-            final = bar is sheet.bars[-1]
-            for staff in range(sheet.staves):
-                if final:
-                    canvas.line(end - 5, line_top[staff], end - 5, line_bottom[staff], 1.3)
-                    canvas.line(end, line_top[staff], end, line_bottom[staff], 3.5)
-                else:
-                    canvas.line(end, line_top[staff], end, line_bottom[staff], 1.3)
-            above = boxes[0].top + 14
-            label_x = bar.x + 8
-            if bar.meter:
-                _meter(canvas, label_x + 4, above, bar.meter, 12)
-                label_x += 18
-            if bar.tempo:
-                first = bar.staves[0][0] if bar.staves[0] else None
-                at = bar.x + (bar.times[first.start] if first else 20)
-                canvas.text(max(at - 6, label_x), above + 4, bar.tempo, 14, anchor="start", weight="normal")
-        y = top + 20
+        y = draw_system(pages[-1], sheet, system, row, y, previous)
     count = len(pages)
     svgs = []
     for number, page in enumerate(pages, 1):

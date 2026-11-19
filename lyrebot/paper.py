@@ -500,3 +500,71 @@ class OnPage:
         """Keep the paper still under a canvas that has scrolled."""
         if self.paper is not None:
             self.lay_paper(*self.paper)
+
+
+class ScrollingPage(OnPage):
+    """For a canvas that scrolls over the page (the song list, the 简谱 page's score): the paper stays still
+    under it, and at an edge with more beyond, its last lines sink into the paper instead of being cut
+    off.  It sets ``extent``, how tall all of it is, and calls ``make_fades`` once it is a canvas."""
+
+    extent = 0
+    theme: "theme.Theme"
+
+    def make_fades(self) -> None:
+        canvas: tk.Canvas = self  # type: ignore[assignment]
+        self.fade_top = canvas.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
+        self.fade_bottom = canvas.create_image(0, 0, anchor="nw", state="hidden", tags="fade")
+        self.fades: tuple[tk.PhotoImage | None, tk.PhotoImage | None] = (None, None)
+        self.faded_for: tuple | None = None  # the page and place the fades were made for
+
+    def lay_paper(self, image: tk.PhotoImage, x: int, y: int) -> None:
+        super().lay_paper(image, x, y)
+        self.fade_edges(image, x, y)
+
+    def fade_edges(self, image: tk.PhotoImage, x: int, y: int) -> None:
+        """At the top, once it has scrolled, and at the foot, while there is more below, a strip of the page
+        clearing away from the edge lies over what is written (``fade``), so that the lines there sink into
+        the paper.  The strips are made again only when the page or the canvas's place changes."""
+        canvas: tk.Canvas = self  # type: ignore[assignment]
+        width, height = canvas.winfo_width(), canvas.winfo_height()
+        if width <= 1 or height <= 1:
+            return
+        if self.page is not None and self.page.later is not None:  # being resized: the fades step aside,
+            self.faded_for = None  # to be made once it holds still and the page is washed for its size
+            canvas.itemconfigure("fade", state="hidden")
+            return
+        tall = min(self.theme.px(18), height // 4)
+        edition = self.page.edition if self.page is not None else 0  # (marks pressed in anew change the paper)
+        if self.faded_for != (str(image), edition, x, y, width, height):
+            self.faded_for = (str(image), edition, x, y, width, height)
+            self.fades = (fade(canvas, image, x, y, width, tall, solid_at_top=True),
+                          fade(canvas, image, x, y + height - tall, width, tall, solid_at_top=False))
+        top = canvas.canvasy(0)
+        above, below = self.edges(top, height)
+        for item, strip, at, show in ((self.fade_top, self.fades[0], top, above),
+                                      (self.fade_bottom, self.fades[1], top + height - tall, below)):
+            if strip is None:
+                canvas.itemconfigure(item, state="hidden")
+                continue
+            canvas.coords(item, canvas.canvasx(0), at)
+            canvas.itemconfigure(item, image=strip, state="normal" if show else "hidden")
+        canvas.tag_raise("fade")
+        canvas.tag_raise("over")  # the ribbon lies over the lines sinking into the paper too
+
+    def edges(self, top: float, height: int) -> tuple[bool, bool]:
+        """Whether there is more above the view (it has scrolled) and below it."""
+        return top > 0, top + height < self.extent
+
+    def yview(self, *args):
+        result = super().yview(*args)  # type: ignore[misc]
+        if args:
+            self.follow_page()
+        return result
+
+    def yview_moveto(self, fraction: float) -> None:
+        super().yview_moveto(fraction)  # type: ignore[misc]
+        self.follow_page()
+
+    def yview_scroll(self, number: int, what: str) -> None:
+        super().yview_scroll(number, what)  # type: ignore[misc]
+        self.follow_page()

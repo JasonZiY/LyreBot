@@ -144,6 +144,44 @@ class IconButton(OnPage, tk.Canvas):
             self.command()
 
 
+class Callout(Tooltip):
+    """A few words in the tips' card, under a point of the screen rather than over a widget, said when asked
+    (``say``) and gone after a while or when ``hide`` is called."""
+
+    def __init__(self, widget: tk.Widget, theme: Theme):  # (no bindings: it is not the widget's tip)
+        self.widget, self.text, self.theme = widget, "", theme
+        self.window: tk.Toplevel | None = None
+        self.job: str | None = None
+        self.ending: str | None = None
+        self.at = (0, 0)
+
+    def say(self, text: str, x: int, y: int, wait: int = 0, last: int = 2200) -> None:
+        """Show ``text`` centred under (x, y), after ``wait`` milliseconds, for ``last`` milliseconds."""
+        self.hide()
+        self.text, self.at = text, (x, y)
+        top = self.widget.winfo_toplevel()
+        if wait:
+            self.job = top.after(wait, self.show)
+        else:
+            self.show()
+        self.ending = top.after(wait + last, self.hide)
+
+    def position(self, width: int, height: int) -> tuple[int, int]:
+        x, y = self.at
+        gap = self.theme.px(6)
+        area = screen_area(self.widget, x, y)
+        return min(max(x - width // 2, area[0]), area[2] - width), min(y + gap, area[3] - height)
+
+    def hide(self, _: tk.Event | None = None) -> None:
+        if self.ending:
+            try:
+                self.widget.winfo_toplevel().after_cancel(self.ending)
+            except tk.TclError:
+                pass
+            self.ending = None
+        super().hide()
+
+
 class PillButton(OnPage, tk.Canvas):
     """A rounded button with a hairline edge ("ghost"), or filled orange ("primary") or red ("danger").  On
     the main window's page a ghost's face is a veil of white over the paper rather than paper of its own."""
