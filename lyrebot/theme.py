@@ -128,7 +128,7 @@ class Theme:
         return self.image(f"fleuron:{color}", width, height, lambda: icons.paint(icons.fleuron(width, height), color))
 
     def pill(self, width: int, height: int, fill: str, border: str) -> tk.PhotoImage:
-        line = max(1.0, self.scale)
+        line = max(1, round(self.scale))  # whole pixels: an edge of 1.25 smears over two rows
         return self.image(f"pill:{fill}:{border}:{line}", width, height, lambda: icons.pill(width, height, fill, border, line))
 
 

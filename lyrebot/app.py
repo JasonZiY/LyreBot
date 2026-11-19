@@ -879,7 +879,7 @@ class App:
         theme, px = self.theme, self.theme.px
         big, small = px(34), px(26)
         c, s = big / 2, small / 2
-        line = max(1.0, self.scale)
+        line = max(1, round(self.scale))  # whole pixels, so rings stay sharp
 
         def picture(name: str, size: int, layers: Callable[[], list]) -> tk.PhotoImage:
             return theme.image(name, size, size, layers)
@@ -926,7 +926,7 @@ class App:
         self.recording_breath = {**self.recording_images,
                                  "normal": picture("recording-out", small, square(HOVER, PEACH, ORANGE))}
         knob = lambda size: lambda: [(ORANGE, icons.circle(size / 2, size / 2, size / 2 - 0.5)),  # noqa: E731
-                                     (PAPER, icons.circle(size / 2, size / 2, size / 2 - 0.5 - 1.6 * line))]
+                                     (PAPER, icons.circle(size / 2, size / 2, size / 2 - 0.5 - 2 * line))]
         self.knob_images = {False: picture("knob", px(10), knob(px(10))),
                             True: picture("knob-hover", px(13), knob(px(13)))}
 

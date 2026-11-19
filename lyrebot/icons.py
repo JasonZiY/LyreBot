@@ -215,10 +215,40 @@ def _rgb(color: str) -> tuple[int, int, int]:
 
 
 # ---- icons ----------------------------------------------------------------------
+#
+# Drawn for the pixel grid.  Lines are a whole number of pixels wide, and a level or upright line runs
+# through the middle of a row or column of pixels (or along the edge between two, when it is an even number
+# wide), so that it fills them solidly instead of smearing over two in half tones.  Only slanting lines
+# and curves are left to the smoothing, and their ends sit in the middle of a pixel.
 
-def line_weight(size: float, share: float = 0.075, least: float = 1.15) -> float:
-    """The family's pen: a set share of the icon, never finer than a clean line of about a pixel."""
-    return max(size * share, least)
+def pen_width(size: float, share: float = 0.075) -> int:
+    """The family's pen in whole pixels: a set share of the icon, at least one pixel."""
+    return max(1, round(size * share))
+
+
+def snap(v: float, pen: int) -> float:
+    """``v`` moved onto the pixel grid: to the middle of a pixel for a line an odd number of pixels wide,
+    to the edge between two for an even one, so that the line covers whole pixels."""
+    return math.floor(v) + 0.5 if pen % 2 else float(round(v))
+
+
+def crisp(points: list[tuple[float, float]], pen: int) -> Shape:
+    """A line through ``points`` laid on the pixel grid: its level and upright runs as solid bars meeting
+    in square corners, any slanting run as an ordinary stroke."""
+    path = [(snap(x, pen), snap(y, pen)) for x, y in points]
+    half = pen / 2
+    runs = []
+    for (ax, ay), (bx, by) in zip(path, path[1:]):
+        if ax == bx or ay == by:
+            runs.append(rect(min(ax, bx) - half, min(ay, by) - half, max(ax, bx) + half, max(ay, by) + half))
+        else:
+            runs.append(stroke([(ax, ay), (bx, by)], pen))
+    return union(*runs)
+
+
+def block(x0: float, y0: float, x1: float, y1: float, radius: float = 0.0) -> Shape:
+    """A rectangle with its edges on whole pixels."""
+    return rect(round(x0), round(y0), round(x1), round(y1), radius)
 
 
 def play(size: int) -> Shape:
@@ -231,24 +261,27 @@ def play(size: int) -> Shape:
 
 
 def stop(size: int) -> Shape:
-    c, half = size / 2, size * 0.13
-    return rect(c - half, c - half, c + half, c + half, radius=size * 0.03)
+    half = round(size * 0.13)
+    left = round(size / 2 - half)
+    return rect(left, left, left + 2 * half, left + 2 * half, radius=size * 0.03)
 
 
 def next_track(size: int) -> list[Part]:
     """⏭ in line: a hollow triangle, and the bar it stops at in gilt."""
-    c, line = size / 2, line_weight(size, 0.052, 1.2)
-    w, h, gap = size * 0.20, size * 0.26, size * 0.10
-    left = c - (w + gap) / 2
-    return [stroke(closed([(left, c - h / 2), (left + w, c), (left, c + h / 2)]), line),
-            gilt(stroke([(left + w + gap, c - h / 2), (left + w + gap, c + h / 2)], line * 1.1))]
+    pen = pen_width(size, 0.052)
+    mid = snap(size / 2, pen)
+    half = round(size * 0.13)
+    left = snap(size / 2 - size * 0.15, pen)
+    tip, bar = left + round(size * 0.20), left + round(size * 0.20) + round(size * 0.10)
+    return [crisp(closed([(left, mid - half), (tip, mid), (left, mid + half)]), pen),
+            gilt(rect(bar - pen / 2, mid - half - pen / 2, bar + pen / 2, mid + half + pen / 2))]
 
 
 def restart(size: int) -> list[Shape]:
     """↺ in line: a ring open near the top left, and at its end, at about eleven o'clock, an arrowhead
     pointing anticlockwise.  No gilt: an arrowhead of another colour comes loose from its ring."""
-    c, line = size / 2, line_weight(size, 0.052, 1.2)
-    radius = size * 0.20
+    pen = pen_width(size, 0.052)
+    c, radius = snap(size / 2, pen), round(size * 0.20)
     head, tail = math.radians(-115), math.radians(185)  # screen angles, clockwise from three o'clock
     steps = 40
     arc = [(c + radius * math.cos(head + (tail - head) * i / steps), c + radius * math.sin(head + (tail - head) * i / steps))
@@ -260,44 +293,60 @@ def restart(size: int) -> list[Shape]:
     tip = (end[0] + ahead[0] * reach * 0.45, end[1] + ahead[1] * reach * 0.45)
     wings = [(tip[0] + (-ahead[0] * 0.8 + out[0] * side) * reach, tip[1] + (-ahead[1] * 0.8 + out[1] * side) * reach)
              for side in (0.75, -0.75)]
-    return [stroke(arc, line), stroke([wings[0], tip, wings[1]], line)]
+    return [stroke(arc, pen), stroke([wings[0], tip, wings[1]], pen)]
 
 
 def keyboard(size: int) -> list[Part]:
-    """A keyboard in line: the case, a row of keys, and the space bar in gilt."""
-    s, line = size, line_weight(size, 0.052, 1.2)
-    case = outline(s * 0.18, s * 0.31, s * 0.82, s * 0.69, s * 0.08, line)
-    keys = [circle(s * x, s * 0.445, max(s * 0.028, 0.75)) for x in (0.33, 0.443, 0.557, 0.67)]
-    return [case, *keys, gilt(stroke([(s * 0.39, s * 0.575), (s * 0.61, s * 0.575)], line))]
+    """A keyboard in line: the case, a row of four keys, and the space bar in gilt, all on whole pixels and
+    evenly spaced."""
+    pen = pen_width(size, 0.052)
+    key = max(1, round(size * 0.06))  # a key's side; the gaps between and around them are as wide
+    width, height = 9 * key + 2 * pen, 4 * key + pen + 2 * pen
+    x0, y0 = round((size - width) / 2), round((size - height) / 2)
+    case = outline(x0, y0, x0 + width, y0 + height, size * 0.08, pen)
+    inner_x, row = x0 + pen + key, y0 + pen + key
+    keys = [block(inner_x + i * 2 * key, row, inner_x + i * 2 * key + key, row + key) for i in range(4)]
+    space = gilt(block(inner_x + 2 * key, row + 2 * key, inner_x + 5 * key, row + 2 * key + pen))
+    return [case, *keys, space]
 
 
 def record(size: int) -> tuple[Shape, Shape]:
     """● with a fine ring round it: (ring, dot)."""
     c = size / 2
-    return ring(c, c, size * 0.31, max(size * 0.045, 1.0)), circle(c, c, size * 0.16)
+    return ring(c, c, size * 0.31, max(1, round(size * 0.045))), circle(c, c, size * 0.16)
 
 
 def chevron(size: int, down: bool = False) -> Shape:
-    c, a = size / 2, size * 0.2
-    weight = max(size * 0.095, 1.1)
+    """› or ⌄: two strokes at right angles, each end in the middle of a pixel, so the slopes step evenly."""
+    reach = max(2, round(size * 0.2))
+    c = math.floor(size / 2) + 0.5
+    point = math.floor(c + reach / 2) + 0.5
+    weight = max(size * 0.095, 1.35)
     if down:
-        return stroke([(c - a, c - a * 0.55), (c, c + a * 0.55), (c + a, c - a * 0.55)], weight)
-    return stroke([(c - a * 0.55, c - a), (c + a * 0.55, c), (c - a * 0.55, c + a)], weight)
+        return stroke([(c - reach, point - reach), (c, point), (c + reach, point - reach)], weight)
+    return stroke([(point - reach, c - reach), (point, c), (point - reach, c + reach)], weight)
+
+
+def _centre(v: float) -> float:
+    return math.floor(v) + 0.5
 
 
 def check(size: int) -> list[Shape]:
     """✓ as a pen makes it: the short stroke finer, the long one thinning as it lifts."""
     s = size
     weight = max(s * 0.1, 1.25)
-    return [stroke([(s * 0.24, s * 0.53), (s * 0.43, s * 0.71)], weight * 0.8),
-            stroke([(s * 0.43, s * 0.71), (s * 0.78, s * 0.31)], [weight, weight * 0.7])]
+    start, low = (_centre(s * 0.24), _centre(s * 0.53)), (_centre(s * 0.43), _centre(s * 0.71))
+    end = (low[0] + round(s * 0.35), low[1] - round(s * 0.35))  # the long stroke at 45°
+    return [stroke([start, low], weight * 0.8), stroke([low, end], [weight, weight * 0.7])]
 
 
 def magnifier(size: int) -> list[Part]:
     """A reading glass: a fine ring, and its handle in gilt."""
-    s, line = size, line_weight(size)
-    return [ring(s * 0.43, s * 0.43, s * 0.25, line),
-            gilt(stroke([(s * 0.62, s * 0.62), (s * 0.82, s * 0.82)], line * 1.6))]
+    s, pen = size, pen_width(size)
+    c, radius = _centre(s * 0.43), round(s * 0.25)
+    grip = _centre(c + radius * 0.75)
+    return [ring(c, c, radius, pen + 0.25),
+            gilt(stroke([(grip, grip), (grip + round(s * 0.2), grip + round(s * 0.2))], pen * 1.6))]
 
 
 def _folder(s: float) -> list[tuple[float, float]]:
@@ -307,21 +356,24 @@ def _folder(s: float) -> list[tuple[float, float]]:
 
 def folder(size: int) -> list[Part]:
     """A folder in line, the edge of its front in gilt."""
-    s, line = size, line_weight(size)
-    return [stroke(_folder(s), line), gilt(stroke([(s * 0.14, s * 0.46), (s * 0.86, s * 0.46)], line * 0.85))]
+    s, pen = size, pen_width(size)
+    front, left, right = snap(s * 0.46, pen), snap(s * 0.14, pen), snap(s * 0.86, pen)
+    return [crisp(_folder(s), pen), gilt(rect(left + pen / 2, front - pen / 2, right - pen / 2, front + pen / 2))]
 
 
 def move_to(size: int) -> list[Part]:
     """A folder in line with a gilt arrow going into it."""
-    s, line = size, line_weight(size)
-    return [stroke(_folder(s), line),
-            gilt(stroke([(s * 0.33, s * 0.56), (s * 0.64, s * 0.56)], line)),
-            gilt(stroke([(s * 0.54, s * 0.47), (s * 0.64, s * 0.56), (s * 0.54, s * 0.65)], line))]
+    s, pen = size, pen_width(size)
+    y, tip, tail = snap(s * 0.565, pen), snap(s * 0.64, pen), snap(s * 0.33, pen)
+    head = max(2, round(s * 0.11))
+    return [crisp(_folder(s), pen),
+            gilt(rect(tail - pen / 2, y - pen / 2, tip + pen / 2, y + pen / 2)),
+            gilt(stroke([(tip - head, y - head), (tip, y), (tip - head, y + head)], pen))]
 
 
 def quill(size: int) -> list[Part]:
     """A quill: the feather in line, its shaft in gilt running out to the nib.  Writing the score anew."""
-    s, line = size, line_weight(size)
+    s, pen = size, pen_width(size)
     start, end = (s * 0.33, s * 0.67), (s * 0.87, s * 0.13)
     along = (end[0] - start[0], end[1] - start[1])
     span = math.hypot(*along)
@@ -334,61 +386,74 @@ def quill(size: int) -> list[Part]:
         x, y = start[0] + along[0] * t, start[1] + along[1] * t
         upper.append((x + across[0] * s * 0.17 * swell, y + across[1] * s * 0.17 * swell))
         lower.append((x - across[0] * s * 0.09 * swell, y - across[1] * s * 0.09 * swell))
-    vane = stroke(upper + lower[::-1], line)
-    shaft = gilt(stroke([(s * 0.13, s * 0.87), (s * 0.70, s * 0.30)], line * 0.9))
+    vane = stroke(upper + lower[::-1], pen + 0.25)
+    nib, top = _centre(s * 0.13), _centre(s * 0.30)
+    shaft = gilt(stroke([(nib, _centre(s * 0.87)), (nib + (_centre(s * 0.87) - top), top)], pen))
     return [vane, shaft]
 
 
 def score_page(size: int) -> list[Part]:
     """A page of music with a turned-down corner, its note in gilt: 简谱."""
-    s, line = size, line_weight(size)
-    page = stroke(closed([(s * 0.24, s * 0.10), (s * 0.60, s * 0.10), (s * 0.78, s * 0.28), (s * 0.78, s * 0.90),
-                          (s * 0.24, s * 0.90)]), line)
-    fold = stroke([(s * 0.60, s * 0.10), (s * 0.60, s * 0.28), (s * 0.78, s * 0.28)], line * 0.85)
-    head = gilt(circle(s * 0.44, s * 0.70, max(s * 0.085, 1.1)))
-    stem = gilt(stroke([(s * 0.515, s * 0.70), (s * 0.515, s * 0.40), (s * 0.62, s * 0.47)], line * 0.9))
-    return [page, fold, head, stem]
+    s, pen = size, pen_width(size)
+    page = crisp(closed([(s * 0.24, s * 0.10), (s * 0.60, s * 0.10), (s * 0.78, s * 0.28), (s * 0.78, s * 0.90),
+                         (s * 0.24, s * 0.90)]), pen)
+    corner, fold = snap(s * 0.60, pen), snap(s * 0.10, pen)
+    side = snap(s * 0.78, pen)
+    turned = crisp([(corner, fold), (corner, fold + side - corner), (side, fold + side - corner)], pen)
+    stem, low, high = snap(s * 0.52, pen), snap(s * 0.70, pen), snap(s * 0.40, pen)
+    head = max(1.1, s * 0.08)
+    return [page, turned,
+            gilt(circle(stem - head + pen / 2, low, head)),
+            gilt(rect(stem - pen / 2, high - pen / 2, stem + pen / 2, low)),
+            gilt(stroke([(stem, high), (stem + round(s * 0.11), high + round(s * 0.11))], pen))]
 
 
 def trash(size: int) -> list[Shape]:
-    s = size
-    weight = line_weight(size, 0.07, 1.1)
-    return [stroke([(s * 0.20, s * 0.27), (s * 0.80, s * 0.27)], weight),
-            stroke([(s * 0.40, s * 0.27), (s * 0.42, s * 0.17), (s * 0.58, s * 0.17), (s * 0.60, s * 0.27)], weight),
-            stroke([(s * 0.27, s * 0.34), (s * 0.31, s * 0.84), (s * 0.69, s * 0.84), (s * 0.73, s * 0.34)], weight),
-            stroke([(s * 0.44, s * 0.44), (s * 0.445, s * 0.73)], weight * 0.85),
-            stroke([(s * 0.56, s * 0.44), (s * 0.555, s * 0.73)], weight * 0.85)]
+    """A bin in line: the lid with its handle, the body, two grooves."""
+    s, pen = size, pen_width(size, 0.07)
+    return [crisp([(s * 0.20, s * 0.27), (s * 0.80, s * 0.27)], pen),
+            crisp([(s * 0.40, s * 0.27), (s * 0.40, s * 0.15), (s * 0.60, s * 0.15), (s * 0.60, s * 0.27)], pen),
+            crisp([(s * 0.27, s * 0.36), (s * 0.27, s * 0.86), (s * 0.73, s * 0.86), (s * 0.73, s * 0.36)], pen),
+            crisp([(s * 0.43, s * 0.46), (s * 0.43, s * 0.74)], pen),
+            crisp([(s * 0.57, s * 0.46), (s * 0.57, s * 0.74)], pen)]
 
 
 def pen_nib(size: int) -> list[Part]:
     """A pen's nib in line, slit to its point, its breather hole in gilt: a speed of one's own."""
-    s, line = size, line_weight(size)
-    nib = closed([(s * 0.36, s * 0.10), (s * 0.64, s * 0.10), (s * 0.77, s * 0.45), (s * 0.50, s * 0.90),
-                  (s * 0.23, s * 0.45)])
-    return [stroke(nib, line), stroke([(s * 0.50, s * 0.90), (s * 0.50, s * 0.60)], line * 0.8),
-            gilt(circle(s * 0.50, s * 0.48, max(s * 0.08, 0.95)))]
+    s, pen = size, pen_width(size)
+    c = snap(s / 2, pen)
+    top, shoulder, point = snap(s * 0.10, pen), snap(s * 0.45, pen), snap(s * 0.90, pen)
+    narrow, wide = round(s * 0.14), round(s * 0.27)
+    nib = crisp(closed([(c - narrow, top), (c + narrow, top), (c + wide, shoulder), (c, point), (c - wide, shoulder)]),
+                pen)
+    hole = snap(s * 0.50, pen)
+    return [nib, rect(c - pen / 2, hole + round(s * 0.12), c + pen / 2, point),
+            gilt(circle(c, hole, max(s * 0.08, 1.0)))]
 
 
 def fleuron(width: int, height: int) -> list[Shape]:
     """·◆·: a small lozenge between two dots, the ornament set into a rule."""
-    c, m = width / 2, height / 2
+    c, m = math.floor(width / 2) + 0.5, height / 2
     half_w, half_h = height * 0.30, height * 0.48
-    dot, gap = max(height * 0.13, 0.7), height * 0.95
+    dot, gap = max(height * 0.13, 0.7), round(height * 0.95)
     return [polygon((c, m - half_h), (c + half_w, m), (c, m + half_h), (c - half_w, m)),
             circle(c - gap, m, dot), circle(c + gap, m, dot)]
 
 
 def fleuron_width(height: int) -> int:
-    """How wide ``fleuron`` needs its picture to be at this height."""
+    """How wide ``fleuron`` needs its picture to be at this height: an odd number, so it has a middle."""
     return int(math.ceil(height * 2.3)) | 1
 
 
 def warning(size: int) -> list[Shape]:
     """⚠ in line: a triangle with round corners, and the ! inside it."""
-    s, line = size, line_weight(size, 0.085, 1.1)
-    corners = [(s * 0.5, s * 0.10), (s * 0.94, s * 0.86), (s * 0.06, s * 0.86)]
-    return [stroke(closed(corners), line), stroke([(s * 0.5, s * 0.40), (s * 0.5, s * 0.59)], line * 1.05),
-            circle(s * 0.5, s * 0.715, line * 0.62)]
+    s, pen = size, pen_width(size, 0.085)
+    c = snap(s / 2, pen)
+    top, bottom, half = snap(s * 0.10, pen), snap(s * 0.86, pen), round(s * 0.44)
+    upper, lower, dot = snap(s * 0.40, pen), snap(s * 0.60, pen), snap(s * 0.72, pen)
+    return [crisp(closed([(c, top), (c + half, bottom), (c - half, bottom)]), pen),
+            rect(c - pen / 2, upper - pen / 2, c + pen / 2, lower + pen / 2),
+            rect(c - pen / 2, dot - pen / 2, c + pen / 2, dot + pen / 2)]
 
 
 # The lyre of LyreBot's crest, on a square of 1024: the left arm from the sound box up to its horn, which
@@ -411,26 +476,38 @@ def lyre_arm(steps: int = 40) -> tuple[list[tuple[float, float]], list[float]]:
     return arm + curl, widths
 
 
+def lyre_strings(size: float) -> list[float]:
+    """Where the strings run across a lyre ``size`` wide: four, or three over the same span when four
+    would run together."""
+    across = [x * size / 1024 for x in LYRE_STRINGS[0]]
+    thread = max(1, round(LYRE_STRINGS[3] * size / 1024))
+    if across[1] - across[0] < 2 * thread + 0.5:
+        across = [across[0], (across[0] + across[-1]) / 2, across[-1]]
+    return [snap(x, thread) for x in across]
+
+
 def lyre(size: int) -> list[Shape]:
-    """The lyre of LyreBot's crest in line: two arms that thin as they rise and curl at their horns, the
-    yoke, the strings and the sound box."""
+    """The lyre of LyreBot's crest: two arms that thin as they rise and curl at their horns, and the yoke,
+    the sound box and the strings on whole pixels."""
     k = size / 1024
     points, widths = lyre_arm()
     widths = [max(w * k, 1.0) for w in widths]
-    (yoke_a, yoke_b, yoke_w), (box_a, box_b, box_w) = LYRE_YOKE, LYRE_BOX
     shapes = [stroke([(x * k, y * k) for x, y in points], widths),
-              stroke([((1024 - x) * k, y * k) for x, y in points], widths),
-              stroke([(yoke_a[0] * k, yoke_a[1] * k), (yoke_b[0] * k, yoke_b[1] * k)], max(yoke_w * k, 0.9)),
-              stroke([(box_a[0] * k, box_a[1] * k), (box_b[0] * k, box_b[1] * k)], max(box_w * k, 1.1))]
-    across, top, bottom, thread = LYRE_STRINGS
-    shapes += [stroke([(x * k, top * k), (x * k, bottom * k)], max(thread * k, 0.55)) for x in across]
+              stroke([((1024 - x) * k, y * k) for x, y in points], widths)]
+    for (a, b, thickness) in (LYRE_YOKE, LYRE_BOX):
+        bar = max(1, round(thickness * k))
+        middle = snap(a[1] * k, bar)
+        shapes.append(rect(round(a[0] * k), middle - bar / 2, round(b[0] * k), middle + bar / 2, radius=bar / 2))
+    _, top, bottom, thread = LYRE_STRINGS
+    line = max(1, round(thread * k))
+    shapes += [rect(x - line / 2, round(top * k), x + line / 2, round(bottom * k)) for x in lyre_strings(size)]
     return shapes
 
 
-def pill(width: int, height: int, fill: str, border: str, line: float = 1.0) -> Layers:
-    """A rounded button face: its border, then its fill inside."""
-    radius = height / 2 - 0.5
-    face = [(border, rect(0.5, 0.5, width - 0.5, height - 0.5, radius))]
+def pill(width: int, height: int, fill: str, border: str, line: int = 1) -> Layers:
+    """A rounded button face: its border, then its fill inside, the straight edges on whole pixels."""
+    radius = height / 2
+    face = [(border, rect(0, 0, width, height, radius))]
     if fill != border:
-        face.append((fill, rect(0.5 + line, 0.5 + line, width - 0.5 - line, height - 0.5 - line, radius - line)))
+        face.append((fill, rect(line, line, width - line, height - line, radius - line)))
     return face

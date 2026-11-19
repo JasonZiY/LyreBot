@@ -64,6 +64,16 @@ class Drawing(unittest.TestCase):
         width = icons.fleuron_width(7)
         self.assertTrue(any(icons.rgba(width, 7, icons.paint(icons.fleuron(width, 7), "#000000"))[3::4]))
 
+    def test_level_and_upright_lines_fill_whole_pixels(self):
+        """Every pixel such a line passes over is solid, at any scale; none is left half covered and grey."""
+        for size in (14, 18, 21, 28):
+            alpha = icons.rgba(size, size, icons.paint(icons.trash(size), "#000000"))[3::4]
+            self.assertTrue(set(alpha) <= {0, 255}, size)
+        pixels = icons.rgba(60, 30, icons.pill(60, 30, "#FAF7F0", "#E3D6BC", 1))
+        at = lambda x, y: tuple(pixels[(y * 60 + x) * 4:(y * 60 + x) * 4 + 4])  # noqa: E731
+        self.assertEqual(at(30, 0), (0xE3, 0xD6, 0xBC, 255))  # a button's edge: one whole row
+        self.assertEqual(at(30, 1), (0xFA, 0xF7, 0xF0, 255))
+
     def test_the_gilt_is_laid_in_gold_and_the_lines_in_ink(self):
         ink, gold = "#2B2722", "#B08D57"
         for draw in (icons.next_track, icons.keyboard, icons.magnifier, icons.folder, icons.move_to, icons.quill,
