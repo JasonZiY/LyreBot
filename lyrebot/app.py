@@ -461,6 +461,7 @@ class SongBrowser(OnPage, tk.Canvas):
         self.fitted: dict[tuple[str, int, tuple], str] = {}
         self.beat_job: str | None = None
         self.beat_floor = 0.0
+        self.grounds: dict[str, tuple[tuple[int, int], tk.PhotoImage]] = {}  # tints made for this width, by colour
         self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_edge = self.create_rectangle(0, 0, 0, 0, fill=ORANGE, width=0, state="hidden")
@@ -490,13 +491,25 @@ class SongBrowser(OnPage, tk.Canvas):
         self.follow_page()
 
     def ground(self, item: int, color: str, box: tuple[float, float, float, float]) -> None:
-        """Lay the rounded tint ``color`` over ``box`` (less a pixel above and below) as ``item``."""
+        """Lay the rounded tint ``color`` over ``box`` (less a pixel above and below) as ``item``.
+
+        Its width follows the list's, so it is not drawn for each width: Tk builds it from a short pill
+        drawn once, its two rounded ends and, stretched between them, a column from its middle."""
         left, top, right, bottom = box
-        width, height, corner = max(1, round(right - left)), max(1, round(bottom - top) - 2), self.corner
-        image = self.theme.image(f"ground:{color}:{corner}", width, height,
-                                 lambda: [(color, icons.rect(0, 0, width, height, corner))])
+        reach = math.ceil(self.corner)
+        width, height = max(2 * reach + 1, round(right - left)), max(1, round(bottom - top) - 2)
+        made = self.grounds.get(color)
+        if made is None or made[0] != (width, height):
+            pill = self.theme.image(f"ground:{color}:{self.corner}", 2 * reach + 1, height,
+                                    lambda: [(color, icons.rect(0, 0, 2 * reach + 1, height, self.corner))])
+            image = tk.PhotoImage(master=self, width=width, height=height)
+            for source, target in (((reach, 0, reach + 1, height), (reach, 0, width - reach, height)),
+                                   ((0, 0, reach, height), (0, 0)), ((reach + 1, 0, 2 * reach + 1, height), (width - reach, 0))):
+                image.tk.call(image, "copy", pill, "-from", *source, "-to", *target, "-compositingrule", "set")
+            made = ((width, height), image)
         self.coords(item, round(left), round(top) + 1)
-        self.itemconfigure(item, image=image, state="normal")
+        self.itemconfigure(item, image=made[1], state="normal")
+        self.grounds[color] = made
 
     def show(self, library: Library, bad: frozenset[Path]) -> None:
         self.library, self.bad = library, bad

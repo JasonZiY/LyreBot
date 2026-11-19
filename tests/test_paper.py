@@ -1,7 +1,9 @@
 from pathlib import Path
 import struct
 import tempfile
+import time
 import tkinter as tk
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 import zlib
@@ -17,44 +19,62 @@ except ImportError:
 
 
 def pixels(data: bytes) -> tuple[int, int, bytes]:
-    """Width, height and the unfiltered RGB rows of a page's PNG."""
+    """Width, height and the unfiltered pixels of one of the page's PNGs."""
     width, height = struct.unpack(">II", data[16:24])
+    depth = {2: 3, 6: 4}[data[25]]
     start = data.index(b"IDAT") + 4
     length = struct.unpack(">I", data[start - 8:start - 4])[0]
     raw = zlib.decompress(data[start:start + length])
-    stride = 3 * width + 1
+    stride = depth * width + 1
     assert all(raw[row * stride] == 0 for row in range(height))  # no filters: rows as they are
     return width, height, b"".join(raw[row * stride + 1:(row + 1) * stride] for row in range(height))
 
 
 class Drawing(unittest.TestCase):
     def test_lamplight_at_the_head_evening_at_the_foot(self):
-        width, height, rgb = pixels(paper.draw(60, 200, 40))
-        self.assertEqual((width, height), (60, 200))
-        at = lambda x, y: rgb[(y * width + x) * 3:(y * width + x) * 3 + 3]  # noqa: E731
-        for x, y in ((0, 0), (59, 10), (30, 39)):  # the head: one colour, give or take the grain
-            self.assertTrue(all(abs(a - b) <= 1 for a, b in zip(at(x, y), paper.HEAD)), (x, y, at(x, y)))
-        middle, foot_left, foot_right = at(5, 110), at(2, 198), at(57, 198)
+        width, height, rgb = pixels(paper.wash(80, 320, 40))
+        step = paper.STEP
+        self.assertEqual((width, height), (-(-(80 + paper.MARGIN) // step), -(-(320 + paper.MARGIN) // step)))
+        at = lambda x, y: tuple(rgb[((y // step) * width + x // step) * 3:((y // step) * width + x // step) * 3 + 3])  # noqa: E731
+        lifted = tuple(round(value + paper.LIFT) for value in paper.HEAD)  # the grain takes that back
+        for x, y in ((0, 0), (79, 10), (40, 31)):
+            self.assertEqual(at(x, y), lifted, (x, y))  # the head: one colour
+        middle, foot_left, foot_right = at(4, 170), at(4, 316), at(76, 316)
         self.assertGreater(middle[2], paper.HEAD[2] + 20)  # out of the lamplight: paper again
         self.assertLess(foot_left[1], middle[1])  # evening: rose
         self.assertGreater(foot_right[2], foot_left[2])  # and mauve towards the right
+        self.assertEqual(at(4, 400)[1], foot_left[1])  # past the foot it runs on as the evening
 
-    def test_the_same_size_draws_the_same_page(self):
-        self.assertEqual(paper.draw(40, 60, 10), paper.draw(40, 60, 10))
+    def test_the_clouds_keep_still_while_the_window_is_resized(self):
+        narrow, wide = pixels(paper.wash(80, 320, 40)), pixels(paper.wash(200, 320, 40))
+        for row in range(10, 22):  # clouded, and above the evening's mauve, which follows the width
+            start = 3 * row
+            self.assertEqual(narrow[2][start * narrow[0]:(start + 30)], wide[2][start * wide[0]:(start + 30)])
+
+    def test_the_grain_darkens_by_a_level_or_two_with_a_few_fibres(self):
+        size, _, rgba = pixels(paper.grain(64))
+        alpha = rgba[3::4]
+        self.assertEqual(set(rgba[0::4]) | set(rgba[1::4]) | set(rgba[2::4]), {0})  # black, more or less of it
+        self.assertEqual(min(alpha), 1)  # nowhere wholly clear
+        grain = [a for a in alpha if a <= 1 + paper.GRAIN]
+        self.assertAlmostEqual(sum(grain) / len(grain), paper.LIFT, delta=0.05)
+        self.assertTrue(any(a > 1 + paper.GRAIN for a in alpha))  # the fibres
+
+    def test_tk_takes_the_grain_at_once(self):
+        root = hidden_window(self)
+        start = time.perf_counter()
+        paper._photo(root, paper.grain())
+        self.assertLess(time.perf_counter() - start, 1.0)
+
+    def test_the_grain_is_drawn_once_and_kept(self):
+        cache = Path(tempfile.mkdtemp())
+        with mock.patch("lyrebot.theme.CACHE", cache), mock.patch.object(paper, "grain", return_value=b"tile") as drawn:
+            self.assertEqual(paper.grain_tile(), b"tile")
+            self.assertEqual(paper.grain_tile(), b"tile")
+        self.assertEqual(drawn.call_count, 1)
 
     def test_a_solid_piece_takes_the_heads_colour(self):
         self.assertEqual(paper.colour(100, 30, 400, 800, 120), "#%02x%02x%02x" % paper.HEAD)
-
-    def test_pages_are_kept_on_disk_but_only_a_few(self):
-        cache = Path(tempfile.mkdtemp())
-        with mock.patch("lyrebot.theme.CACHE", cache), mock.patch.object(paper, "KEEP", 2), \
-                mock.patch.object(paper, "draw", wraps=paper.draw) as drawn:
-            first = paper.picture(20, 30, 5)
-            self.assertEqual(paper.picture(20, 30, 5), first)
-            self.assertEqual(drawn.call_count, 1)  # the second time it was read back
-            for height in (31, 32, 33):
-                paper.picture(20, height, 5)
-        self.assertEqual(len(list(cache.glob("page-*.png"))), 2)
 
     def test_a_tint_lets_what_is_under_it_show(self):
         red, green, blue, alpha = icons.rgba(2, 2, [("#D9775729", icons.rect(0, 0, 2, 2))])[:4]
@@ -87,9 +107,40 @@ class OnThePage(unittest.TestCase):
         page.refresh()
         for piece, (x, y) in ((sheet, (7, 5)), (words, (10, 7))):
             self.assertEqual(page.offset(piece), (x, y))
-            self.assertEqual(piece.coords(piece.find_withtag("paper")[0]), [-x, -y])
+            [laid] = piece.find_withtag("paper")
+            self.assertEqual(piece.coords(laid), [-x, -y])  # the window's corner, off this piece's
+            self.assertEqual(piece.itemcget(laid, "image"), str(page.image))
         words.configure(text="风息")
         self.assertEqual(len(words.find_withtag("paper")), 1)  # redrawing keeps the paper
+
+    def test_the_paper_is_opaque_so_a_repaint_only_copies_it(self):
+        page = self.page()
+        image = page.image
+        corners = [(0, 0), (image.width() - 1, image.height() - 1), (5, 50)]
+        self.assertTrue(all(not int(image.tk.call(image, "transparency", "get", x, y)) for x, y in corners))
+        head = [image.get(x, 2) for x in range(0, 40)]
+        mean = tuple(sum(pixel[k] for pixel in head) / len(head) for k in range(3))
+        self.assertTrue(all(abs(m - h) < 0.6 for m, h in zip(mean, paper.HEAD)), mean)  # the grain evens out
+
+    def test_a_window_dragged_larger_keeps_paper_under_it(self):
+        page = self.page()
+        page.lay(100, 100)
+        drawn = []
+        washing = paper.wash
+        with mock.patch.object(paper, "wash", side_effect=lambda *a: drawn.append(a) or washing(*a)):
+            for step in range(1, 31):
+                size = (100 + 12 * step, 100 + 15 * step)
+                page.moved(SimpleNamespace(widget=self.root, width=size[0], height=size[1]))
+                deadline = time.monotonic() + 0.5
+                while page.soon is not None and time.monotonic() < deadline:
+                    self.root.update()
+                self.assertGreaterEqual(page.image.width(), size[0])  # paper reaches the right
+                self.assertGreaterEqual(page.image.height(), size[1])  # and the foot, all the way
+            self.assertLess(len(drawn), 10)  # washed now and then, not on every change
+            deadline = time.monotonic() + 1.0
+            while page.later is not None and time.monotonic() < deadline:
+                self.root.update()
+        self.assertEqual(page.size, (460, 550))  # and once more for the size it came to
 
     def test_words_answer_and_measure_as_a_label_would(self):
         font = self.theme.fonts.body
