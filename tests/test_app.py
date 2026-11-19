@@ -20,6 +20,40 @@ SONGS = [Path("a.txt"), Path("b.txt"), Path("c.txt")]
 _TK = None  # the one Tk interpreter the window tests share
 
 
+def hidden_window(test):
+    """A hidden window for a test, closed after it with its timers cancelled.
+
+    Every test's window sits on one Tk interpreter, made once: creating
+    and destroying a Tk root per test now and then leaves Tcl unable to
+    start the next one ("invalid command name tcl_findLibrary"), and the
+    test would quietly be skipped.  Timers are shared by the interpreter,
+    so one left behind would fire during a later test's update() and
+    complain.  The window's images are freed on the spot: left to the
+    garbage collector, they can be freed in a later test's worker thread,
+    where each one waits a second for a main loop that isn't running (a
+    20 s join then times out).
+    """
+    import gc
+    import tkinter as tk
+    global _TK
+    if _TK is None:
+        try:
+            _TK = tk.Tk()
+        except tk.TclError as error:
+            test.skipTest(f"no display: {error}")
+        _TK.withdraw()
+    root = tk.Toplevel(_TK)
+
+    def close():
+        for job in root.tk.splitlist(root.tk.call("after", "info")):
+            root.after_cancel(job)
+        root.destroy()
+        gc.collect()
+    test.addCleanup(close)
+    root.withdraw()
+    return root
+
+
 class NextSong(unittest.TestCase):
     def test_in_order_wraps_around(self):
         self.assertEqual(next_song(SONGS, SONGS[1], IN_ORDER), SONGS[2])
@@ -58,37 +92,7 @@ class Folders(unittest.TestCase):
         self.scores.mkdir()
 
     def window(self):
-        """A hidden window for the app, closed after the test with its timers cancelled.
-
-        Every test's window sits on one Tk interpreter, made once: creating
-        and destroying a Tk root per test now and then leaves Tcl unable to
-        start the next one ("invalid command name tcl_findLibrary"), and the
-        test would quietly be skipped.  Timers are shared by the interpreter,
-        so one left behind would fire during a later test's update() and
-        complain.  The window's images are freed on the spot: left to the
-        garbage collector, they can be freed in a later test's worker thread,
-        where each one waits a second for a main loop that isn't running (a
-        20 s join then times out).
-        """
-        import gc
-        import tkinter as tk
-        global _TK
-        if _TK is None:
-            try:
-                _TK = tk.Tk()
-            except tk.TclError as error:
-                self.skipTest(f"no display: {error}")
-            _TK.withdraw()
-        root = tk.Toplevel(_TK)
-
-        def close():
-            for job in root.tk.splitlist(root.tk.call("after", "info")):
-                root.after_cancel(job)
-            root.destroy()
-            gc.collect()
-        self.addCleanup(close)
-        root.withdraw()
-        return root
+        return hidden_window(self)
 
     def add_midi(self, name, age=10.0):
         path = self.midi / name
@@ -197,14 +201,14 @@ class Folders(unittest.TestCase):
         from lyrebot.app import App
         root = self.window()
         app = App(root, self.scores, self.midi, tool_dirs=[self.root / "no tools here"])
-        with mock.patch("lyrebot.app.messagebox.showinfo") as told:
+        with mock.patch("lyrebot.app.dialogs.info") as told:
             app.record()
         told.assert_called_once()
         self.assertIsNone(app.worker)
         self.add_midi("旧歌-录音.mid")
         answers = ["旧歌", "a:b", None]
         with mock.patch("lyrebot.app.find_tools", return_value=fake_tools(self.root)), \
-                mock.patch("lyrebot.app.simpledialog.askstring", side_effect=answers) as asked:
+                mock.patch("lyrebot.app.dialogs.ask_text", side_effect=answers) as asked:
             app.record()  # two names refused, then cancelled
         self.assertEqual(asked.call_count, 3)
         self.assertIn("已经有叫「旧歌-录音」", asked.call_args_list[1].args[1])
@@ -227,7 +231,7 @@ class Folders(unittest.TestCase):
             return presses
 
         with mock.patch("lyrebot.app.listen", side_effect=listen), \
-                mock.patch("lyrebot.app.simpledialog.askstring", return_value="小调"):
+                mock.patch("lyrebot.app.dialogs.ask_text", return_value="小调"):
             app.listen()
             self.assertTrue(app.listening)
             self.assertFalse(app.button.enabled)
@@ -243,7 +247,7 @@ class Folders(unittest.TestCase):
         self.assertTrue(app.keys_button.enabled)
 
         with mock.patch("lyrebot.app.listen", return_value=[]), \
-                mock.patch("lyrebot.app.simpledialog.askstring", return_value=""):
+                mock.patch("lyrebot.app.dialogs.ask_text", return_value=""):
             app.quiet_until = 0
             app.listen()
             app.worker.join(20)
@@ -608,7 +612,7 @@ class Folders(unittest.TestCase):
         self.assertIsNone(self.cell(app, "song", "未分").count)
         shown = {app.browser.itemcget(item, "text") for item in app.browser.find_withtag("content")
                  if app.browser.type(item) == "text"}
-        self.assertTrue({"▾ OST", "3", "▸ 蒙德", "2"} <= shown)
+        self.assertTrue({"OST", "3", "蒙德", "2"} <= shown)
 
     def test_searching_goes_through_the_matches_in_list_order(self):
         songs = [Path("寂夜月如锋-录音.txt"), Path("静夜的轻语.txt"), Path("Lemon.txt"), Path("夜阑安暇时.txt")]
@@ -708,7 +712,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.selected(), moved)
         self.assertIn(moved, app.browser.visible_songs())  # the region it went to is open
         self.assertEqual(app.status_label.cget("text"), "已移到「璃月」")
-        with mock.patch("lyrebot.app.messagebox.showerror") as told:
+        with mock.patch("lyrebot.app.dialogs.error") as told:
             self.assertIsNone(app.move(moved, self.scores / "歌曲", "歌曲"))  # one of that name is there
         self.assertIn("已经有", told.call_args.args[1])
         self.assertTrue(moved.exists())
@@ -724,15 +728,15 @@ class Folders(unittest.TestCase):
         menu = app.speed_choice.menu
         last = menu.index("end")
         self.assertEqual(menu.entrycget(last, "label"), "自定义…")
-        with mock.patch("lyrebot.app.simpledialog.askstring", side_effect=["快一点", "400", "125%"]) as asked:
+        with mock.patch("lyrebot.app.dialogs.ask_text", side_effect=["快一点", "400", "125%"]) as asked:
             menu.invoke(last)
         self.assertEqual(asked.call_count, 3)
         self.assertIn("25 到 300", asked.call_args.args[1])
         self.assertEqual(app.speed.get(), "125%")
         self.assertEqual(app.speed_factor(), 1.25)
-        self.assertTrue(app.speed_choice.cget("text").startswith("125%"))
+        self.assertTrue(app.speed_choice.text.startswith("125%"))
         self.assertEqual(app.time_label.cget("text"), clock(4 / 1.25))
-        with mock.patch("lyrebot.app.simpledialog.askstring", return_value=None):
+        with mock.patch("lyrebot.app.dialogs.ask_text", return_value=None):
             menu.invoke(last)  # cancelling keeps the speed
         self.assertEqual(app.speed.get(), "125%")
         menu.invoke(0)  # and the usual speeds are still there
@@ -786,10 +790,10 @@ class Folders(unittest.TestCase):
         from unittest import mock
         arranged = target.read_text(encoding="utf-8")
         target.write_text(arranged.replace("speed=", "# 手改过\nspeed=", 1), encoding="utf-8")
-        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=False):
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=False):
             app.rearrange()  # declined: the edit stays
         self.assertIn("手改过", target.read_text(encoding="utf-8"))
-        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=True):
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True):
             app.rearrange()
         self.assertEqual(target.read_text(encoding="utf-8"), arranged)
         self.assertIn("已重新编配", app.status_label.cget("text"))
@@ -838,7 +842,7 @@ class Folders(unittest.TestCase):
         def recycle(path):
             gone.append(path.name)
             path.unlink()
-        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=False) as asked, \
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=False) as asked, \
                 mock.patch("lyrebot.app.to_recycle_bin", side_effect=recycle):
             app.delete()  # declined: nothing goes
             self.assertEqual(gone, [])
@@ -861,8 +865,8 @@ class Folders(unittest.TestCase):
         self.assertFalse(recorded.exists())  # nothing left to make it again
 
         app.select(hand)
-        with mock.patch("lyrebot.app.messagebox.askyesno", return_value=True), \
-                mock.patch("lyrebot.app.messagebox.showerror") as told, \
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True), \
+                mock.patch("lyrebot.app.dialogs.error") as told, \
                 mock.patch("lyrebot.app.to_recycle_bin", side_effect=OSError("文件正被占用")):
             app.delete()
         self.assertIn("文件正被占用", told.call_args.args[1])

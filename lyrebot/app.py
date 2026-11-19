@@ -15,10 +15,10 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox as system_dialogs
 from typing import Callable
 
-from . import icons
+from . import dialogs, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .collate import pinyin_key
 from .jianpu import export as export_jianpu
@@ -29,8 +29,11 @@ from .notate import notate
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
+from .theme import (FAINT, GOLD, GOLD_SOFT, HAIR, HIGHLIGHT, HOVER, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH,
+                    WARN, WHITE, Theme, dress)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
+from .widgets import Choice, IconButton, Ornament, PillButton, PopupMenu, ThinScrollbar, WritingLine, rounded, rounded_points
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -57,22 +60,6 @@ READY = "请切换到游戏窗口，按 F7 立刻开始"  # under the bar once a
 GO_ON = "点 ▶ 或按 F7 从该小节继续"  # once it was stopped part way: the bar counter shows which bar
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
-FAMILY = "Microsoft YaHei UI"
-
-# Claude's palette: warm paper, ink, and one orange accent.
-PAPER = "#FAF9F5"
-INK = "#3D3929"
-MUTED = "#8C8578"
-FAINT = "#C9C2B6"
-LINE = "#E8E2D7"
-TRACK = "#ECE6DC"
-ORANGE = "#D97757"
-ORANGE_DEEP = "#C15F3C"
-PEACH = "#F0D3C4"
-HIGHLIGHT = "#F5E4DA"
-HOVER = "#EFE9DF"
-WARN = "#B5502F"
-
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
 CUSTOM_SPEED = "自定义…"
 SLOWEST_SPEED, FASTEST_SPEED = 25.0, 300.0  # percent
@@ -81,9 +68,8 @@ ON_ITS_OWN = (SINGLE, REPEAT)  # the modes a song in no playlist can play in
 UNFILED = "未归类"
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
-LIST_FONT, SMALL_FONT, TITLE_FONT = 9, 8, 10  # points
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
-WINDOW_WIDTH = 330  # the window's width when it opens, and the narrowest it goes, likewise
+WINDOW_WIDTH = 350  # the window's width when it opens, and the narrowest it goes: the widest controls fit
 
 
 def parse_speed(text: str) -> float | None:
@@ -420,102 +406,6 @@ def song_files(score: Path, midi_dir: Path) -> list[Path]:
     return [score, *([source] if source else []), *audio]
 
 
-class IconButton(tk.Label):
-    """A flat image button: fires on release inside it, and does nothing while disabled."""
-
-    def __init__(self, parent: tk.Widget, images: dict[str, tk.PhotoImage], command: Callable[[], None]):
-        super().__init__(parent, image=images["normal"], bg=PAPER, borderwidth=0, cursor="hand2")
-        self.images, self.command = images, command
-        self.enabled, self.inside, self.pressed = True, False, False
-        self.bind("<Enter>", lambda _: self.hover(True))
-        self.bind("<Leave>", lambda _: self.hover(False))
-        self.bind("<ButtonPress-1>", self.press)
-        self.bind("<ButtonRelease-1>", self.release)
-
-    def set(self, images: dict[str, tk.PhotoImage] | None = None, enabled: bool | None = None) -> None:
-        if images is not None:
-            self.images = images
-        if enabled is not None:
-            self.enabled = enabled
-            self.pressed = False
-        self.configure(cursor="hand2" if self.enabled else "arrow")
-        self.redraw()
-
-    def redraw(self) -> None:
-        if not self.enabled:
-            self.configure(image=self.images["disabled"])
-        else:
-            self.configure(image=self.images["hover" if self.inside else "normal"])
-
-    def hover(self, inside: bool) -> None:
-        self.inside = inside
-        self.redraw()
-
-    def press(self, _: tk.Event) -> None:
-        self.pressed = self.enabled
-
-    def release(self, event: tk.Event) -> None:
-        fire = self.pressed and self.enabled and 0 <= event.x < self.winfo_width() and 0 <= event.y < self.winfo_height()
-        self.pressed = False
-        if fire:
-            self.command()
-
-
-class TextButton(tk.Label):
-    """Flat text that does something when clicked, and nothing while disabled."""
-
-    def __init__(self, parent: tk.Widget, text: str, command: Callable[[], None], font: tuple):
-        super().__init__(parent, text=text, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=8, pady=2)
-        self.command, self.enabled = command, True
-        self.bind("<Enter>", lambda _: self.enabled and self.configure(bg=HOVER))
-        self.bind("<Leave>", lambda _: self.configure(bg=PAPER))
-        self.bind("<Button-1>", lambda _: self.enabled and self.command())
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-        self.configure(bg=PAPER, fg=INK if enabled else FAINT, cursor="hand2" if enabled else "arrow")
-
-
-class Choice(tk.Label):
-    """Flat text like "100% ▾" that opens a small menu of options."""
-
-    def __init__(self, parent: tk.Widget, variable: tk.StringVar, options: tuple[str, ...],
-                 on_change: Callable[[], None], font: tuple,
-                 actions: tuple[tuple[str, Callable[[], None]], ...] = ()):
-        super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=6, pady=2)
-        self.variable, self.options, self.enabled = variable, options, True
-        self.menu = tk.Menu(self, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
-                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=font)
-        for option in options:
-            self.menu.add_radiobutton(label=option, value=option, variable=variable,
-                                      selectcolor=ORANGE, command=on_change)
-        for label, command in actions:
-            self.menu.add_command(label=label, command=command)
-        variable.trace_add("write", lambda *_: self.redraw())
-        self.bind("<Enter>", lambda _: self.enabled and self.configure(bg=HOVER))
-        self.bind("<Leave>", lambda _: self.configure(bg=PAPER))
-        self.bind("<Button-1>", self.open)
-        self.redraw()
-
-    def redraw(self) -> None:
-        self.configure(text=f"{self.variable.get()}  ▾", fg=INK if self.enabled else FAINT,
-                       cursor="hand2" if self.enabled else "arrow")
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-        self.configure(bg=PAPER)
-        self.redraw()
-
-    def allow(self, allowed: tuple[str, ...] | None) -> None:
-        """Grey out the options not in ``allowed``; None allows them all."""
-        for index, option in enumerate(self.options):
-            self.menu.entryconfigure(index, state="normal" if allowed is None or option in allowed else "disabled")
-
-    def open(self, _: tk.Event) -> None:
-        if self.enabled:
-            self.menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height())
-
-
 @dataclass(frozen=True)
 class Cell:
     """One clickable place in the song list."""
@@ -525,6 +415,7 @@ class Cell:
     text: str
     path: Path | None = None
     count: int | None = None  # of the songs in a shelf or region, shown after its name
+    is_open: bool = False  # a shelf or region showing what is in it
 
 
 class SongBrowser(tk.Canvas):
@@ -534,28 +425,41 @@ class SongBrowser(tk.Canvas):
     regions (or 歌曲's songs) on the lines under its name, a region's songs
     under its own.  Songs run down two columns.  It starts with OST open,
     its regions closed, and 歌曲 closed.
+
+    A shelf's title is set in the serif with a hairline running on to the
+    edge; chevrons are old gold; the chosen song sits on a warm rounded
+    ground with an orange edge, and the song being played shows three
+    small orange bars keeping time.
     """
 
-    def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
+    def __init__(self, parent: tk.Widget, theme: Theme, locked: Callable[[], object],
                  on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
-        px = lambda n: max(1, round(n * scale))  # noqa: E731
+        self.theme = theme
+        px = theme.px
         self.row, self.pad = px(ROW_HEIGHT), px(6)
         self.margin = px(8)  # kept clear on either side of the list
-        self.indent = 0  # how far songs sit in from regions: the width of "▸ ", measured when laid out
+        self.mark = px(12)  # the chevrons
+        self.indent = self.mark + px(4)  # how far songs sit in from regions: past the chevron, to the name
         self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
+        self.shelf_gap = px(6)  # breathing room above a shelf with something over it
+        self.corner = px(5)
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
         self.locked, self.on_select, self.on_play, self.on_delete = locked, on_select, on_play, on_delete
         self.library: Library | None = None
         self.bad: frozenset[Path] = frozenset()
         self.chosen: Path | None = None
+        self.playing: Path | None = None
         self.closed_shelves: set[str] = {SONGS}  # it opens with OST's regions in sight, each closed
         self.open_regions: set[str] = set()
         self.cells: list[Cell] = []
         self.total = 0
-        self.fitted: dict[tuple[str, int, bool], str] = {}
-        self.hover_box = self.create_rectangle(0, 0, 0, 0, fill=HOVER, width=0, state="hidden")
-        self.chosen_box = self.create_rectangle(0, 0, 0, 0, fill=HIGHLIGHT, width=0, state="hidden")
+        self.fitted: dict[tuple[str, int, tuple], str] = {}
+        self.beat_job: str | None = None
+        self.beat_floor = 0.0
+        self.hover_box = rounded(self, 0, 0, 1, 1, self.corner, fill=HOVER, outline="", state="hidden")
+        self.chosen_box = rounded(self, 0, 0, 1, 1, self.corner, fill=HIGHLIGHT, outline="", state="hidden")
+        self.chosen_edge = self.create_rectangle(0, 0, 0, 0, fill=ORANGE, width=0, state="hidden")
         self.bind("<Configure>", lambda _: self.lay_out())
         self.bind("<Button-1>", self.click)
         self.bind("<Double-Button-1>", self.double_click)
@@ -581,17 +485,13 @@ class SongBrowser(tk.Canvas):
             return
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
         left, right = self.margin, width - self.margin
-        # Songs start where a region's name does, after its ▸.
-        self.indent = int(self.tk.call("font", "measure", (FAMILY, LIST_FONT), "▸ "))
         songs_left = left + self.indent
         columns = self.column_edges(songs_left, right)
         row = self.row
         cells: list[Cell] = []
-        rules: list[int] = []
 
         def song(path: Path, left: float, top: int, right: float) -> None:
-            mark = "⚠ " if path in self.bad else ""
-            cells.append(Cell("song", "", (left, top, right, top + row), mark + path.stem, path))
+            cells.append(Cell("song", "", (left, top, right, top + row), path.stem, path))
 
         def run_down(paths: tuple[Path, ...], edges: list[float], top: int) -> int:
             columns = in_columns(paths, SONG_COLUMNS)
@@ -600,63 +500,97 @@ class SongBrowser(tk.Canvas):
                     song(path, edges[index], top + line * row, edges[index + 1])
             return max(map(len, columns), default=0) * row
 
-        def opener(is_open: bool, name: str) -> str:
-            return f"{'▾' if is_open else '▸'} {name}"
-
         y = 0
         for path in library.unfiled:
             song(path, songs_left, y, right)
             y += row
         if library.unfiled:
-            rules.append(y)
+            y += self.shelf_gap
         is_open = OST not in self.closed_shelves
-        cells.append(Cell("shelf", OST, (left, y, right, y + row), opener(is_open, OST), count=len(library.ost)))
+        cells.append(Cell("shelf", OST, (left, y, right, y + row), OST, count=len(library.ost), is_open=is_open))
         y += row
         if is_open:
             for name, paths in library.regions:
                 expanded = name in self.open_regions
-                cells.append(Cell("region", name, (left, y, right, y + row), opener(expanded, name), count=len(paths)))
+                cells.append(Cell("region", name, (left, y, right, y + row), name, count=len(paths), is_open=expanded))
                 y += row
                 if expanded:
                     y += run_down(paths, columns, y)
-        rules.append(y)
+        y += self.shelf_gap
         is_open = SONGS not in self.closed_shelves
-        cells.append(Cell("shelf", SONGS, (left, y, right, y + row), opener(is_open, SONGS),
-                          count=len(library.songs)))
+        cells.append(Cell("shelf", SONGS, (left, y, right, y + row), SONGS, count=len(library.songs),
+                          is_open=is_open))
         y += row
         if is_open:
             y += run_down(library.songs, columns, y)
 
         self.cells, self.total = cells, y
         self.delete("content")
-        for rule in rules:
-            self.create_line(left, rule, right, rule, fill=LINE, tags="content")
         for cell in cells:
-            left, top, right, bottom = cell.box
-            bold = cell.kind == "shelf"
-            color = WARN if cell.path in self.bad else INK
-            font = (FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT)
-            text = self.fit(cell.text, self.room(cell), bold)
-            middle = (top + bottom) / 2
-            self.create_text(left + self.pad, middle, anchor="w", fill=color, tags="content", font=font, text=text)
-            if cell.count is not None:
-                after = left + self.pad + int(self.tk.call("font", "measure", font, text)) + self.pad
-                self.create_text(after, middle, anchor="w", fill=MUTED, tags="content",
-                                 font=(FAMILY, LIST_FONT), text=str(cell.count))
-        self.configure(scrollregion=(0, 0, width, max(y, 1)))
+            self.draw(cell)
+        bottom = y
+        if not library.everything:  # nothing to play yet: a lyre drawn in gold, waiting
+            size = self.theme.px(72)
+            art = self.theme.icon("lyre", size, GOLD_SOFT, icons.lyre)
+            self.create_image(width / 2, y + self.theme.px(28) + size / 2, image=art, tags="content")
+            bottom = y + self.theme.px(40) + size
+        self.configure(scrollregion=(0, 0, width, max(bottom, 1)))
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
+        if self.find_withtag("beat") and not self.beat_job:
+            self.beat()
 
-    def room(self, cell: Cell) -> int:
-        """How wide a cell's text may be."""
-        return int(cell.box[2] - cell.box[0]) - self.pad - self.tail
+    def draw(self, cell: Cell) -> None:
+        """Draw one place in the list: a song, or a shelf or region with its chevron and count."""
+        theme, fonts = self.theme, self.theme.fonts
+        left, top, right, bottom = cell.box
+        middle = (top + bottom) / 2
+        x = left + self.pad
+        if cell.kind == "song":
+            ink = INK
+            if cell.path in self.bad:
+                size = theme.px(11)
+                self.create_image(x + size / 2, middle, image=self.warning(size), tags="content")
+                x += size + theme.px(4)
+                ink = WARN
+            if cell.path == self.playing:
+                bar, gap = theme.px(2), theme.px(1.5)
+                self.beat_floor = middle + theme.px(5)
+                for index in range(3):
+                    x0 = x + index * (bar + gap)
+                    self.create_rectangle(x0, middle - theme.px(2), x0 + bar, self.beat_floor, fill=ORANGE, width=0,
+                                          tags=("content", "beat"))
+                x += 3 * bar + 2 * gap + theme.px(5)
+            text = self.fit(cell.text, int(right - x) - self.tail, fonts.body)
+            self.create_text(x, middle, anchor="w", text=text, fill=ink, font=fonts.body, tags="content")
+            return
+        empty = cell.kind == "region" and not cell.count
+        chevron = theme.icon("chevron-down" if cell.is_open else "chevron", self.mark, FAINT if empty else GOLD,
+                             lambda size: icons.chevron(size, down=cell.is_open))
+        self.create_image(x + self.mark / 2, middle, image=chevron, tags="content")
+        x = left + self.pad + self.indent
+        font = fonts.shelf if cell.kind == "shelf" else fonts.body
+        text = self.fit(cell.text, int(right - x) - self.tail, font)
+        self.create_text(x, middle, anchor="w", text=text, fill=MUTED if empty else INK, font=font, tags="content")
+        x += theme.measure(font, text) + theme.px(6)
+        count = str(cell.count)
+        self.create_text(x, middle, anchor="w", text=count, fill=FAINT if empty else MUTED, font=fonts.figures,
+                         tags="content")
+        if cell.kind == "shelf":
+            start, end = x + theme.measure(fonts.figures, count) + theme.px(8), right - self.pad
+            if start < end:
+                self.create_line(start, middle, end, middle, fill=HAIR, tags="content")
 
-    def fit(self, text: str, width: int, bold: bool) -> str:
+    def warning(self, size: int) -> tk.PhotoImage:
+        shape, marks = icons.warning(size)
+        return self.theme.image(f"warning-badge:{WARN}", size, size,
+                                lambda: [(WARN, shape), *[("#FFFFFF", mark) for mark in marks]])
+
+    def fit(self, text: str, width: int, font: tuple) -> str:
         """``text``, cut short with … if it is wider than ``width``."""
-        key = (text, width, bold)
+        key = (text, width, font)
         if key not in self.fitted:
-            font = (FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT)
-            measure = lambda piece: int(self.tk.call("font", "measure", font, piece))  # noqa: E731
+            measure = lambda piece: self.theme.measure(font, piece)  # noqa: E731
             short = text
             if measure(text) > width:
                 low, high = 0, len(text)
@@ -670,6 +604,26 @@ class SongBrowser(tk.Canvas):
             self.fitted[key] = short
         return self.fitted[key]
 
+    def set_playing(self, path: Path | None) -> None:
+        """Mark the song being played (None when nothing plays)."""
+        if path != self.playing:
+            self.playing = path
+            self.lay_out()
+
+    def beat(self) -> None:
+        """Keep the playing song's three bars moving, each at its own pace, while it plays."""
+        self.beat_job = None
+        bars = self.find_withtag("beat")
+        if not bars or self.playing is None:
+            return
+        now, tall = time.monotonic(), self.theme.px(10)
+        for index, bar in enumerate(bars):
+            x0, _, x1, _ = self.coords(bar)
+            height = tall * (0.3 + 0.7 * abs(math.sin(now * (2.6 + 0.9 * index) + 1.7 * index)))
+            self.coords(bar, x0, self.beat_floor - height, x1, self.beat_floor)
+        # Timed on the window, as all of LyreBot's timers are, so closing it cancels them together.
+        self.beat_job = self.winfo_toplevel().after(90, self.beat)
+
     def cell_of(self, path: Path) -> Cell | None:
         return next((cell for cell in self.cells if cell.path == path), None)
 
@@ -677,9 +631,15 @@ class SongBrowser(tk.Canvas):
         cell = self.cell_of(self.chosen) if self.chosen else None
         if cell is None:
             self.itemconfigure(self.chosen_box, state="hidden")
-        else:
-            self.coords(self.chosen_box, *cell.box)
-            self.itemconfigure(self.chosen_box, state="normal")
+            self.itemconfigure(self.chosen_edge, state="hidden")
+            return
+        left, top, right, bottom = cell.box
+        self.coords(self.chosen_box, *rounded_points(left, top + 1, right, bottom - 1, self.corner))
+        edge = self.theme.px(2)
+        self.coords(self.chosen_edge, left + edge / 2, top + self.theme.px(6), left + edge / 2 + edge,
+                    bottom - self.theme.px(6))
+        self.itemconfigure(self.chosen_box, state="normal")
+        self.itemconfigure(self.chosen_edge, state="normal")
 
     def visible_songs(self) -> list[Path]:
         return [cell.path for cell in self.cells if cell.path is not None]
@@ -742,7 +702,8 @@ class SongBrowser(tk.Canvas):
         if cell is None:
             self.itemconfigure(self.hover_box, state="hidden")
         else:
-            self.coords(self.hover_box, *cell.box)
+            left, top, right, bottom = cell.box
+            self.coords(self.hover_box, *rounded_points(left, top + 1, right, bottom - 1, self.corner))
             self.itemconfigure(self.hover_box, state="normal")
 
     def step(self, by: int) -> str:
@@ -796,108 +757,108 @@ class App:
         self.quiet_until = 0.0
         self.base_title = "LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）"
 
-        scale = self.scale = root.winfo_fpixels("1i") / 96
-        px = lambda n: max(1, round(n * scale))  # noqa: E731
+        self.theme = theme = Theme(root)
+        self.scale = theme.scale
+        px, fonts = theme.px, theme.fonts
         root.title(self.base_title)
         root.geometry(f"{px(WINDOW_WIDTH)}x{px(640)}")  # opens as narrow as it may be
         root.minsize(px(WINDOW_WIDTH), px(360))
         root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
-        self.build_images(px(30), px(25))
-
-        style = ttk.Style(root)
-        style.theme_use("clam")
-        style.configure("Thin.Vertical.TScrollbar", background=LINE, troughcolor=PAPER, bordercolor=PAPER,
-                        lightcolor=LINE, darkcolor=LINE, gripcount=0, arrowsize=px(6))
-        style.map("Thin.Vertical.TScrollbar", background=[("active", FAINT)])
-        style.layout("Thin.Vertical.TScrollbar", [("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [
-            ("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})])
+        self.bar_hover = False
+        self.breath = False
+        self.breath_job: str | None = None
+        self.build_images()
 
         # ---- search ----
         finder = tk.Frame(root, bg=PAPER)
-        self.search_entry = tk.Entry(finder, font=(FAMILY, LIST_FONT), relief="flat", bg="#FFFFFF", fg=INK,
-                                     insertbackground=INK, highlightthickness=1, highlightbackground=LINE,
-                                     highlightcolor=ORANGE)
+        crest = px(20)
+        tk.Label(finder, image=theme.icon("lyre", crest, GOLD, icons.lyre), bg=PAPER).pack(side="left",
+                                                                                         padx=(0, px(8)))
+        self.search_button = PillButton(finder, theme, "搜索", self.search)
+        self.search_button.pack(side="right", padx=(px(10), 0))
+        self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier)
+        self.search_field.pack(side="left", fill="x", expand=True)
+        self.search_entry = self.search_field.entry
         self.search_entry.bind("<Return>", lambda _: self.search())
-        self.search_button = TextButton(finder, "搜索", self.search, (FAMILY, LIST_FONT))
-        self.search_button.pack(side="right", padx=(px(4), 0))
-        self.search_entry.pack(side="left", fill="x", expand=True, ipady=px(2))
 
         # ---- song list ----
         top = tk.Frame(root, bg=PAPER)
-        self.browser = SongBrowser(top, scale, self.locked, self.show_selected, self.start, self.delete)
+        self.browser = SongBrowser(top, theme, self.locked, self.show_selected, self.start, self.delete)
         self.browser.pack(side="left", fill="both", expand=True)
-        self.scrollbar = ttk.Scrollbar(top, command=self.browser.yview, style="Thin.Vertical.TScrollbar")
+        self.scrollbar = ThinScrollbar(top, theme, self.browser.yview)
         self.browser.configure(yscrollcommand=self.scrolled)
         self.browser.bind("<Button-3>", self.context_menu)
         root.bind("<MouseWheel>", self.browser.wheel)
-        look = dict(tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT, activeforeground=INK,
-                    disabledforeground=FAINT, borderwidth=0, font=(FAMILY, LIST_FONT))
-        self.song_menu = tk.Menu(root, **look)  # for a song
-        self.move_menu = tk.Menu(self.song_menu, **look)
-        self.song_menu.add_cascade(label="移到…", menu=self.move_menu)
+        self.song_menu = PopupMenu(root, theme)  # for a song
+        self.move_menu = PopupMenu(root, theme)
+        self.song_menu.add_cascade(label="移到…", menu=self.move_menu, icon=icons.move_to)
         self.song_menu.add_separator()
-        self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
-        self.song_menu.add_command(label="导出简谱", command=self.export_jianpu)
+        self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange, icon=icons.sparkle)
+        self.song_menu.add_command(label="导出简谱", command=self.export_jianpu, icon=icons.page_note)
         self.song_menu.add_separator()
-        self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete)
-        self.folder_menu = tk.Menu(root, **look)  # for OST, 歌曲 or a region
-        self.folder_menu.add_command(label="", command=lambda: self.open_folder(self.menu_folder))
+        self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete, icon=icons.trash,
+                                   danger=True)
+        self.folder_menu = PopupMenu(root, theme)  # for OST, 歌曲 or a region
+        self.folder_menu.add_command(label="", command=lambda: self.open_folder(self.menu_folder), icon=icons.folder)
 
-        rule = tk.Frame(root, bg=LINE, height=1)
+        rule = Ornament(root, theme)
 
         # ---- now playing ----
         panel = tk.Frame(root, bg=PAPER)
         heading = tk.Frame(panel, bg=PAPER)
         heading.pack(fill="x")
-        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))
-        self.time_label.pack(side="right", anchor="s")
-        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))  # 2|20: bar 2 of 20
-        self.bar_label.pack(side="right", anchor="s", padx=(0, px(10)))
-        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, TITLE_FONT, "bold"), anchor="w")
+        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=fonts.figures)
+        self.time_label.pack(side="right", anchor="s", pady=(0, px(2)))
+        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=fonts.figures)  # 2|20: bar 2 of 20
+        self.bar_label.pack(side="right", anchor="s", padx=(0, px(12)), pady=(0, px(2)))
+        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=fonts.title, anchor="w")
         self.title_label.pack(side="left", fill="x", expand=True)
 
-        self.bar_height = px(10)  # the clickable band; the drawn track is thinner
+        self.bar_height = px(14)  # the clickable band; the drawn track is thinner
         self.bar = tk.Canvas(panel, height=self.bar_height, bg=PAPER, highlightthickness=0, cursor="hand2")
-        self.bar.pack(fill="x", pady=(px(3), 0))
+        self.bar.pack(fill="x", pady=(px(4), 0))
         self.bar.bind("<Configure>", lambda _: self.draw_bar())
         self.bar.bind("<Button-1>", self.seek)
+        self.bar.bind("<Enter>", lambda _: self.hover_bar(True))
+        self.bar.bind("<Leave>", lambda _: self.hover_bar(False))
 
-        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT), anchor="w", justify="left")
-        self.status_label.pack(fill="x", pady=(px(1), 0))
+        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.status_label.pack(fill="x", pady=(px(2), 0))
         panel.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
 
         controls = tk.Frame(panel, bg=PAPER)
-        controls.pack(fill="x", pady=(px(5), 0))
-        self.speed = tk.StringVar(value="100%")
-        self.mode = tk.StringVar(value=SINGLE)
-        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, LIST_FONT),
-                                   ((CUSTOM_SPEED, self.ask_speed),))
+        controls.pack(fill="x", pady=(px(8), 0))
+        self.speed = tk.StringVar(master=root, value="100%")
+        self.mode = tk.StringVar(master=root, value=SINGLE)
+        self.speed_choice = Choice(controls, theme, self.speed, SPEEDS, self.show_selected,
+                                   ((CUSTOM_SPEED, self.ask_speed, icons.pencil),))
         self.speed_choice.pack(side="left")
-        self.mode_choice = Choice(controls, self.mode, MODES, self.mode_picked, (FAMILY, LIST_FONT))
-        self.mode_choice.pack(side="left", padx=(px(4), 0))
+        self.mode_choice = Choice(controls, theme, self.mode, MODES, self.mode_picked)
+        self.mode_choice.pack(side="left", padx=(px(6), 0))
         # While a song plays these stay disabled: clicking LyreBot already stops the song
         # (the game loses focus), and a live button would start it again on release.
-        self.next_button = IconButton(controls, self.next_images, self.play_next)
+        self.next_button = IconButton(controls, self.next_images, self.play_next, "下一首", theme)
         self.next_button.pack(side="right")
-        self.button = IconButton(controls, self.play_images, self.start)
+        self.button = IconButton(controls, self.play_images, self.start, "播放（F7 立刻开始）", theme)
         self.button.pack(side="right", padx=(0, px(6)))
-        self.restart_button = IconButton(controls, self.restart_images, self.restart)
+        self.restart_button = IconButton(controls, self.restart_images, self.restart, "从头开始", theme)
         self.restart_button.pack(side="right", padx=(0, px(6)))  # as far from ▶ as ⏭, on the other side
-        self.record_button = IconButton(controls, self.record_images, self.record)
-        self.record_button.pack(side="right", padx=(0, px(6)))
-        self.keys_button = IconButton(controls, self.keys_images, self.listen)
+        self.record_button = IconButton(controls, self.record_images, self.record, "录音", theme)
+        self.record_button.pack(side="right", padx=(0, px(4)))
+        self.keys_button = IconButton(controls, self.keys_images, self.listen, "记录演奏", theme)
         self.keys_button.pack(side="right", padx=(0, px(2)))
 
         # The player goes in first, so that a short window takes its room from the list.
-        panel.pack(side="bottom", fill="x", padx=px(14), pady=(px(7), px(8)))
-        rule.pack(side="bottom", fill="x", padx=px(10), pady=(px(4), 0))
-        finder.pack(side="top", fill="x", padx=px(16), pady=(px(10), 0))
+        panel.pack(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))
+        rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
+        finder.pack(side="top", fill="x", padx=px(16), pady=(px(14), px(4)))
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(6), 0))
 
         self.refresh()
         self.show_selected()  # nothing is chosen yet: it asks for a song
+        dress(root)
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
         root.after(600, self.transcribe_next)
@@ -914,42 +875,72 @@ class App:
         self.start_held = held
         self.root.after(HOTKEY_POLL, self.watch_start_key)
 
-    def build_images(self, big: int, small: int) -> None:
-        def image(size: int, layers) -> tk.PhotoImage:
-            picture = tk.PhotoImage(master=self.root, width=size, height=size)
-            picture.put(" ".join(icons.render(size, PAPER, layers)))
-            return picture
+    def build_images(self) -> None:
+        """The buttons' faces: ▶ an orange disc set in a gold ring, the rest drawn in fine ink lines."""
+        theme, px = self.theme, self.theme.px
+        big, small = px(34), px(26)
+        c, s = big / 2, small / 2
+        line = max(1.0, self.scale)
 
-        c = big / 2
-        disc = lambda color: (color, icons.circle(c, c, c - 0.5))  # noqa: E731
-        self.play_images = {"normal": image(big, [disc(ORANGE), ("#FFFFFF", icons.play(big))]),
-                            "hover": image(big, [disc(ORANGE_DEEP), ("#FFFFFF", icons.play(big))]),
-                            "disabled": image(big, [disc(PEACH), ("#FFFFFF", icons.play(big))])}
-        stop = image(big, [disc(PEACH), ("#FFFFFF", icons.stop(big))])
+        def picture(name: str, size: int, layers: Callable[[], list]) -> tk.PhotoImage:
+            return theme.image(name, size, size, layers)
+
+        def face(disc: str, edge: str, glyph: Callable[[int], icons.Shape]) -> Callable[[], list]:
+            return lambda: [(edge, icons.ring(c, c, c - 0.5 - line / 2, line)),
+                            (disc, icons.circle(c, c, c - 3.2 * line)), (WHITE, glyph(big))]
+        self.play_images = {"normal": picture("play-normal", big, face(ORANGE, GOLD, icons.play)),
+                            "hover": picture("play-hover", big, face(ORANGE_DEEP, GOLD, icons.play)),
+                            "disabled": picture("play-disabled", big, face(PEACH, HAIR, icons.play))}
+        stop = picture("play-stop", big, face(PEACH, HAIR, icons.stop))
         self.stop_images = {"normal": stop, "hover": stop, "disabled": stop}
-        s = small / 2
-        mark = lambda color: [(color, shape) for shape in icons.next_track(small)]  # noqa: E731
-        self.next_images = {"normal": image(small, mark(INK)),
-                            "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + mark(INK)),
-                            "disabled": image(small, mark(FAINT))}
-        dot = lambda color: (color, icons.circle(s, s, small * 0.17))  # noqa: E731
-        self.record_images = {"normal": image(small, [dot(ORANGE)]),
-                              "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5)), dot(ORANGE_DEEP)]),
-                              "disabled": image(small, [dot(PEACH)])}
-        def keys(color: str, back: str) -> list:
-            body, *holes = icons.keyboard(small)
-            return [(color, body)] + [(back, hole) for hole in holes]
-        turn = lambda color: [(color, shape) for shape in icons.restart(small)]  # noqa: E731
-        self.restart_images = {"normal": image(small, turn(INK)),
-                               "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + turn(INK)),
-                               "disabled": image(small, turn(FAINT))}
-        self.keys_images = {"normal": image(small, keys(INK, PAPER)),
-                            "hover": image(small, [(HOVER, icons.circle(s, s, s - 0.5))] + keys(INK, HOVER)),
-                            "disabled": image(small, keys(FAINT, PAPER))}
-        square = lambda color: (color, icons.stop(small))  # noqa: E731
-        self.recording_images = {"normal": image(small, [(HIGHLIGHT, icons.circle(s, s, s - 0.5)), square(ORANGE)]),
-                                 "hover": image(small, [(PEACH, icons.circle(s, s, s - 0.5)), square(ORANGE_DEEP)]),
-                                 "disabled": image(small, [square(FAINT)])}
+
+        def halo(color: str = HOVER) -> tuple[str, icons.Shape]:
+            return color, icons.circle(s, s, s - 0.5)
+
+        def plain(name: str, draw: Callable[[int], list]) -> dict[str, tk.PhotoImage]:
+            return {"normal": picture(f"{name}-normal", small, lambda: [(INK, shape) for shape in draw(small)]),
+                    "hover": picture(f"{name}-hover", small,
+                                     lambda: [halo(), *[(INK, shape) for shape in draw(small)]]),
+                    "disabled": picture(f"{name}-disabled", small, lambda: [(FAINT, shape) for shape in draw(small)])}
+        self.next_images = plain("next", icons.next_track)
+        self.restart_images = plain("restart", icons.restart)
+        self.keys_images = plain("keys", icons.keyboard)
+
+        def dot(edge: str, color: str, ground: tuple | None = None) -> Callable[[], list]:
+            def layers() -> list:
+                ring, middle = icons.record(small)
+                return [*([ground] if ground else []), (edge, ring), (color, middle)]
+            return layers
+        self.record_images = {"normal": picture("record-normal", small, dot(HAIR, ORANGE)),
+                              "hover": picture("record-hover", small, dot(GOLD, ORANGE_DEEP, halo())),
+                              "disabled": picture("record-disabled", small, dot(HAIR, PEACH))}
+
+        def square(ground: str, edge: str, color: str) -> Callable[[], list]:
+            def layers() -> list:
+                ring, _ = icons.record(small)
+                return [halo(ground), (edge, ring), (color, icons.stop(small))]
+            return layers
+        self.recording_images = {"normal": picture("recording-in", small, square(HIGHLIGHT, ORANGE, ORANGE)),
+                                 "hover": picture("recording-hover", small, square(PEACH, ORANGE_DEEP, ORANGE_DEEP)),
+                                 "disabled": picture("recording-disabled", small,
+                                                     lambda: [(FAINT, icons.stop(small))])}
+        # The other breath of a recording: the ground and ring a shade lighter.
+        self.recording_breath = {**self.recording_images,
+                                 "normal": picture("recording-out", small, square(HOVER, PEACH, ORANGE))}
+        knob = lambda size: lambda: [(ORANGE, icons.circle(size / 2, size / 2, size / 2 - 0.5)),  # noqa: E731
+                                     (PAPER, icons.circle(size / 2, size / 2, size / 2 - 0.5 - 1.6 * line))]
+        self.knob_images = {False: picture("knob", px(10), knob(px(10))),
+                            True: picture("knob-hover", px(13), knob(px(13)))}
+
+    def breathe(self) -> None:
+        """While recording or listening, the ■ slowly breathes."""
+        if not (self.recording or self.listening):
+            self.breath_job = None
+            return
+        button = self.record_button if self.recording else self.keys_button
+        self.breath = not self.breath
+        button.set(images=self.recording_breath if self.breath else self.recording_images)
+        self.breath_job = self.root.after(700, self.breathe)
 
     def watch(self) -> None:
         """Pick up scores, MIDI and audio files added, removed or edited while the window is open."""
@@ -972,15 +963,29 @@ class App:
     def say(self, text: str, warn: bool = False) -> None:
         self.status_label.configure(text=text, fg=WARN if warn else MUTED)
 
+    def track(self) -> tuple[float, float]:
+        """Where the progress track starts and ends on its canvas: inside half a knob at each end."""
+        reach = self.theme.px(13) / 2
+        width = self.bar.winfo_width()
+        return reach, max(width - reach, reach + 1)
+
     def draw_bar(self) -> None:
-        bar, width = self.bar, self.bar.winfo_width()
-        thick = max(2, round(4 * self.scale))
-        top = (self.bar_height - thick) // 2
+        bar, middle = self.bar, self.bar_height / 2
         bar.delete("all")
-        bar.create_rectangle(0, top, width, top + thick, fill=TRACK, width=0)
-        filled = round(width * min(max(self.fraction, 0.0), 1.0))
-        if filled > 0:
-            bar.create_rectangle(0, top, filled, top + thick, fill=ORANGE, width=0)
+        left, right = self.track()
+        thick = self.theme.px(2)
+        bar.create_line(left, middle, right, middle, width=thick, fill=HAIR, capstyle="round")
+        fraction = min(max(self.fraction, 0.0), 1.0)
+        at = left + (right - left) * fraction
+        if fraction > 0:
+            bar.create_line(left, middle, at, middle, width=thick, fill=ORANGE, capstyle="round")
+        browser = getattr(self, "browser", None)
+        if self.worker is not None or (browser is not None and self.selected() is not None):
+            bar.create_image(at, middle, image=self.knob_images[self.bar_hover])
+
+    def hover_bar(self, inside: bool) -> None:
+        self.bar_hover = inside and self.worker is None
+        self.draw_bar()
 
     def set_fraction(self, fraction: float) -> None:
         self.fraction = fraction
@@ -1084,7 +1089,7 @@ class App:
         prompt = f"演奏速度是原速的百分之几（{limits}）："
         answer = self.speed.get().rstrip("%")
         while True:
-            answer = simpledialog.askstring("自定义速度", prompt, initialvalue=answer, parent=self.root)
+            answer = dialogs.ask_text("自定义速度", prompt, initialvalue=answer, parent=self.root)
             if answer is None:
                 return
             percent = parse_speed(answer)
@@ -1177,13 +1182,13 @@ class App:
             return None
         target = folder / score.name
         if target.exists():
-            messagebox.showerror("无法移动", f"「{name}」里已经有 {score.name}", parent=self.root)
+            dialogs.error("无法移动", f"「{name}」里已经有 {score.name}", parent=self.root)
             return None
         try:
             folder.mkdir(parents=True, exist_ok=True)
             score.rename(target)
         except OSError as error:
-            messagebox.showerror("无法移动", f"{score.name}：{error}", parent=self.root)
+            dialogs.error("无法移动", f"{score.name}：{error}", parent=self.root)
             return None
         self.cache.pop(score, None)
         self.refresh()
@@ -1211,7 +1216,7 @@ class App:
             return
         listed = "\n".join(self.shown(path) for path in files)
         question = f"删除「{score.stem}」？\n\n这些文件会移到回收站，需要时可以从回收站还原：\n\n{listed}"
-        if not messagebox.askyesno("删除", question, icon="warning", default="no", parent=self.root):
+        if not dialogs.confirm("删除", question, parent=self.root, yes="删除", danger=True):
             return
         index = self.songs.index(score) if score in self.songs else 0
         rest = [path for path in self.songs if path != score]
@@ -1221,7 +1226,7 @@ class App:
             try:
                 to_recycle_bin(path)
             except OSError as error:
-                messagebox.showerror("无法删除", f"{self.shown(path)}：{error}", parent=self.root)
+                dialogs.error("无法删除", f"{self.shown(path)}：{error}", parent=self.root)
                 self.refresh()
                 return
             self.cache.pop(path, None)
@@ -1242,7 +1247,7 @@ class App:
         try:
             export_jianpu(score, target)
         except (OSError, ScoreError) as error:
-            messagebox.showerror("无法导出简谱", f"{score.name}：{error}", parent=self.root)
+            dialogs.error("无法导出简谱", f"{score.name}：{error}", parent=self.root)
             return None
         self.say(f"简谱已存进 jianpu_output 文件夹：{target.name}，在浏览器里可以打印成 PDF")
         self.open_file(target)
@@ -1287,12 +1292,12 @@ class App:
         if source is None:
             return
         question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
-        if not messagebox.askyesno("从 MIDI 重新编配", question, parent=self.root):
+        if not dialogs.confirm("从 MIDI 重新编配", question, parent=self.root, yes="重新编配"):
             return
         try:
             arrange_file(source, score)
         except (OSError, MidiError, ArrangeError) as error:
-            messagebox.showerror("无法编配", f"{source.name}：{error}", parent=self.root)
+            dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
             return
         self.failed_midi.pop(source, None)
         self.cache.pop(score, None)
@@ -1309,7 +1314,7 @@ class App:
         if self.worker or self.transcriber or time.monotonic() < self.quiet_until:
             return
         if find_tools(self.tool_dirs) is None:
-            messagebox.showinfo("还不能录音", NO_TOOLS, parent=self.root)
+            dialogs.info("还不能录音", NO_TOOLS, parent=self.root)
             return
         name = self.ask_name()
         if name is None:
@@ -1318,6 +1323,7 @@ class App:
         self.cancel = threading.Event()
         self.recording = True
         self.set_playing(False, recording=True)
+        self.breathe()
         self.title_label.configure(text=name)
         self.time_label.configure(text="")
         self.bar_label.configure(text="")
@@ -1331,7 +1337,7 @@ class App:
         prompt = f"要{verb}的是哪首曲子？曲谱会叫「曲名{suffix}」（不填就按时间起名）："
         answer = ""
         while True:
-            answer = simpledialog.askstring(title, prompt, initialvalue=answer, parent=self.root)
+            answer = dialogs.ask_text(title, prompt, initialvalue=answer, parent=self.root)
             if answer is None:
                 return None
             name = recording_name(answer, suffix)
@@ -1371,6 +1377,7 @@ class App:
         self.cancel = threading.Event()
         self.listening = True
         self.set_playing(False, listening=True)
+        self.breathe()
         self.title_label.configure(text=name)
         self.time_label.configure(text="")
         self.bar_label.configure(text="")
@@ -1463,7 +1470,7 @@ class App:
         self.cache.pop(path, None)  # always play the file as it is now
         score = self.read(path)
         if isinstance(score, ScoreError):
-            messagebox.showerror("曲谱有误", f"{path.stem}：{score}", parent=self.root)
+            dialogs.error("曲谱有误", f"{path.stem}：{score}", parent=self.root)
             self.refresh()
             return
         speed = self.speed_factor()
@@ -1515,8 +1522,8 @@ class App:
     def seek(self, event: tk.Event) -> None:
         if self.worker:
             return
-        width = self.bar.winfo_width()
-        self.start(fraction=min(max(event.x / width, 0.0), 0.999) if width > 0 else 0.0)
+        left, right = self.track()
+        self.start(fraction=min(max((event.x - left) / (right - left), 0.0), 0.999))
 
     def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
         busy = playing or recording or listening
@@ -1612,6 +1619,7 @@ class App:
             elif kind == "song":
                 path, self.duration = value
                 self.select(path)
+                self.browser.set_playing(path)
                 self.title_label.configure(text=path.stem)
                 self.time_label.configure(text=f"0:00 / {clock(self.duration)}")
                 score = self.read(path)
@@ -1630,7 +1638,7 @@ class App:
             elif kind == "error":
                 self.say("出错，已停止", warn=True)
                 if not self.closing:
-                    messagebox.showerror("演奏出错", value, parent=self.root)
+                    dialogs.error("演奏出错", value, parent=self.root)
             elif kind == "recording":
                 state, seconds = value
                 if state == "recording":
@@ -1659,7 +1667,9 @@ class App:
                 self.recording = False
                 self.listening = False
                 self.quiet_until = time.monotonic() + COOLDOWN
+                self.browser.set_playing(None)
                 self.set_playing(False)
+                self.draw_bar()
                 if self.written:  # select the new score once the list may refresh again
                     path, note = self.written
                     self.written = None
@@ -1702,6 +1712,6 @@ def main() -> None:
             raise
         import traceback  # windowless start: show the error instead of vanishing
         root.withdraw()
-        messagebox.showerror("LyreBot 启动失败", traceback.format_exc(limit=3))
+        system_dialogs.showerror("LyreBot 启动失败", traceback.format_exc(limit=3))
         return
     root.mainloop()
