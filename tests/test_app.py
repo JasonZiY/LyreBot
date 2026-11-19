@@ -71,39 +71,39 @@ class Place(unittest.TestCase):
         self.path = Path(tempfile.mkdtemp()) / "window.json"
         self.addCleanup(shutil.rmtree, self.path.parent, ignore_errors=True)
 
-    def read(self, screen):
+    def read(self, area, dpi=120):
         from unittest import mock
         from lyrebot.app import read_place
-        with mock.patch("lyrebot.app.screen_holding", return_value=screen) as holding:
-            found = read_place(self.path)
+        with mock.patch("lyrebot.app.screen_holding", return_value=area) as holding:
+            found = read_place(dpi, self.path)
         return found, holding
 
     def test_the_window_opens_where_it_was_left(self):
         from lyrebot.app import write_place
         write_place((-1500, 80, 438, 900), 120, self.path)
-        found, holding = self.read((120, (-1920, 0, 0, 1040)))
-        self.assertEqual(found, (-1500, 80, 438, 900, 120))
+        found, holding = self.read((-2400, 0, 0, 1290))
+        self.assertEqual(found, (-1500, 80, 438, 900))
         holding.assert_called_once_with(-1500, 80, -1062, 980)
 
-    def test_on_a_screen_scaled_otherwise_it_keeps_its_size_to_the_eye(self):
+    def test_with_the_main_screen_scaled_otherwise_since_it_keeps_its_size_to_the_eye(self):
         from lyrebot.app import write_place
-        write_place((100, 100, 500, 1000), 120, self.path)  # left at 125%
-        found, _ = self.read((96, (0, 0, 1920, 1040)))  # that screen is at 100% now
-        self.assertEqual(found, (100, 100, 400, 800, 96))  # 500 x 1000 at 125% is 400 x 800 at 100%
+        write_place((100, 100, 500, 1000), 120, self.path)  # left with LyreBot drawn at 125%
+        found, _ = self.read((0, 0, 1920, 1040), dpi=96)  # and now drawn at 100%
+        self.assertEqual(found, (100, 100, 400, 800))  # 500 x 1000 at 125% is 400 x 800 at 100%
 
     def test_it_is_no_smaller_than_the_window_may_be_and_all_on_the_screen(self):
         from lyrebot.app import WINDOW_WIDTH, write_place
         write_place((1800, 1000, 100, 100), 96, self.path)
-        found, _ = self.read((96, (0, 0, 1920, 1040)))
-        self.assertEqual(found, (1920 - WINDOW_WIDTH, 1040 - 360, WINDOW_WIDTH, 360, 96))
+        found, _ = self.read((0, 0, 1920, 1040), dpi=96)
+        self.assertEqual(found, (1920 - WINDOW_WIDTH, 1040 - 360, WINDOW_WIDTH, 360))
 
     def test_nothing_kept_or_a_screen_gone_or_a_spoilt_note_opens_it_afresh(self):
         from lyrebot.app import write_place
-        self.assertEqual(self.read((96, (0, 0, 1920, 1040)))[0], None)  # nothing kept
+        self.assertEqual(self.read((0, 0, 1920, 1040))[0], None)  # nothing kept
         write_place((-1500, 80, 438, 900), 120, self.path)
         self.assertEqual(self.read(None)[0], None)  # the screen it was on is gone
         self.path.write_text("{", encoding="utf-8")
-        self.assertEqual(self.read((96, (0, 0, 1920, 1040)))[0], None)
+        self.assertEqual(self.read((0, 0, 1920, 1040))[0], None)
 
 
 class NextSong(unittest.TestCase):
@@ -821,103 +821,6 @@ class Folders(unittest.TestCase):
                 mock.patch.object(app.root, "focus_set") as leave:
             app.click_away(SimpleNamespace(widget=app.backdrop))  # not in it: nothing to leave
         leave.assert_not_called()
-
-    def test_moved_to_a_screen_scaled_otherwise_the_window_is_drawn_again_showing_the_same(self):
-        from lyrebot.app import App
-        first, second = self.write_scores("OST/蒙德/风息的离别诗.txt", "OST/蒙德/白日梦的涟漪.txt")
-        app = App(self.window(), self.scores, self.midi)
-        scaling = app.root.tk.call("tk", "scaling")
-        self.addCleanup(app.root.tk.call, "tk", "scaling", scaling)  # (one interpreter for every test)
-        app.browser.toggle(self.cell(app, "region", "蒙德"))
-        app.select(first)
-        app.search_entry.insert(0, "风")
-        app.say("刚从录音编配好")
-        old_browser, dpi = app.browser, 96 if app.dpi != 96 else 144
-        app.rescale(dpi)
-        self.assertEqual(app.dpi, dpi)
-        self.assertEqual(app.bar_height, round(14 * dpi / 96))  # every piece at the new scale
-        self.assertFalse(old_browser.winfo_exists())
-        self.assertEqual(app.selected(), first)  # what it showed, it shows
-        self.assertIn("蒙德", app.browser.open_regions)
-        self.assertIn(second, app.browser.visible_songs())
-        self.assertEqual(app.search_entry.get(), "风")
-        self.assertEqual(app.status_label.cget("text"), "刚从录音编配好")
-        self.assertEqual(app.title_label.cget("text"), first.stem)
-        self.assertEqual(len(app.speed.trace_info()), 1)  # the old choices stopped watching
-        self.assertEqual(app.root.bind("<Configure>").count("moved"), 1)  # one page lays the paper
-
-    def test_the_window_notices_a_new_screen_scaling_and_waits_out_a_dialog(self):
-        from unittest import mock
-        app, _ = self.framed_app(True)
-        dpi = 96 if app.dpi != 96 else 144
-        with mock.patch.object(app, "rescale") as rescale:
-            app.poll()
-            rescale.assert_not_called()
-            app.frame.dpi, app.frame.rescaled = dpi, app.frame.rescaled + 1  # what the frame hears from Windows
-            with mock.patch.object(app.root, "grab_current", return_value=app.root):
-                app.poll()
-            rescale.assert_not_called()  # a dialog is open: not under it
-            app.frame.moving = True
-            app.poll()
-            rescale.assert_not_called()  # nor while the window is being dragged
-            app.frame.moving = False
-            app.poll()
-            rescale.assert_called_once_with(dpi)
-            app.poll()
-            rescale.assert_called_once_with(dpi)
-
-    def test_drawn_again_it_takes_its_new_size_out_of_sight(self):
-        from unittest import mock
-        app, _ = self.framed_app(True)
-        app.frame.hwnd = 5
-        dpi = 96 if app.dpi != 96 else 144
-        scaling = app.root.tk.call("tk", "scaling")
-        self.addCleanup(app.root.tk.call, "tk", "scaling", scaling)
-        steps = []
-        with mock.patch("lyrebot.app.chrome.hold", side_effect=lambda hwnd, held: steps.append(("hold", held))), \
-                mock.patch("lyrebot.app.chrome.place", side_effect=lambda hwnd, box: steps.append(("place", box))), \
-                mock.patch("lyrebot.app.chrome.box_of", return_value=(-1800, 60, 350, 640)), \
-                mock.patch("lyrebot.app.chrome.pointer", return_value=None), \
-                mock.patch("lyrebot.app.screen_holding", return_value=(dpi, (-1920, 0, 0, 1040))):
-            ratio = dpi / app.dpi
-            app.rescale(dpi)
-        self.assertEqual(steps, [("hold", True), ("place", (-1800, 60, round(350 * ratio), round(640 * ratio))),
-                                 ("hold", False)])  # held, made over and sized, then shown whole
-
-    def test_moved_to_and_fro_between_screens_the_window_keeps_its_size_to_the_eye(self):
-        from unittest import mock
-        app, _ = self.framed_app(True)
-        app.frame.hwnd, app.dpi, app.seen_size = 5, 120, (350, 640)
-        screen = (96, (-1920, 0, 0, 1040))
-        with mock.patch("lyrebot.app.chrome.box_of", return_value=(-1500, 100, 548, 800)), \
-                mock.patch("lyrebot.app.chrome.pointer", return_value=None), \
-                mock.patch("lyrebot.app.screen_holding", return_value=screen):
-            # whatever size it has in pixels, it goes by its size to the eye: 350 x 640 at 100%
-            self.assertEqual(app.box_for(96), (-1500, 100, 350, 640))
-        app.dpi = 96
-        with mock.patch("lyrebot.app.chrome.box_of", return_value=(100, 100, 350, 640)), \
-                mock.patch("lyrebot.app.chrome.pointer", return_value=(150, 110)), \
-                mock.patch("lyrebot.app.screen_holding", return_value=(120, (0, 0, 1920, 1140))):
-            # and 438 x 800 at 125%, made over around the point it is held by, which stays under the pointer
-            self.assertEqual(app.box_for(120), (87, 98, 438, 800))  # (150 - 50 x 438/350, 110 - 10 x 800/640)
-
-    def test_only_a_hand_changes_the_windows_size_to_the_eye(self):
-        from unittest import mock
-        app, _ = self.framed_app(True)
-        app.dpi, app.known_size, app.seen_size = 120, (438, 800), (350, 640)
-        with mock.patch.object(app.root, "winfo_width", return_value=500), \
-                mock.patch.object(app.root, "winfo_height", return_value=800):
-            app.frame.moving = True
-            app.notice_size()
-            self.assertEqual(app.seen_size, (350, 640))  # not while it is being dragged
-            app.frame.moving = False
-            app.notice_size()
-        self.assertEqual(app.seen_size, (400, 640))  # sized by hand: 500 px at 125% is 400 to the eye
-        app.known_size = (438, 800)  # LyreBot's own resize, as rescale leaves it
-        with mock.patch.object(app.root, "winfo_width", return_value=438), \
-                mock.patch.object(app.root, "winfo_height", return_value=800):
-            app.notice_size()
-        self.assertEqual(app.seen_size, (400, 640))
 
     def test_closing_keeps_the_place(self):
         from unittest import mock

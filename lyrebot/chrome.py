@@ -31,8 +31,6 @@ HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMR
 
 WM_NCDESTROY, WM_NCCALCSIZE, WM_NCHITTEST, WM_SYSCOMMAND = 0x0082, 0x0083, 0x0084, 0x0112
 WM_NCLBUTTONDOWN, WM_NCRBUTTONDOWN = 0x00A1, 0x00A4
-WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE = 0x02E0, 0x0231, 0x0232
-RDW_INVALIDATE, RDW_ERASE, RDW_FRAME, RDW_ALLCHILDREN, RDW_UPDATENOW = 0x0001, 0x0004, 0x0400, 0x0080, 0x0100
 SC_MINIMIZE, SC_MAXIMIZE = 0xF020, 0xF030
 GWL_EXSTYLE, GWL_STYLE, GWLP_WNDPROC, GWLP_HWNDPARENT = -20, -16, -4, -8
 WS_CAPTION, WS_SYSMENU, WS_THICKFRAME = 0x00C00000, 0x00080000, 0x00040000
@@ -53,11 +51,6 @@ class Frame:
         self.buttons: list[Box] = []  # on the title bar, but Tk's to press
         self.hwnd = 0  # the window Windows sees (Tk's wrapper), once adopted
         self.presses = 0  # presses on the title bar and the edges, which Windows has and Tk never hears of
-        self.dpi = 0  # the scaling of the screen the window is on, once Windows has said it changed
-        self.rescaled = 0  # counts those changes, for the window to notice and draw itself again
-        self.suggested: Box | None = None  # left, top, width, height Windows suggests for the new scaling
-        self.moving = False  # being dragged or sized: Windows' own loop has the mouse
-        self.waiting = False  # the scaling changed during a drag: to be drawn for once it is over
 
     def hit(self, x: int, y: int, width: int, height: int) -> int:
         """What a press at (x, y) does in a window ``width`` by ``height``: one of the HT codes."""
@@ -83,28 +76,6 @@ class Frame:
         if not _user32.GetWindowRect(self.hwnd, ctypes.byref(box)):
             return HTCLIENT
         return self.hit(x - box.left, y - box.top, box.right - box.left, box.bottom - box.top)
-
-    def dpi_changed(self, wparam: int, lparam: int) -> None:
-        """The window is now mostly on a screen of another scaling (WM_DPICHANGED).  In the middle of a drag
-        it keeps its size and picture (made over there, it shook under the pointer), to be drawn for the new
-        screen once let go; moved there any other way (Win+Shift+arrow, the screen's scaling changed), at
-        once, with the size Windows suggests.  Either way the window does the drawing (see ``rescaled``)."""
-        self.dpi = wparam & 0xFFFF
-        if self.moving:
-            self.waiting = True
-            return
-        suggested = wintypes.RECT.from_address(lparam)
-        self.suggested = (suggested.left, suggested.top, suggested.right - suggested.left,
-                          suggested.bottom - suggested.top)
-        self.rescaled += 1
-
-    def let_go(self) -> None:
-        """The drag is over (WM_EXITSIZEMOVE): now draw for the screen it crossed to, if it crossed."""
-        self.moving = False
-        if self.waiting:
-            self.waiting = False
-            self.suggested = None
-            self.rescaled += 1
 
     def minimise(self) -> None:
         """Down to the taskbar, as the system's own button would (Tk will not iconify a window without
@@ -133,11 +104,6 @@ if sys.platform == "win32":
     _user32.SetWindowPos.argtypes = (wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                      ctypes.c_int, wintypes.UINT)
     _user32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
-    _user32.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
-    _user32.SendMessageW.restype = ctypes.c_ssize_t
-    _user32.RedrawWindow.argtypes = (wintypes.HWND, ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT)
-    _user32.LockWindowUpdate.argtypes = (wintypes.HWND,)
-    _user32.GetCursorPos.argtypes = (ctypes.POINTER(wintypes.POINT),)
 else:  # pragma: no cover - Windows only
     _user32 = None
 
@@ -168,40 +134,6 @@ def _subclass(hwnd: int, handle: Callable[[int, int, int], int | None]) -> None:
     callback = WNDPROC(procedure)
     _procedures.append(callback)
     _user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.cast(callback, ctypes.c_void_p).value)
-
-
-def hold(hwnd: int, held: bool) -> None:
-    """While ``held``, nothing in the window is painted, and the screen keeps showing what it showed; let go,
-    all of it is painted afresh.  For making the window again out of sight.
-
-    Windows' LockWindowUpdate, not WM_SETREDRAW: that one clears the window's visible style while it holds,
-    and a window resized meanwhile is taken by Tk to have been withdrawn, so its pieces are never shown."""
-    _user32.LockWindowUpdate(hwnd if held else None)
-    if not held:
-        _user32.RedrawWindow(hwnd, None, None,
-                             RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW)
-
-
-def place(hwnd: int, box: Box) -> None:
-    """Move and size the window to ``box`` (left, top, width, height), keeping the keyboard where it is."""
-    left, top, width, height = box
-    _user32.SetWindowPos(hwnd, None, left, top, width, height, SWP_NOZORDER | SWP_NOACTIVATE)
-
-
-def pointer() -> tuple[int, int] | None:
-    """Where the mouse pointer is on the screens."""
-    found = wintypes.POINT()
-    if not _user32.GetCursorPos(ctypes.byref(found)):
-        return None
-    return found.x, found.y
-
-
-def box_of(hwnd: int) -> Box | None:
-    """Where the window is: left, top, width, height."""
-    found = wintypes.RECT()
-    if not _user32.GetWindowRect(hwnd, ctypes.byref(found)):
-        return None
-    return found.left, found.top, found.right - found.left, found.bottom - found.top
 
 
 def stand_aside(frame: Frame, widgets: Iterable[tk.Misc]) -> None:
@@ -255,14 +187,7 @@ def adopt(window: tk.Tk | tk.Toplevel, frame: Frame, see_through: Iterable[tk.Mi
                 frame.presses += 1  # (and Windows goes on to move, size or show the menu)
             if message == WM_SYSCOMMAND and wparam & 0xFFF0 == SC_MAXIMIZE:
                 return 0  # no maximising (Win+Up, the system menu): a frameless window would spill off the screen
-            if message == WM_DPICHANGED:
-                frame.dpi_changed(wparam, lparam)
-                return 0
-            if message == WM_ENTERSIZEMOVE:
-                frame.moving = True
-            elif message == WM_EXITSIZEMOVE:
-                frame.let_go()
-            return None  # (Tk hears of the drag too)
+            return None
 
         _subclass(hwnd, own)
         stand_aside(frame, see_through)

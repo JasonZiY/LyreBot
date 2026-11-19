@@ -33,7 +33,7 @@ from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
-                    ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dpi_at, dress, geometry, round_corners, screen_area,
+                    ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
                     screen_holding)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
@@ -805,8 +805,7 @@ class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
                  tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR, own_frame: bool = False,
                  place: tuple[int, int, int, int] | None = None):
-        """``place`` is where the window was left (see ``read_place``), on a screen whose scaling ``tk scaling``
-        is already set for."""
+        """``place`` is where the window was left (see ``read_place``)."""
         self.root = root
         self.place = place
         self.scores_dir = scores_dir
@@ -845,12 +844,6 @@ class App:
         self.quiet_until = 0.0
         self.base_title = "LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）"
         self.frame: chrome.Frame | None = None  # LyreBot's own frame, once Windows lends it (``take_frame``)
-        self.rescaled = 0  # the frame's count of changes of screen scaling, as last drawn for
-        # The window's size as the eye sees it (in pixels at 100%), which a move to a screen scaled otherwise
-        # keeps; only resizing the window by hand changes it.  And its size in pixels as last seen, to tell
-        # such a resize from LyreBot's own.
-        self.seen_size: tuple[float, float] | None = None
-        self.known_size: tuple[int, int] | None = None
         self.frame_presses = 0  # and of presses on its title bar and edges, as last seen
         self.title_bar: TitleBar | None = None
         root.title(self.base_title)
@@ -875,8 +868,7 @@ class App:
         root.after(HOTKEY_POLL, self.watch_start_key)
 
     def build(self, size: tuple[int, int] | None = None) -> None:
-        """Make the window's pieces at the present scaling (``tk scaling``): at the start, and again when the
-        window moves to a screen of another scaling (``rescale``), then for its ``size`` there."""
+        """Make the window's pieces at the present scaling (``tk scaling``), for a window of ``size``."""
         root = self.root
         self.theme = theme = Theme(root)
         self.scale = theme.scale
@@ -1023,92 +1015,6 @@ class App:
         self.frame = self.title_bar = None
         self.crest.grid()
         return False
-
-    def rescale(self, dpi: int) -> None:
-        """Draw the window again for the screen it has moved to, whose scaling is ``dpi``, showing what it
-        showed: the same songs open, chosen and in view, the same search, the same words under the player,
-        the same buttons live.  It is made over out of sight (``chrome.hold``): the screen keeps the old
-        picture while the pieces are made again and the window takes its size for the new scaling, and
-        then shows all of it at once."""
-        frame = self.frame
-        box = self.box_for(dpi)
-        held = frame is not None and bool(frame.hwnd)
-        if held:
-            chrome.hold(frame.hwnd, True)
-        try:
-            self.make_over(dpi, box)
-        finally:
-            if held:
-                chrome.hold(frame.hwnd, False)  # (asks every piece to paint, at once)
-                self.root.update()  # and they all do, before the screen shows any of them
-
-    def box_for(self, dpi: int) -> tuple[int, int, int, int] | None:
-        """Where the window goes for its new scaling: the size it has to the eye (``seen_size``) in the new
-        screen's pixels, so that moving it to and fro never changes it; placed where Windows suggested (moved
-        by keyboard), or else (let go after a drag across) around the point under the pointer, so the bar it
-        was dragged by stays under it; all of it on that screen."""
-        frame = self.frame
-        if frame is None or not frame.hwnd:
-            return None
-        found = chrome.box_of(frame.hwnd)
-        if found is None:
-            return None
-        left, top, width, height = found
-        seen = self.seen_size or (width * 96 / self.dpi, height * 96 / self.dpi)
-        new_width, new_height = round(seen[0] * dpi / 96), round(seen[1] * dpi / 96)
-        if frame.suggested is not None:
-            left, top = frame.suggested[:2]
-            frame.suggested = None
-        else:
-            held = chrome.pointer()
-            if held is not None and left <= held[0] < left + width and top <= held[1] < top + height:
-                left = round(held[0] - (held[0] - left) * new_width / width)
-                top = round(held[1] - (held[1] - top) * new_height / height)
-        width, height = new_width, new_height
-        screen = screen_holding(left, top, left + width, top + height)
-        if screen is not None:
-            _, (area_left, area_top, area_right, area_bottom) = screen
-            width, height = min(width, area_right - area_left), min(height, area_bottom - area_top)
-            left = min(max(left, area_left), area_right - width)
-            top = min(max(top, area_top), area_bottom - height)
-        return left, top, width, height
-
-    def make_over(self, dpi: int, box: tuple[int, int, int, int] | None) -> None:
-        root, browser = self.root, self.browser
-        shown = (set(browser.closed_shelves), set(browser.open_regions), browser.chosen, browser.playing,
-                 browser.yview()[0])
-        search = self.search_entry.get()
-        labels = [(label.cget("text"), label.cget("fg"))
-                  for label in (self.title_label, self.time_label, self.bar_label, self.status_label)]
-        for job in (browser.beat_job, self.breath_job):
-            if job:
-                root.after_cancel(job)
-        browser.beat_job = self.breath_job = None
-        self.page.close()
-        for child in root.winfo_children():
-            child.destroy()
-        if box is not None and self.frame is not None:  # the new size first, so the new page is made for it,
-            root.minsize(round(WINDOW_WIDTH * dpi / 96), round(360 * dpi / 96))  # with the new screen's least size
-            root.update_idletasks()  # (or Windows holds it to the old screen's: wider than it should be)
-            chrome.place(self.frame.hwnd, box)
-            self.known_size = (box[2], box[3])  # LyreBot's own resize, not a hand's
-        root.tk.call("tk", "scaling", dpi / 72.0)
-        self.build(size=(box[2], box[3]) if box else (root.winfo_width(), root.winfo_height()))
-        browser = self.browser
-        browser.closed_shelves, browser.open_regions, browser.chosen, browser.playing, top = shown
-        if self.library is not None:
-            browser.show(self.library, self.bad)
-        browser.yview_moveto(top)
-        self.search_entry.insert(0, search)
-        for label, (text, ink) in zip((self.title_label, self.time_label, self.bar_label, self.status_label), labels):
-            label.configure(text=text, fg=ink)
-        busy = self.worker is not None
-        self.set_playing(busy and not (self.recording or self.listening), self.recording, self.listening)
-        if self.recording or self.listening:
-            self.breathe()
-        self.draw_bar()
-        root.update_idletasks()  # laid out at the new size, still out of sight
-        self.known_size = root.winfo_width(), root.winfo_height()  # whatever it came to (a small screen holds it in)
 
     def keep_place(self) -> None:
         """Write down where the window is, for it to open there next time (see ``read_place``)."""
@@ -1911,25 +1817,11 @@ class App:
         if typing:
             self.root.focus_set()
 
-    def notice_size(self) -> None:
-        """A change of the window's size that LyreBot did not make is the hand's: the size to the eye follows."""
-        size = self.root.winfo_width(), self.root.winfo_height()
-        if size[0] <= 1 or size == self.known_size or (self.frame is not None and self.frame.moving):
-            return
-        self.known_size = size
-        self.seen_size = (size[0] * 96 / self.dpi, size[1] * 96 / self.dpi)
-
     def poll(self) -> None:
         frame = self.frame
-        self.notice_size()
         if frame is not None and frame.presses != self.frame_presses:
             self.frame_presses = frame.presses  # pressed on the title bar or an edge
             self.leave_search()
-        if frame is not None and frame.rescaled != self.rescaled and not frame.moving \
-                and self.root.grab_current() is None:
-            self.rescaled = frame.rescaled  # (with a dialog open, once it has closed)
-            if frame.dpi and frame.dpi != self.dpi:
-                self.rescale(frame.dpi)
         while True:
             try:
                 kind, value = self.updates.get_nowait()
@@ -2014,25 +1906,8 @@ class App:
 PLACE = CACHE_ROOT.parent / "window.json"  # where the window was left
 
 
-def take_screen_scaling() -> None:
-    """Tell Windows LyreBot draws for each screen's own scaling (per-monitor DPI awareness, v2), so that on a
-    screen scaled unlike the main one it is drawn afresh, crisp, rather than stretched as a picture."""
-    try:
-        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):  # PER_MONITOR_AWARE_V2
-            return
-    except (AttributeError, OSError):
-        return
-    for level in (2, 1):  # older Windows: per monitor, else the main screen's scaling
-        try:
-            if ctypes.windll.shcore.SetProcessDpiAwareness(level) == 0:
-                return
-        except (AttributeError, OSError):
-            return
-
-
 def write_place(box: tuple[int, int, int, int], dpi: int, path: Path | None = None) -> None:
-    """Keep the window's place, ``box`` (left, top, width, height in the screen's pixels) on a screen
-    scaled to ``dpi``."""
+    """Keep the window's place, ``box`` (left, top, width, height in LyreBot's pixels), drawn at ``dpi``."""
     path = path or PLACE
     left, top, width, height = box
     try:
@@ -2043,32 +1918,35 @@ def write_place(box: tuple[int, int, int, int], dpi: int, path: Path | None = No
         pass
 
 
-def read_place(path: Path | None = None) -> tuple[int, int, int, int, int] | None:
-    """Where the window was left, as (left, top, width, height, dpi) for the screen it is on now: its size
-    made over for that screen's scaling, no smaller than the window may be, and the whole of it on the
-    screen.  None when nothing was kept, or the screen it was on is gone."""
+def read_place(dpi: int, path: Path | None = None) -> tuple[int, int, int, int] | None:
+    """Where the window was left, as (left, top, width, height) for LyreBot drawn at ``dpi`` now (its size
+    made over if the main screen's scaling has changed since), no smaller than the window may be, and the
+    whole of it on the screen it is on.  None when nothing was kept, or that screen is gone."""
     path = path or PLACE
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
         left, top, width, height, was = (int(kept[key]) for key in ("left", "top", "width", "height", "dpi"))
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    found = screen_holding(left, top, left + width, top + height)
-    if found is None or was <= 0:
+    area = screen_holding(left, top, left + width, top + height)
+    if area is None or was <= 0:
         return None
-    dpi, (area_left, area_top, area_right, area_bottom) = found
+    area_left, area_top, area_right, area_bottom = area
     width = max(round(width * dpi / was), round(WINDOW_WIDTH * dpi / 96))
     height = max(round(height * dpi / was), round(360 * dpi / 96))
     width, height = min(width, area_right - area_left), min(height, area_bottom - area_top)
     left = min(max(left, area_left), area_right - width)
     top = min(max(top, area_top), area_bottom - height)
-    return left, top, width, height, dpi
+    return left, top, width, height
 
 
 def main() -> None:
     if sys.platform == "win32" and not is_admin() and relaunch_as_admin():
         return  # the elevated copy takes over
-    take_screen_scaling()
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # drawn at the main screen's scaling
+    except (AttributeError, OSError):
+        pass
     try:  # own taskbar entry, so Windows doesn't borrow another pythonw app's icon
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("LyreBot")
     except (AttributeError, OSError):
@@ -2078,12 +1956,8 @@ def main() -> None:
         root.iconbitmap(default=str(ICON))
     except tk.TclError:
         pass
-    place = read_place()
-    # Drawn at the scaling of the screen it opens on: where it was left, or where the pointer is.
-    dpi = place[4] if place else dpi_at(*root.winfo_pointerxy())
-    root.tk.call("tk", "scaling", dpi / 72.0)
     try:
-        App(root, own_frame=True, place=place[:4] if place else None)
+        App(root, own_frame=True, place=read_place(round(root.winfo_fpixels("1i"))))
     except Exception:
         if sys.stderr is not None:
             raise

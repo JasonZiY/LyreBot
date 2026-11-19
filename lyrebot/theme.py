@@ -210,38 +210,12 @@ def screen_area(widget: tk.Misc, x: float, y: float) -> Area:
     return 0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight()
 
 
-MONITOR_DEFAULTTONULL, MDT_EFFECTIVE_DPI = 0, 0
+MONITOR_DEFAULTTONULL = 0
 
 
-def _dpi_of(monitor: int) -> int:
-    """A screen's scaling as Windows gives it, in dots per inch (96 is 100%)."""
-    try:
-        x, y = ctypes.c_uint(), ctypes.c_uint()
-        if ctypes.windll.shcore.GetDpiForMonitor(ctypes.c_void_p(monitor), MDT_EFFECTIVE_DPI, ctypes.byref(x),
-                                                 ctypes.byref(y)) == 0 and x.value:
-            return x.value
-    except (AttributeError, OSError):
-        pass
-    return 96
-
-
-def dpi_at(x: float, y: float) -> int:
-    """The scaling of the screen at (x, y), or the nearest one."""
-    if sys.platform != "win32":
-        return 96
-    try:
-        user32 = ctypes.windll.user32
-        user32.MonitorFromPoint.argtypes = [_Point, ctypes.c_ulong]
-        user32.MonitorFromPoint.restype = ctypes.c_void_p
-        monitor = user32.MonitorFromPoint(_Point(round(x), round(y)), MONITOR_DEFAULTTONEAREST)
-    except (AttributeError, OSError):
-        return 96
-    return _dpi_of(monitor) if monitor else 96
-
-
-def screen_holding(left: int, top: int, right: int, bottom: int) -> tuple[int, Area] | None:
-    """The scaling and the work area of the screen holding most of a box, or None when no screen holds any of
-    it (the screen it was on has been taken away)."""
+def screen_holding(left: int, top: int, right: int, bottom: int) -> Area | None:
+    """The work area of the screen holding most of a box, or None when no screen holds any of it (the screen
+    it was on has been taken away)."""
     if sys.platform != "win32":
         return None
     try:
@@ -257,7 +231,7 @@ def screen_holding(left: int, top: int, right: int, bottom: int) -> tuple[int, A
     except (AttributeError, OSError):
         return None
     work = info.rcWork
-    return _dpi_of(monitor), (work.left, work.top, work.right, work.bottom)
+    return work.left, work.top, work.right, work.bottom
 
 
 def fit(width: int, height: int, x: int, y: int, area: Area, left_instead: int | None = None,

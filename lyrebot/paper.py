@@ -281,16 +281,7 @@ class Page:
         self.later: str | None = None  # the wash for the size the window settles at
         self.wanted = (0, 0)  # the window's size, as it last said
         self.washed_at = 0.0
-        self.binding = root.bind("<Configure>", self.moved, add="+")
-
-    def close(self) -> None:
-        """Let go of the window, whose pieces are about to be made again on a new page."""
-        self.root.unbind("<Configure>", self.binding)  # (the page's is the window's only one)
-        for job in (self.job, self.soon, self.later):
-            if job is not None:
-                self.root.after_cancel(job)
-        self.job = self.soon = self.later = None
-        self.surfaces = []
+        root.bind("<Configure>", self.moved, add="+")
 
     def lay(self, width: int, height: int) -> None:
         """Make the paper for a window of this size and lay it under every surface, now."""
