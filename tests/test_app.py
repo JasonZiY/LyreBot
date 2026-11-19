@@ -282,6 +282,34 @@ class Folders(unittest.TestCase):
             path.write_text("speed=60\na-\n", encoding="utf-8")
         return [self.scores / name for name in names]
 
+    def framed_app(self, adopted):
+        """An App asked to draw its own title bar, on a system where Windows does (or refuses) its part.
+        One per test: the windows' cleanup cancels every timer the interpreter has."""
+        from unittest import mock
+        from lyrebot.app import App
+        self.write_scores("甲.txt")
+        with mock.patch("lyrebot.app.chrome.available", return_value=True),                 mock.patch("lyrebot.app.chrome.adopt", return_value=adopted) as adopt:
+            return App(self.window(), self.scores, self.midi, own_frame=True), adopt
+
+    def test_the_window_may_draw_its_own_title_bar_and_lend_it_the_lyre(self):
+        app, adopt = self.framed_app(True)
+        self.assertIsNotNone(app.title_bar)
+        self.assertEqual(app.root.pack_slaves()[0], app.title_bar)  # on top of everything
+        self.assertEqual(app.crest.winfo_manager(), "")  # the lyre went up into the bar
+        self.assertIs(adopt.call_args.args[1], app.title_bar.frame)
+        self.assertIn(app.title_bar, adopt.call_args.kwargs["see_through"])
+
+    def test_where_windows_will_not_lend_its_frame_the_window_stays_as_it_was(self):
+        app, _ = self.framed_app(False)
+        self.assertIsNone(app.title_bar)  # Windows keeps its bar, and the lyre its place
+        self.assertEqual(app.crest.master.pack_slaves()[0], app.crest)
+        self.assertNotIn("TitleBar", [type(child).__name__ for child in app.root.winfo_children()])
+
+    def test_unless_asked_the_window_keeps_the_system_title_bar(self):
+        from lyrebot.app import App
+        self.write_scores("甲.txt")
+        self.assertIsNone(App(self.window(), self.scores, self.midi).title_bar)
+
     def test_scores_sort_into_regions_songs_and_unfiled(self):
         self.write_scores("OST/璃月/清润玉响.txt", "OST/蒙德/风息.txt", "OST/蒙德/白日梦.txt", "OST/散落.txt",
                           "OST/新地区/新歌.txt", "歌曲/春日影.txt", "歌曲/分组/Lemon.txt", "未分.txt", "别的/杂项.txt")

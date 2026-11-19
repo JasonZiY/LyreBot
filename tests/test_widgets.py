@@ -9,9 +9,9 @@ import unittest
 from unittest import mock
 import zlib
 
-from lyrebot import dialogs, icons
+from lyrebot import chrome, dialogs, icons
 from lyrebot.theme import Theme, fit, geometry, screen_area
-from lyrebot.widgets import Choice, PillButton, PopupMenu, ThinScrollbar, Tooltip, WritingLine
+from lyrebot.widgets import Choice, PillButton, PopupMenu, ThinScrollbar, TitleBar, Tooltip, WritingLine
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_app import hidden_window
@@ -58,7 +58,7 @@ class Drawing(unittest.TestCase):
     def test_every_icon_draws(self):
         for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
                      icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
-                     icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron):
+                     icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross):
             pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
         width = icons.fleuron_width(7)
@@ -67,8 +67,9 @@ class Drawing(unittest.TestCase):
     def test_level_and_upright_lines_fill_whole_pixels(self):
         """Every pixel such a line passes over is solid, at any scale; none is left half covered and grey."""
         for size in (14, 18, 21, 28):
-            alpha = icons.rgba(size, size, icons.paint(icons.trash(size), "#000000"))[3::4]
-            self.assertTrue(set(alpha) <= {0, 255}, size)
+            for draw in (icons.trash, icons.minimise):
+                alpha = icons.rgba(size, size, icons.paint(draw(size), "#000000"))[3::4]
+                self.assertTrue(set(alpha) <= {0, 255}, (draw.__name__, size))
         pixels = icons.rgba(60, 30, icons.pill(60, 30, "#FAF7F0", "#E3D6BC", 1))
         at = lambda x, y: tuple(pixels[(y * 60 + x) * 4:(y * 60 + x) * 4 + 4])  # noqa: E731
         self.assertEqual(at(30, 0), (0xE3, 0xD6, 0xBC, 255))  # a button's edge: one whole row
@@ -147,6 +148,37 @@ class Pieces(unittest.TestCase):
         self.assertFalse(line.hint.winfo_manager())
         line.entry.delete(0, "end")
         self.assertTrue(line.hint.winfo_manager())
+
+    def test_the_title_bar_shows_the_frame_its_buttons_and_presses_them(self):
+        pressed = []
+        frame = chrome.Frame(edge=5, caption=0)
+        bar = TitleBar(self.root, self.theme, frame, "LyreBot", "未以管理员身份运行",
+                       lambda: pressed.append("minimise"), lambda: pressed.append("close"))
+        px = self.theme.px
+        with mock.patch.object(bar, "winfo_width", return_value=400), mock.patch.object(bar, "winfo_x", return_value=0),                 mock.patch.object(bar, "winfo_y", return_value=0):
+            bar.redraw()
+        self.assertEqual(frame.caption, bar.bar_height)
+        close, minimise = frame.buttons
+        self.assertEqual(close[2], 400 - px(8))  # × sits at the right, — just left of it
+        self.assertLess(minimise[2], close[0])
+        self.assertGreater(close[1], 0)
+        self.assertLessEqual(close[3], bar.bar_height - px(3))  # above the gilt fillet
+        texts = [bar.itemcget(item, "text") for item in bar.find_all() if bar.type(item) == "text"]
+        self.assertEqual(texts, ["LyreBot", "未以管理员身份运行"])
+
+        def at(box):
+            return SimpleNamespace(x=(box[0] + box[2]) / 2, y=(box[1] + box[3]) / 2)
+        bar.point(bar.button_at(at(close).x, at(close).y))
+        self.assertEqual(bar.inside, "close")
+        self.assertEqual(bar.itemcget("close", "image"), str(bar.faces["close"][True]))  # lit under the pointer
+        bar.press(at(close))
+        bar.release(SimpleNamespace(x=200, y=10))  # let go off the button: nothing
+        self.assertEqual(pressed, [])
+        for box in (minimise, close):
+            bar.press(at(box))
+            bar.release(at(box))
+        self.assertEqual(pressed, ["minimise", "close"])
+        self.assertIsNone(bar.inside)
 
     def test_the_scrollbar_pages_and_drags(self):
         moves = []

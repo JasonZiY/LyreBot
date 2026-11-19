@@ -408,6 +408,22 @@ def score_page(size: int) -> list[Part]:
             gilt(stroke([(stem, high), (stem + round(s * 0.11), high + round(s * 0.11))], pen))]
 
 
+def minimise(size: int) -> Shape:
+    """— for the title bar: one level line on whole pixels."""
+    pen = pen_width(size, 0.052)
+    reach, middle = round(size * 0.15), size / 2
+    return crisp([(middle - reach, middle), (middle + reach, middle)], pen)
+
+
+def cross(size: int) -> list[Shape]:
+    """× for the title bar: two strokes at 45° crossing in the middle, their ends in the middle of pixels."""
+    pen = pen_width(size, 0.052)
+    c = _centre(size / 2) if pen % 2 else float(round(size / 2))
+    reach = round(size * 0.13)
+    return [stroke([(c - reach, c - reach), (c + reach, c + reach)], pen),
+            stroke([(c - reach, c + reach), (c + reach, c - reach)], pen)]
+
+
 def trash(size: int) -> list[Shape]:
     """A bin in line: the lid with its handle, the body, two grooves."""
     s, pen = size, pen_width(size, 0.07)

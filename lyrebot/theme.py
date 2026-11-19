@@ -3,8 +3,9 @@
 The colours, the fonts (a Song-style serif for titles where one is installed,
 Georgia for figures), the images drawn by ``icons`` (kept on disk, so a start
 draws nothing it drew before) and the touches Windows 11 lends a window: a
-title bar the colour of the paper, and rounded corners with a gold edge and a
-soft shadow for the menus and tips drawn here.
+title bar the colour of the paper for the dialogs, and rounded corners with a
+gold edge and a soft shadow for the menus and tips drawn here.  The main
+window's title bar is drawn by LyreBot itself (``chrome``), in leather and gilt.
 """
 
 from __future__ import annotations
@@ -37,6 +38,16 @@ HOVER = "#F1ECE2"  # under the pointer
 WARN = "#B5502F"
 WARN_DEEP = "#963F23"
 WHITE = "#FFFFFF"
+
+# The title bar is the book's cover, the dark leather of the program icon, stamped in gold.
+LEATHER_TOP, LEATHER_FOOT = "#4A3B31", "#3A2E27"  # the leather lit from above
+LEATHER_EDGE = "#2E241E"  # where the cover meets the page
+LEATHER_HOVER = "#5E4C40"  # a button's leather under the pointer
+RIM = "#705A49"  # the cover's worn edge: the window's outline
+GILT = "#D9BC82"  # gold stamped into leather
+GILT_BRIGHT = "#E8D2A0"  # the title, where the gold catches the light
+GILT_DEEP = "#B58F50"  # the fillet along the cover's foot
+EMBER = "#E8A386"  # a warning in the gold's company
 
 SANS = "Microsoft YaHei UI"
 SERIFS = ("Noto Serif SC SemiBold", "Source Han Serif SC SemiBold", "Source Han Serif CN SemiBold",

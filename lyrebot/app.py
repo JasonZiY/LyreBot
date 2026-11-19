@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import messagebox as system_dialogs
 from typing import Callable
 
-from . import dialogs, icons
+from . import chrome, dialogs, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .collate import pinyin_key
 from .jianpu import export as export_jianpu
@@ -30,10 +30,11 @@ from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
 from .theme import (FAINT, GOLD, GOLD_SOFT, HAIR, HIGHLIGHT, HOVER, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH,
-                    WARN, WHITE, Theme, dress)
+                    RIM, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import Choice, IconButton, Ornament, PillButton, PopupMenu, ThinScrollbar, WritingLine, rounded, rounded_points
+from .widgets import (Choice, IconButton, Ornament, PillButton, PopupMenu, ThinScrollbar, TitleBar, WritingLine, rounded,
+                      rounded_points)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -720,7 +721,7 @@ class SongBrowser(tk.Canvas):
 
 class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
-                 tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR):
+                 tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR, own_frame: bool = False):
         self.root = root
         self.scores_dir = scores_dir
         self.midi_dir = midi_dir
@@ -774,9 +775,8 @@ class App:
 
         # ---- search ----
         finder = tk.Frame(root, bg=PAPER)
-        crest = px(20)
-        tk.Label(finder, image=theme.icon("lyre", crest, GOLD, icons.lyre), bg=PAPER).pack(side="left",
-                                                                                         padx=(0, px(8)))
+        self.crest = tk.Label(finder, image=theme.icon("lyre", px(20), GOLD, icons.lyre), bg=PAPER)
+        self.crest.pack(side="left", padx=(0, px(8)))  # moves up into the title bar when LyreBot draws one
         self.search_button = PillButton(finder, theme, "搜索", self.search)
         self.search_button.pack(side="right", padx=(px(10), 0))
         self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier)
@@ -861,12 +861,39 @@ class App:
 
         self.refresh()
         self.show_selected()  # nothing is chosen yet: it asks for a song
-        dress(root)
+        self.title_bar: TitleBar | None = None
+        if not (own_frame and self.take_frame(finder, panel)):
+            dress(root)
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
         root.after(600, self.transcribe_next)
         root.after(2000, self.watch)
         root.after(HOTKEY_POLL, self.watch_start_key)
+
+    def take_frame(self, finder: tk.Frame, first: tk.Widget) -> bool:
+        """Draw the title bar in LyreBot's own leather and gilt instead of Windows' (see ``chrome``): the lyre
+        moves up into it, and the window opens in the middle of the screen the pointer is on."""
+        if not chrome.available():
+            return False
+        root, px = self.root, self.theme.px
+        frame = chrome.Frame(edge=px(5), caption=0)
+        bar = TitleBar(root, self.theme, frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
+                       frame.minimise, self.close)
+        bar.pack(side="top", fill="x", before=first)
+        self.crest.pack_forget()
+        finder.pack_configure(pady=(px(12), px(4)))
+        width, height = px(WINDOW_WIDTH), px(640)
+        left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
+        root.geometry(geometry(left + max(0, right - left - width) // 2, top + max(0, bottom - top - height) // 2,
+                               width, height))
+        if chrome.adopt(root, frame, see_through=(root, bar)):
+            round_corners(root, border=RIM)
+            self.title_bar = bar
+            return True
+        bar.destroy()
+        self.crest.pack(side="left", padx=(0, px(8)), before=self.search_button)
+        finder.pack_configure(pady=(px(14), px(4)))
+        return False
 
     def watch_start_key(self) -> None:
         """F7 plays the chosen song at once, in whatever window is in front, as ▶ would."""
@@ -1745,7 +1772,7 @@ def main() -> None:
     except tk.TclError:
         pass
     try:
-        App(root)
+        App(root, own_frame=True)
     except Exception:
         if sys.stderr is not None:
             raise

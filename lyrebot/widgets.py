@@ -1,6 +1,6 @@
 """The pieces LyreBot's window is built of, each drawn in its own style rather than the system's:
-icon buttons, rounded buttons and choices, tips, menus, a fine scrollbar, an ornamental rule and
-a writing line.
+icon buttons, rounded buttons and choices, tips, menus, a fine scrollbar, an ornamental rule,
+a writing line and the window's leather title bar.
 
 ``PopupMenu`` keeps the part of ``tk.Menu``'s interface LyreBot uses, so the
 code that fills a menu, and the tests that read one, need not know the
@@ -14,7 +14,8 @@ import tkinter as tk
 from typing import Callable
 
 from . import icons
-from .theme import (FAINT, GOLD, GOLD_SOFT, HAIR, HOVER, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, WARN,
+from .theme import (EMBER, FAINT, GILT, GILT_BRIGHT, GILT_DEEP, GOLD, GOLD_SOFT, HAIR, HOVER, INK, LEATHER_EDGE,
+                    LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, WARN,
                     WARN_DEEP, WHITE, Theme, fit, geometry, round_corners, screen_area)
 
 
@@ -713,3 +714,102 @@ class WritingLine(tk.Frame):
             self.hint.place_forget()
         else:
             self.hint.place(in_=self.entry, x=0, rely=0.5, anchor="w")
+
+
+class TitleBar(tk.Canvas):
+    """The window's title bar as the cover of a leather-bound book: the gilt lyre and name on dark
+    leather, a gilt fillet along its foot, and — and × in gilt lines on the right.
+
+    It tells ``frame`` (a ``chrome.Frame``) how tall it is and where its buttons are, so that a press
+    on the rest of it moves the window and a press near the edges resizes it, as Windows' own bar
+    would; only presses on the buttons reach it."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, frame, title: str, note: str,
+                 minimise: Callable[[], None], close: Callable[[], None]):
+        px = theme.px
+        self.theme, self.frame, self.title, self.note = theme, frame, title, note
+        self.commands = {"minimise": minimise, "close": close}
+        self.bar_height = px(34)
+        super().__init__(parent, height=self.bar_height, bg=LEATHER_TOP, highlightthickness=0, borderwidth=0)
+        size = self.button_size = px(24)
+        half = size / 2
+
+        def face(name: str, draw: Callable[[int], object], color: str, disc: str | None = None) -> tk.PhotoImage:
+            return theme.image(f"title-{name}", size, size,
+                               lambda: ([(disc, icons.circle(half, half, half - 0.5))] if disc else [])
+                               + icons.paint(draw(size), color))  # type: ignore[arg-type]
+        self.faces = {
+            "minimise": {False: face("minimise", icons.minimise, GILT),
+                         True: face("minimise-hover", icons.minimise, GILT_BRIGHT, LEATHER_HOVER)},
+            "close": {False: face("close", icons.cross, GILT), True: face("close-hover", icons.cross, PAPER, WARN)},
+        }
+        self.crest = theme.icon("title-crest", px(17), GILT, icons.lyre)
+        self.boxes: dict[str, tuple[float, float, float, float]] = {}
+        self.inside: str | None = None  # the button under the pointer
+        self.pressed: str | None = None
+        self.watching: str | None = None
+        self.bind("<Configure>", lambda _: self.redraw())
+        self.bind("<Motion>", lambda event: self.point(self.button_at(event.x, event.y)))
+        self.bind("<Leave>", lambda _: self.point(None))
+        self.bind("<ButtonPress-1>", self.press)
+        self.bind("<ButtonRelease-1>", self.release)
+
+    def redraw(self) -> None:
+        self.delete("all")
+        px, width, height = self.theme.px, self.winfo_width(), self.bar_height
+        top, foot = ([int(color[i:i + 2], 16) for i in (1, 3, 5)] for color in (LEATHER_TOP, LEATHER_FOOT))
+        for y in range(height):  # the leather, lit from above
+            t = y / max(1, height - 1)
+            shade = tuple(round(a + (b - a) * t) for a, b in zip(top, foot))
+            self.create_line(0, y, width, y, fill="#%02x%02x%02x" % shade)
+        line = max(1, round(self.theme.scale))
+        fillet = height - px(3)
+        self.create_rectangle(0, fillet - line, width, fillet - 1, fill=GILT_DEEP, outline="")
+        self.create_rectangle(0, height - line, width, height, fill=LEATHER_EDGE, outline="")
+        middle = fillet / 2
+        x = px(16)
+        self.create_image(x + self.crest.width() / 2, middle, image=self.crest)
+        x += self.crest.width() + px(7)
+        title = self.create_text(x, middle, text=self.title, font=self.theme.fonts.shelf, fill=GILT_BRIGHT, anchor="w")
+        if self.note:
+            right = self.bbox(title)[2] if self.bbox(title) else x
+            self.create_text(right + px(8), middle, text=self.note, font=self.theme.fonts.small, fill=EMBER, anchor="w")
+        size = self.button_size
+        close = width - px(8) - size / 2
+        for name, centre in (("close", close), ("minimise", close - size - px(4))):
+            self.boxes[name] = (centre - size / 2, middle - size / 2, centre + size / 2, middle + size / 2)
+            self.create_image(centre, middle, image=self.faces[name][self.inside == name], tags=name)
+        dx, dy = self.winfo_x(), self.winfo_y()
+        self.frame.caption = dy + height
+        self.frame.buttons = [(round(l + dx), round(t + dy), round(r + dx), round(b + dy))
+                              for l, t, r, b in self.boxes.values()]
+
+    def button_at(self, x: float, y: float) -> str | None:
+        return next((name for name, (l, t, r, b) in self.boxes.items() if l <= x < r and t <= y < b), None)
+
+    def point(self, name: str | None) -> None:
+        if name != self.inside:
+            for lit in (self.inside, name):
+                if lit:
+                    self.itemconfigure(lit, image=self.faces[lit][lit == name])
+            self.inside = name
+        if name and not self.watching:
+            self.watching = self.winfo_toplevel().after(80, self.watch)
+
+    def watch(self) -> None:
+        """Moving off a button onto the bar leaves Tk no event (Windows has that part), so look."""
+        self.watching = None
+        try:
+            x, y = self.winfo_pointerx() - self.winfo_rootx(), self.winfo_pointery() - self.winfo_rooty()
+        except tk.TclError:
+            return
+        self.point(self.button_at(x, y))
+
+    def press(self, event: tk.Event) -> None:
+        self.pressed = self.button_at(event.x, event.y)
+
+    def release(self, event: tk.Event) -> None:
+        pressed, self.pressed = self.pressed, None
+        if pressed and self.button_at(event.x, event.y) == pressed:
+            self.point(None)
+            self.commands[pressed]()
