@@ -1,3 +1,3 @@
 """LyreBot: text scores to timed keyboard input."""
 
-__version__ = "2.12.2"
+__version__ = "2.12.3"
