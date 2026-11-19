@@ -846,6 +846,11 @@ class App:
         self.base_title = "LyreBot" if is_admin() else "LyreBot（未以管理员身份运行）"
         self.frame: chrome.Frame | None = None  # LyreBot's own frame, once Windows lends it (``take_frame``)
         self.rescaled = 0  # the frame's count of changes of screen scaling, as last drawn for
+        # The window's size as the eye sees it (in pixels at 100%), which a move to a screen scaled otherwise
+        # keeps; only resizing the window by hand changes it.  And its size in pixels as last seen, to tell
+        # such a resize from LyreBot's own.
+        self.seen_size: tuple[float, float] | None = None
+        self.known_size: tuple[int, int] | None = None
         self.frame_presses = 0  # and of presses on its title bar and edges, as last seen
         self.title_bar: TitleBar | None = None
         root.title(self.base_title)
@@ -1038,19 +1043,28 @@ class App:
                 self.root.update()  # and they all do, before the screen shows any of them
 
     def box_for(self, dpi: int) -> tuple[int, int, int, int] | None:
-        """Where the window goes for its new scaling: where Windows suggested, or else (let go after a drag
-        across) its size made over by the scalings' ratio from where it lies, all of it on that screen."""
+        """Where the window goes for its new scaling: the size it has to the eye (``seen_size``) in the new
+        screen's pixels, so that moving it to and fro never changes it; placed where Windows suggested (moved
+        by keyboard), or else (let go after a drag across) around the point under the pointer, so the bar it
+        was dragged by stays under it; all of it on that screen."""
         frame = self.frame
         if frame is None or not frame.hwnd:
             return None
-        if frame.suggested is not None:
-            box, frame.suggested = frame.suggested, None
-            return box
         found = chrome.box_of(frame.hwnd)
         if found is None:
             return None
         left, top, width, height = found
-        width, height = round(width * dpi / self.dpi), round(height * dpi / self.dpi)
+        seen = self.seen_size or (width * 96 / self.dpi, height * 96 / self.dpi)
+        new_width, new_height = round(seen[0] * dpi / 96), round(seen[1] * dpi / 96)
+        if frame.suggested is not None:
+            left, top = frame.suggested[:2]
+            frame.suggested = None
+        else:
+            held = chrome.pointer()
+            if held is not None and left <= held[0] < left + width and top <= held[1] < top + height:
+                left = round(held[0] - (held[0] - left) * new_width / width)
+                top = round(held[1] - (held[1] - top) * new_height / height)
+        width, height = new_width, new_height
         screen = screen_holding(left, top, left + width, top + height)
         if screen is not None:
             _, (area_left, area_top, area_right, area_bottom) = screen
@@ -1073,8 +1087,11 @@ class App:
         self.page.close()
         for child in root.winfo_children():
             child.destroy()
-        if box is not None and self.frame is not None:  # the new size first, so the new page is made for it
+        if box is not None and self.frame is not None:  # the new size first, so the new page is made for it,
+            root.minsize(round(WINDOW_WIDTH * dpi / 96), round(360 * dpi / 96))  # with the new screen's least size
+            root.update_idletasks()  # (or Windows holds it to the old screen's: wider than it should be)
             chrome.place(self.frame.hwnd, box)
+            self.known_size = (box[2], box[3])  # LyreBot's own resize, not a hand's
         root.tk.call("tk", "scaling", dpi / 72.0)
         self.build(size=(box[2], box[3]) if box else (root.winfo_width(), root.winfo_height()))
         browser = self.browser
@@ -1091,6 +1108,7 @@ class App:
             self.breathe()
         self.draw_bar()
         root.update_idletasks()  # laid out at the new size, still out of sight
+        self.known_size = root.winfo_width(), root.winfo_height()  # whatever it came to (a small screen holds it in)
 
     def keep_place(self) -> None:
         """Write down where the window is, for it to open there next time (see ``read_place``)."""
@@ -1893,8 +1911,17 @@ class App:
         if typing:
             self.root.focus_set()
 
+    def notice_size(self) -> None:
+        """A change of the window's size that LyreBot did not make is the hand's: the size to the eye follows."""
+        size = self.root.winfo_width(), self.root.winfo_height()
+        if size[0] <= 1 or size == self.known_size or (self.frame is not None and self.frame.moving):
+            return
+        self.known_size = size
+        self.seen_size = (size[0] * 96 / self.dpi, size[1] * 96 / self.dpi)
+
     def poll(self) -> None:
         frame = self.frame
+        self.notice_size()
         if frame is not None and frame.presses != self.frame_presses:
             self.frame_presses = frame.presses  # pressed on the title bar or an edge
             self.leave_search()

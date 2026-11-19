@@ -137,6 +137,7 @@ if sys.platform == "win32":
     _user32.SendMessageW.restype = ctypes.c_ssize_t
     _user32.RedrawWindow.argtypes = (wintypes.HWND, ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT)
     _user32.LockWindowUpdate.argtypes = (wintypes.HWND,)
+    _user32.GetCursorPos.argtypes = (ctypes.POINTER(wintypes.POINT),)
 else:  # pragma: no cover - Windows only
     _user32 = None
 
@@ -185,6 +186,14 @@ def place(hwnd: int, box: Box) -> None:
     """Move and size the window to ``box`` (left, top, width, height), keeping the keyboard where it is."""
     left, top, width, height = box
     _user32.SetWindowPos(hwnd, None, left, top, width, height, SWP_NOZORDER | SWP_NOACTIVATE)
+
+
+def pointer() -> tuple[int, int] | None:
+    """Where the mouse pointer is on the screens."""
+    found = wintypes.POINT()
+    if not _user32.GetCursorPos(ctypes.byref(found)):
+        return None
+    return found.x, found.y
 
 
 def box_of(hwnd: int) -> Box | None:

@@ -877,11 +877,47 @@ class Folders(unittest.TestCase):
         with mock.patch("lyrebot.app.chrome.hold", side_effect=lambda hwnd, held: steps.append(("hold", held))), \
                 mock.patch("lyrebot.app.chrome.place", side_effect=lambda hwnd, box: steps.append(("place", box))), \
                 mock.patch("lyrebot.app.chrome.box_of", return_value=(-1800, 60, 350, 640)), \
+                mock.patch("lyrebot.app.chrome.pointer", return_value=None), \
                 mock.patch("lyrebot.app.screen_holding", return_value=(dpi, (-1920, 0, 0, 1040))):
             ratio = dpi / app.dpi
             app.rescale(dpi)
         self.assertEqual(steps, [("hold", True), ("place", (-1800, 60, round(350 * ratio), round(640 * ratio))),
                                  ("hold", False)])  # held, made over and sized, then shown whole
+
+    def test_moved_to_and_fro_between_screens_the_window_keeps_its_size_to_the_eye(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        app.frame.hwnd, app.dpi, app.seen_size = 5, 120, (350, 640)
+        screen = (96, (-1920, 0, 0, 1040))
+        with mock.patch("lyrebot.app.chrome.box_of", return_value=(-1500, 100, 548, 800)), \
+                mock.patch("lyrebot.app.chrome.pointer", return_value=None), \
+                mock.patch("lyrebot.app.screen_holding", return_value=screen):
+            # whatever size it has in pixels, it goes by its size to the eye: 350 x 640 at 100%
+            self.assertEqual(app.box_for(96), (-1500, 100, 350, 640))
+        app.dpi = 96
+        with mock.patch("lyrebot.app.chrome.box_of", return_value=(100, 100, 350, 640)), \
+                mock.patch("lyrebot.app.chrome.pointer", return_value=(150, 110)), \
+                mock.patch("lyrebot.app.screen_holding", return_value=(120, (0, 0, 1920, 1140))):
+            # and 438 x 800 at 125%, made over around the point it is held by, which stays under the pointer
+            self.assertEqual(app.box_for(120), (87, 98, 438, 800))  # (150 - 50 x 438/350, 110 - 10 x 800/640)
+
+    def test_only_a_hand_changes_the_windows_size_to_the_eye(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        app.dpi, app.known_size, app.seen_size = 120, (438, 800), (350, 640)
+        with mock.patch.object(app.root, "winfo_width", return_value=500), \
+                mock.patch.object(app.root, "winfo_height", return_value=800):
+            app.frame.moving = True
+            app.notice_size()
+            self.assertEqual(app.seen_size, (350, 640))  # not while it is being dragged
+            app.frame.moving = False
+            app.notice_size()
+        self.assertEqual(app.seen_size, (400, 640))  # sized by hand: 500 px at 125% is 400 to the eye
+        app.known_size = (438, 800)  # LyreBot's own resize, as rescale leaves it
+        with mock.patch.object(app.root, "winfo_width", return_value=438), \
+                mock.patch.object(app.root, "winfo_height", return_value=800):
+            app.notice_size()
+        self.assertEqual(app.seen_size, (400, 640))
 
     def test_closing_keeps_the_place(self):
         from unittest import mock
