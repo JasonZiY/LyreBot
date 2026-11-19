@@ -54,6 +54,15 @@ def hidden_window(test):
     return root
 
 
+def press(widget, sequence):
+    """Do what ``widget`` is bound to do for ``sequence``.  A hidden window never has the focus, so a key
+    event generated for it goes nowhere: run the command its binding calls instead."""
+    import re
+    command = re.search(r"\[(\S+)", widget.bind(sequence)).group(1)
+    # The event's fields (%# %b %f %h %k %s %t %w %x %y %A %E %K %N %W %T %X %Y %D), as a key press of nothing.
+    widget.tk.call(command, *["0"] * 10, "", "0", "", "0", str(widget), "2", "0", "0", "0")
+
+
 class NextSong(unittest.TestCase):
     def test_in_order_wraps_around(self):
         self.assertEqual(next_song(SONGS, SONGS[1], IN_ORDER), SONGS[2])
@@ -302,7 +311,8 @@ class Folders(unittest.TestCase):
     def test_where_windows_will_not_lend_its_frame_the_window_stays_as_it_was(self):
         app, _ = self.framed_app(False)
         self.assertIsNone(app.title_bar)  # Windows keeps its bar, and the lyre its place
-        self.assertEqual(app.crest.master.pack_slaves()[0], app.crest)
+        self.assertEqual(app.crest.winfo_manager(), "grid")
+        self.assertEqual(int(app.crest.grid_info()["column"]), 0)
         self.assertNotIn("TitleBar", [type(child).__name__ for child in app.root.winfo_children()])
 
     def test_the_list_scrolls_over_a_page_that_stays_still(self):
@@ -697,16 +707,28 @@ class Folders(unittest.TestCase):
         self.assertIsNone(next_match(songs, "雪"))
         self.assertIsNone(next_match(songs, "  "))
 
+    def test_the_search_field_has_the_right_half_of_its_row_and_no_button(self):
+        from lyrebot.app import App
+        from lyrebot.widgets import PillButton
+        self.write_scores("甲.txt")
+        app = App(self.window(), self.scores, self.midi)
+        row = app.search_field.master
+        self.assertEqual(int(app.search_field.grid_info()["column"]), 1)
+        self.assertEqual(app.search_field.grid_info()["sticky"], "ew")
+        halves = [row.grid_columnconfigure(column) for column in (0, 1)]
+        self.assertEqual([(half["weight"], half["uniform"]) for half in halves], [(1, "half"), (1, "half")])
+        self.assertFalse([child for child in row.winfo_children() if isinstance(child, PillButton)])
+
     def test_the_search_box_jumps_to_each_match(self):
         from lyrebot.app import App
         first, second, third = self.write_scores("OST/蒙德/风息的离别诗.txt", "OST/纳塔/风清月白.txt", "歌曲/春风.txt")
         app = App(self.window(), self.scores, self.midi)
         app.search_entry.insert(0, "风")
-        app.search()
+        press(app.search_entry, "<Return>")  # Enter searches
         self.assertEqual(app.selected(), first)
         self.assertIn(first, app.browser.visible_songs())  # its region opened
-        self.assertIn("第 1 首，共 3 首", app.status_label.cget("text"))
-        app.search()
+        self.assertIn("第 1 首，共 3 首，再按回车看下一首", app.status_label.cget("text"))
+        press(app.search_entry, "<Return>")
         self.assertEqual(app.selected(), second)
         app.search()
         self.assertEqual(app.selected(), third)  # 歌曲 opened too

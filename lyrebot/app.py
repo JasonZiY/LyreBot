@@ -34,8 +34,8 @@ from .theme import (CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, 
                     PEACH, RIM, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area)
 from .timeline import compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Choice, IconButton, Ornament, Picture, PillButton, PopupMenu, Sheet, ThinScrollbar, TitleBar,
-                      Words, WritingLine)
+from .widgets import (Choice, IconButton, Ornament, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar, Words,
+                      WritingLine)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -818,14 +818,17 @@ class App:
         self.build_images()
 
         # ---- search ----
+        # Two halves: the lyre at the left (it moves up into the title bar when LyreBot draws one), and
+        # the search field filling the right.  Enter searches; there is no button for it.
         finder = Sheet(root, theme)
+        for column in (0, 1):
+            finder.columnconfigure(column, weight=1, uniform="half")
         self.crest = Picture(finder, theme, theme.icon("lyre", px(20), GOLD, icons.lyre))
-        self.crest.pack(side="left", padx=(0, px(8)))  # moves up into the title bar when LyreBot draws one
-        self.search_button = PillButton(finder, theme, "搜索", self.search)
-        self.search_button.pack(side="right", padx=(px(10), 0))
+        self.crest.grid(row=0, column=0, sticky="w")
         self.search_field = WritingLine(finder, theme, hint="搜索曲名", icon=icons.magnifier, bg=self.page.head)
-        self.search_field.pack(side="left", fill="x", expand=True)
+        self.search_field.grid(row=0, column=1, sticky="ew")
         self.search_entry = self.search_field.entry
+        self.search_entry.configure(width=1)  # as wide as its half, whatever that is
         self.search_entry.bind("<Return>", lambda _: self.search())
 
         # ---- song list ----
@@ -924,7 +927,7 @@ class App:
         bar = TitleBar(root, self.theme, frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
                        frame.minimise, self.close)
         bar.pack(side="top", fill="x", before=first)
-        self.crest.pack_forget()
+        self.crest.grid_remove()
         finder.pack_configure(pady=(px(12), px(4)))
         width, height = px(WINDOW_WIDTH), px(640)
         left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
@@ -935,7 +938,7 @@ class App:
             self.title_bar = bar
             return True
         bar.destroy()
-        self.crest.pack(side="left", padx=(0, px(8)), before=self.search_button)
+        self.crest.grid()
         finder.pack_configure(pady=(px(14), px(4)))
         return False
 
@@ -1128,7 +1131,7 @@ class App:
             return
         self.select(found)
         matches = [path for path in self.songs if query.casefold() in path.stem.casefold()]
-        self.say(f"「{query}」第 {matches.index(found) + 1} 首，共 {len(matches)} 首，再点搜索看下一首"
+        self.say(f"「{query}」第 {matches.index(found) + 1} 首，共 {len(matches)} 首，再按回车看下一首"
                  if len(matches) > 1 else f"「{query}」只有这一首")
 
     def playlist(self, path: Path | None) -> list[Path]:
@@ -1641,7 +1644,6 @@ class App:
         self.restart_button.set(enabled=not busy)
         self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
-        self.search_button.set_enabled(not busy)
         self.bar.configure(cursor="arrow" if busy else "hand2")
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,
