@@ -473,15 +473,17 @@ class Cell:
 class SongBrowser(tk.Canvas):
     """The song list: unfiled scores across the top, then OST by region and 歌曲.
 
-    The shelves start open and the regions closed.  An open region's songs
-    run down two columns on the lines under its name, as wide as the 歌曲
-    shelf's two, which share all the width after the shelf's name.
+    Everything starts at one left edge and opens downwards: a shelf's
+    regions (or 歌曲's songs) on the lines under its name, a region's songs
+    under its own.  Songs run down two columns.  The shelves start open and
+    the regions closed.
     """
 
     def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
                  on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
         px = lambda n: max(1, round(n * scale))  # noqa: E731
-        self.row, self.shelf_width, self.pad = px(ROW_HEIGHT), px(52), px(6)
+        self.row, self.pad = px(ROW_HEIGHT), px(6)
+        self.margin = px(8)  # kept clear on either side of the list
         self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
@@ -520,7 +522,8 @@ class SongBrowser(tk.Canvas):
         if library is None:
             return
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
-        across_shelf = self.column_edges(self.shelf_width, width)
+        left, right = self.margin, width - self.margin
+        columns = self.column_edges(left, right)
         row = self.row
         cells: list[Cell] = []
         rules: list[int] = []
@@ -541,31 +544,31 @@ class SongBrowser(tk.Canvas):
 
         y = 0
         for path in library.unfiled:
-            song(path, 0, y, width)
+            song(path, left, y, right)
             y += row
         if library.unfiled:
             rules.append(y)
         is_open = OST not in self.closed_shelves
-        cells.append(Cell("shelf", OST, (0, y, self.shelf_width, y + row), opener(is_open, OST)))
+        cells.append(Cell("shelf", OST, (left, y, right, y + row), opener(is_open, OST)))
+        y += row
         if is_open:
             for name, paths in library.regions:
                 expanded = name in self.open_regions
-                cells.append(Cell("region", name, (self.shelf_width, y, width, y + row), opener(expanded, name)))
+                cells.append(Cell("region", name, (left, y, right, y + row), opener(expanded, name)))
                 y += row
                 if expanded:
-                    y += run_down(paths, across_shelf, y)
-        else:
-            y += row
+                    y += run_down(paths, columns, y)
         rules.append(y)
         is_open = SONGS not in self.closed_shelves
-        cells.append(Cell("shelf", SONGS, (0, y, self.shelf_width, y + row), opener(is_open, SONGS)))
-        height = run_down(library.songs, across_shelf, y) if is_open else 0
-        y += max(height, row)
+        cells.append(Cell("shelf", SONGS, (left, y, right, y + row), opener(is_open, SONGS)))
+        y += row
+        if is_open:
+            y += run_down(library.songs, columns, y)
 
         self.cells, self.total = cells, y
         self.delete("content")
         for rule in rules:
-            self.create_line(0, rule, width, rule, fill=LINE, tags="content")
+            self.create_line(left, rule, right, rule, fill=LINE, tags="content")
         for cell in cells:
             left, top, right, bottom = cell.box
             bold = cell.kind == "shelf"

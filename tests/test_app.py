@@ -337,21 +337,25 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.selected(), self.scores / "未分.txt")
         self.assertEqual({path.stem for path in browser.visible_songs()}, {"未分", "一", "二", "三", "四"})
         self.assertEqual([cell.name for cell in browser.cells if cell.kind == "region"], list(REGIONS))
+        left, right = browser.margin, width - browser.margin  # a little room from either side
         unfiled = self.cell(app, "song", "未分")
-        self.assertEqual((unfiled.box[0], unfiled.box[2]), (0, width))
+        self.assertEqual((unfiled.box[0], unfiled.box[2]), (left, right))
+        ost, region = self.cell(app, "shelf", "OST"), self.cell(app, "region", "蒙德")
+        self.assertEqual((ost.box[0], region.box[0]), (left, left))  # one left edge for every level
+        self.assertEqual(self.cell(app, "region", list(REGIONS)[0]).box[1], ost.box[3])  # regions under OST
 
-        region = self.cell(app, "region", "蒙德")
         below = self.cell(app, "region", "璃月").box[1]
-        self.assertEqual((region.box[0], region.box[2]), (browser.shelf_width, width))
         self.click(app, region)
-        across = browser.column_edges(browser.shelf_width, width)
+        across = browser.column_edges(left, right)
         songs = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "蒙德"]
         self.assertEqual(sorted({cell.box[0] for cell in songs}), across[:2])  # two columns ...
         self.assertEqual(min(cell.box[1] for cell in songs), region.box[3])  # ... on the lines under its name
         self.assertEqual(self.cell(app, "region", "璃月").box[1], below + 2 * browser.row)  # 3 songs take 2 lines
-        shelf = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "歌曲"]
-        self.assertEqual(sorted({cell.box[0] for cell in shelf}), across[:2])  # the same two columns as 歌曲's
-        self.assertEqual(max(cell.box[2] for cell in shelf), width)
+        shelf = self.cell(app, "shelf", "歌曲")
+        songs = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "歌曲"]
+        self.assertEqual(sorted({cell.box[0] for cell in songs}), across[:2])  # the same two columns
+        self.assertEqual(min(cell.box[1] for cell in songs), shelf.box[3])  # under 歌曲
+        self.assertEqual(max(cell.box[2] for cell in songs), right)
 
         self.click(app, self.cell(app, "region", "蒙德"))
         self.assertNotIn(self.scores / "OST" / "蒙德" / "甲.txt", browser.visible_songs())
