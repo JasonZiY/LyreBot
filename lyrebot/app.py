@@ -53,6 +53,7 @@ NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0  # seconds to switch to the game after starting a song from the window; F7 needs none
 HOTKEY_POLL = 30  # milliseconds between looks at F7
+READY = "请切换到游戏窗口，按F7立刻开始"  # under the bar once a song is chosen
 FAMILY = "Microsoft YaHei UI"
 
 # Claude's palette: warm paper, ink, and one orange accent.
@@ -877,7 +878,7 @@ class App:
         self.button = IconButton(controls, self.play_images, self.start)
         self.button.pack(side="right", padx=(0, px(6)))
         self.restart_button = IconButton(controls, self.restart_images, self.restart)
-        self.restart_button.pack(side="right", padx=(0, px(4)))
+        self.restart_button.pack(side="right", padx=(0, px(6)))  # as far from ▶ as ⏭, on the other side
         self.record_button = IconButton(controls, self.record_images, self.record)
         self.record_button.pack(side="right", padx=(0, px(6)))
         self.keys_button = IconButton(controls, self.keys_images, self.listen)
@@ -1116,7 +1117,7 @@ class App:
                 self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds)
             self.say(f"停在第 {bar + 1} 小节 · 点 ▶ 或按 F7 从这里接着弹，点 ↺ 从头弹")
             return
-        self.say(self.notice[1] if self.notice else "")
+        self.say(self.notice[1] if self.notice else READY)
 
     def open_folder(self, folder: Path) -> None:
         folder.mkdir(parents=True, exist_ok=True)

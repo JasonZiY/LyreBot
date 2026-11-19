@@ -96,10 +96,10 @@ def triangle(a: tuple[float, float], b: tuple[float, float], c: tuple[float, flo
 
 
 def restart(size: int) -> list[Shape]:
-    """↺: a ring open near the top right, its arrowhead at about two o'clock pointing up, anticlockwise."""
+    """↺: a ring open near the top left, its arrowhead at about eleven o'clock pointing left, anticlockwise."""
     c = size / 2
     radius, thick = size * 0.21, size * 0.075
-    gap = (math.radians(-85), math.radians(-25))  # screen angles, clockwise from three o'clock
+    gap = (math.radians(-175), math.radians(-115))  # screen angles, clockwise from three o'clock
 
     def ring(x: float, y: float) -> bool:
         if not (radius - thick / 2) ** 2 <= (x - c) ** 2 + (y - c) ** 2 <= (radius + thick / 2) ** 2:

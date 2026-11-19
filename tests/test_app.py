@@ -386,7 +386,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.selected(), one)
         self.assertEqual(app.title_label.cget("text"), "一")
         self.assertTrue(app.button.enabled)
-        self.assertEqual(app.status_label.cget("text"), "")  # no BPM or tempo changes under the bar
+        self.assertEqual(app.status_label.cget("text"), "请切换到游戏窗口，按F7立刻开始")  # no BPM or tempo changes
         with mock.patch.object(app.browser, "on_play") as play:
             self.click(app, self.cell(app, "song", "二"), double=True)
         play.assert_called_once_with()
