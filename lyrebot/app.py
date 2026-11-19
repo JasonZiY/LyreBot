@@ -582,9 +582,7 @@ class SongBrowser(tk.Canvas):
                 self.create_line(start, middle, end, middle, fill=HAIR, tags="content")
 
     def warning(self, size: int) -> tk.PhotoImage:
-        shape, marks = icons.warning(size)
-        return self.theme.image(f"warning-badge:{WARN}", size, size,
-                                lambda: [(WARN, shape), *[("#FFFFFF", mark) for mark in marks]])
+        return self.theme.icon("warning", size, WARN, icons.warning)
 
     def fit(self, text: str, width: int, font: tuple) -> str:
         """``text``, cut short with … if it is wider than ``width``."""
@@ -795,8 +793,8 @@ class App:
         self.move_menu = PopupMenu(root, theme)
         self.song_menu.add_cascade(label="移到…", menu=self.move_menu, icon=icons.move_to)
         self.song_menu.add_separator()
-        self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange, icon=icons.sparkle)
-        self.song_menu.add_command(label="导出简谱", command=self.export_jianpu, icon=icons.page_note)
+        self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange, icon=icons.quill)
+        self.song_menu.add_command(label="导出简谱", command=self.export_jianpu, icon=icons.score_page)
         self.song_menu.add_separator()
         self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete, icon=icons.trash,
                                    danger=True)
@@ -833,7 +831,7 @@ class App:
         self.speed = tk.StringVar(master=root, value="100%")
         self.mode = tk.StringVar(master=root, value=SINGLE)
         self.speed_choice = Choice(controls, theme, self.speed, SPEEDS, self.show_selected,
-                                   ((CUSTOM_SPEED, self.ask_speed, icons.pencil),))
+                                   ((CUSTOM_SPEED, self.ask_speed, icons.pen_nib),))
         self.speed_choice.pack(side="left")
         self.mode_choice = Choice(controls, theme, self.mode, MODES, self.mode_picked)
         self.mode_choice.pack(side="left", padx=(px(6), 0))
@@ -876,7 +874,8 @@ class App:
         self.root.after(HOTKEY_POLL, self.watch_start_key)
 
     def build_images(self) -> None:
-        """The buttons' faces: ▶ an orange disc set in a gold ring, the rest drawn in fine ink lines."""
+        """The buttons' faces: ▶ an orange disc set in a gold ring, ● an orange dot in a gold one, the rest
+        drawn in fine ink lines with their gilt in gold."""
         theme, px = self.theme, self.theme.px
         big, small = px(34), px(26)
         c, s = big / 2, small / 2
@@ -898,10 +897,9 @@ class App:
             return color, icons.circle(s, s, s - 0.5)
 
         def plain(name: str, draw: Callable[[int], list]) -> dict[str, tk.PhotoImage]:
-            return {"normal": picture(f"{name}-normal", small, lambda: [(INK, shape) for shape in draw(small)]),
-                    "hover": picture(f"{name}-hover", small,
-                                     lambda: [halo(), *[(INK, shape) for shape in draw(small)]]),
-                    "disabled": picture(f"{name}-disabled", small, lambda: [(FAINT, shape) for shape in draw(small)])}
+            return {"normal": picture(f"{name}-normal", small, lambda: icons.paint(draw(small), INK, GOLD)),
+                    "hover": picture(f"{name}-hover", small, lambda: [halo(), *icons.paint(draw(small), INK, GOLD)]),
+                    "disabled": picture(f"{name}-disabled", small, lambda: icons.paint(draw(small), FAINT))}
         self.next_images = plain("next", icons.next_track)
         self.restart_images = plain("restart", icons.restart)
         self.keys_images = plain("keys", icons.keyboard)
@@ -911,7 +909,7 @@ class App:
                 ring, middle = icons.record(small)
                 return [*([ground] if ground else []), (edge, ring), (color, middle)]
             return layers
-        self.record_images = {"normal": picture("record-normal", small, dot(HAIR, ORANGE)),
+        self.record_images = {"normal": picture("record-normal", small, dot(GOLD_SOFT, ORANGE)),
                               "hover": picture("record-hover", small, dot(GOLD, ORANGE_DEEP, halo())),
                               "disabled": picture("record-disabled", small, dot(HAIR, PEACH))}
 

@@ -33,7 +33,7 @@ class Drawing(unittest.TestCase):
     def test_the_quick_look_matches_full_sampling(self):
         """A pixel is only sampled in full where its corners disagree: thin strokes must not be lost."""
         size = 26
-        layers = [("#2B2722", shape) for shape in icons.restart(size) + icons.keyboard(size)]
+        layers = icons.paint(icons.restart(size) + icons.keyboard(size), "#2B2722")
         fast = icons.rgba(size, size, layers)
         slow = bytearray()
         offsets = [(i + 0.5) / 4 for i in range(4)]
@@ -56,13 +56,22 @@ class Drawing(unittest.TestCase):
         self.assertEqual(raw, b"\x00" + bytes(range(12)) + b"\x00" + bytes(range(12, 24)))
 
     def test_every_icon_draws(self):
-        for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.check,
-                     icons.magnifier, icons.folder, icons.move_to, icons.sparkle, icons.page_note, icons.trash,
-                     icons.pencil, icons.diamond, icons.lyre, icons.chevron):
-            shapes = draw(16)
-            shapes = list(shapes) if isinstance(shapes, (list, tuple)) else [shapes]
-            pixels = icons.rgba(16, 16, [("#000000", shape) for shape in shapes])
+        for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
+                     icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
+                     icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron):
+            pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
+        width = icons.fleuron_width(7)
+        self.assertTrue(any(icons.rgba(width, 7, icons.paint(icons.fleuron(width, 7), "#000000"))[3::4]))
+
+    def test_the_gilt_is_laid_in_gold_and_the_lines_in_ink(self):
+        ink, gold = "#2B2722", "#B08D57"
+        for draw in (icons.next_track, icons.keyboard, icons.magnifier, icons.folder, icons.move_to, icons.quill,
+                     icons.score_page, icons.pen_nib):
+            colors = {color for color, _ in icons.paint(draw(18), ink, gold)}
+            self.assertEqual(colors, {ink, gold}, draw.__name__)  # every one has lines and a touch of gold
+        self.assertEqual({color for color, _ in icons.paint(icons.folder(18), "#C9BFAE")}, {"#C9BFAE"})  # off: all faint
+        self.assertEqual([color for color, _ in icons.paint(icons.chevron(10), gold)], [gold])  # a lone shape too
 
 
 class Pieces(unittest.TestCase):

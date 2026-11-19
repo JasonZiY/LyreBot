@@ -350,10 +350,11 @@ class PopupMenu:
         for index, item in enumerate(self.items):
             if item["type"] == "separator":
                 middle = y + m["rule"] // 2
-                dot = self.theme.px(5)
-                canvas.create_line(m["right"], middle, width / 2 - dot, middle, fill=HAIR)
-                canvas.create_line(width / 2 + dot, middle, width - m["right"], middle, fill=HAIR)
-                canvas.create_image(width / 2, middle, image=self.theme.icon("diamond", dot, GOLD_SOFT, icons.diamond))
+                ornament = self.theme.fleuron(self.theme.px(5), GOLD_SOFT)
+                gap = ornament.width() / 2 + self.theme.px(4)
+                canvas.create_line(m["right"], middle, width / 2 - gap, middle, fill=HAIR)
+                canvas.create_line(width / 2 + gap, middle, width - m["right"], middle, fill=HAIR)
+                canvas.create_image(width / 2, middle, image=ornament)
                 self.rows.append((y, y + m["rule"]))
                 y += m["rule"]
                 continue
@@ -369,9 +370,10 @@ class PopupMenu:
             mark = None
             if item["type"] == "radiobutton" and item["variable"].get() == item["value"]:
                 mark = self.theme.icon("check", m["mark"], ORANGE if enabled else FAINT, icons.check)
-            elif item.get("icon"):
-                color = FAINT if not enabled else WARN if item.get("danger") else GOLD
-                mark = self.theme.icon(item["icon"].__name__, m["mark"], color, item["icon"])
+            elif item.get("icon"):  # drawn in ink with its gilt in gold; in red for deleting; faint when off
+                color = FAINT if not enabled else WARN if item.get("danger") else INK
+                gold = FAINT if not enabled else WARN if item.get("danger") else GOLD
+                mark = self.theme.icon(item["icon"].__name__, m["mark"], color, item["icon"], gold)
             if mark is not None:
                 canvas.create_image(m["text"] / 2 + self.theme.px(2), middle, image=mark)
             canvas.create_text(m["text"], middle, anchor="w", text=item["label"], fill=ink, font=fonts.body)
@@ -657,7 +659,7 @@ class ThinScrollbar(tk.Canvas):
 
 
 class Ornament(tk.Canvas):
-    """A hairline across, with a small gold diamond set in the middle."""
+    """A hairline across, with a small gold ·◆· set in the middle."""
 
     def __init__(self, parent: tk.Widget, theme: Theme):
         self.theme = theme
@@ -667,11 +669,11 @@ class Ornament(tk.Canvas):
     def redraw(self) -> None:
         self.delete("all")
         width, middle = self.winfo_width(), self.winfo_height() / 2
-        size, gap = self.theme.px(7), self.theme.px(6)
-        centre = width / 2
-        self.create_line(0, middle, centre - size / 2 - gap, middle, fill=HAIR)
-        self.create_line(centre + size / 2 + gap, middle, width, middle, fill=HAIR)
-        self.create_image(centre, middle, image=self.theme.icon("diamond", size, GOLD, icons.diamond))
+        ornament = self.theme.fleuron(self.theme.px(7), GOLD)
+        centre, gap = width / 2, ornament.width() / 2 + self.theme.px(6)
+        self.create_line(0, middle, centre - gap, middle, fill=HAIR)
+        self.create_line(centre + gap, middle, width, middle, fill=HAIR)
+        self.create_image(centre, middle, image=ornament)
 
 
 class WritingLine(tk.Frame):
@@ -686,8 +688,8 @@ class WritingLine(tk.Frame):
         row.pack(fill="x")
         if icon is not None:
             size = theme.px(13)
-            tk.Label(row, image=theme.icon(icon.__name__, size, MUTED, icon), bg=PAPER).pack(side="left",
-                                                                                          padx=(0, theme.px(6)))
+            tk.Label(row, image=theme.icon(icon.__name__, size, MUTED, icon, GOLD), bg=PAPER).pack(
+                side="left", padx=(0, theme.px(6)))
         self.entry = tk.Entry(row, textvariable=self.value, font=theme.fonts.body, relief="flat", borderwidth=0,
                               bg=PAPER, fg=INK, insertbackground=INK, insertwidth=max(1, theme.px(1)),
                               highlightthickness=0, selectbackground=HOVER, selectforeground=INK)

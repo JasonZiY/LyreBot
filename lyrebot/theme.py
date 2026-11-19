@@ -115,13 +115,17 @@ class Theme:
             self.images[memo] = tk.PhotoImage(master=self.root, data=base64.b64encode(data).decode("ascii"))
         return self.images[memo]
 
-    def icon(self, name: str, size: int, color: str, draw: Callable[[int], object]) -> tk.PhotoImage:
-        """A one-colour icon: ``draw(size)`` gives its shape or shapes."""
-        def layers() -> icons.Layers:
-            shapes = draw(size)
-            shapes = shapes if isinstance(shapes, (list, tuple)) else [shapes]
-            return [(color, shape) for shape in shapes]
-        return self.image(f"{name}:{color}", size, size, layers)
+    def icon(self, name: str, size: int, color: str, draw: Callable[[int], object],
+             gold: str | None = None) -> tk.PhotoImage:
+        """An icon: ``draw(size)`` gives its parts, its lines painted ``color`` and its gilt ``gold`` (or
+        ``color`` too)."""
+        return self.image(f"{name}:{color}:{gold or color}", size, size,
+                          lambda: icons.paint(draw(size), color, gold))  # type: ignore[arg-type]
+
+    def fleuron(self, height: int, color: str) -> tk.PhotoImage:
+        """·◆· in ``color``, ``height`` tall: the ornament set into a rule."""
+        width = icons.fleuron_width(height)
+        return self.image(f"fleuron:{color}", width, height, lambda: icons.paint(icons.fleuron(width, height), color))
 
     def pill(self, width: int, height: int, fill: str, border: str) -> tk.PhotoImage:
         line = max(1.0, self.scale)

@@ -59,9 +59,7 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
     head = tk.Frame(frame, bg=PAPER)
     head.pack(fill="x")
     if warning:
-        size = px(18)
-        shape, marks = icons.warning(size)
-        mark = theme.image(f"warning-badge:{WARN}", size, size, lambda: [(WARN, shape), *[("#FFFFFF", m) for m in marks]])
+        mark = theme.icon("warning", px(18), WARN, icons.warning)
         tk.Label(head, image=mark, bg=PAPER).pack(side="left", padx=(0, px(8)), anchor="n", pady=(px(2), 0))
     width = px(320)
     tk.Label(head, text=heading, font=fonts.title, fg=INK, bg=PAPER, justify="left", anchor="w",
