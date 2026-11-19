@@ -484,6 +484,7 @@ class SongBrowser(tk.Canvas):
         px = lambda n: max(1, round(n * scale))  # noqa: E731
         self.row, self.pad = px(ROW_HEIGHT), px(6)
         self.margin = px(8)  # kept clear on either side of the list
+        self.indent = 0  # how far songs sit in from regions: the width of "▸ ", measured when laid out
         self.tail = px(2)  # room after a name: the next column's own margin keeps them apart
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
@@ -523,7 +524,10 @@ class SongBrowser(tk.Canvas):
             return
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
         left, right = self.margin, width - self.margin
-        columns = self.column_edges(left, right)
+        # Songs start where a region's name does, after its ▸.
+        self.indent = int(self.tk.call("font", "measure", (FAMILY, LIST_FONT), "▸ "))
+        songs_left = left + self.indent
+        columns = self.column_edges(songs_left, right)
         row = self.row
         cells: list[Cell] = []
         rules: list[int] = []
@@ -544,7 +548,7 @@ class SongBrowser(tk.Canvas):
 
         y = 0
         for path in library.unfiled:
-            song(path, left, y, right)
+            song(path, songs_left, y, right)
             y += row
         if library.unfiled:
             rules.append(y)
@@ -572,7 +576,7 @@ class SongBrowser(tk.Canvas):
         for cell in cells:
             left, top, right, bottom = cell.box
             bold = cell.kind == "shelf"
-            color = MUTED if bold else WARN if cell.path in self.bad else INK
+            color = WARN if cell.path in self.bad else INK
             self.create_text(left + self.pad, (top + bottom) / 2, anchor="w", fill=color, tags="content",
                              font=(FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT),
                              text=self.fit(cell.text, self.room(cell), bold))
