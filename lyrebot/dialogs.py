@@ -9,7 +9,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from . import icons
-from .theme import GOLD_SOFT, INK, MUTED, PAPER, WARN, Theme, dress
+from .theme import GOLD_SOFT, INK, MUTED, PAPER, WARN, Theme, dress, geometry, screen_area
 from .widgets import PillButton, WritingLine
 
 
@@ -95,13 +95,7 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
     window.bind("<Escape>", lambda _: finish(cancel))
 
     window.update_idletasks()
-    w, h = window.winfo_reqwidth(), window.winfo_reqheight()
-    if owner.winfo_viewable():
-        x = owner.winfo_rootx() + (owner.winfo_width() - w) // 2
-        y = owner.winfo_rooty() + max((owner.winfo_height() - h) // 3, 0)
-    else:
-        x, y = (window.winfo_screenwidth() - w) // 2, (window.winfo_screenheight() - h) // 3
-    window.geometry(f"+{max(0, x)}+{max(0, y)}")
+    window.geometry(geometry(*_place(owner, window.winfo_reqwidth(), window.winfo_reqheight())))
     window.deiconify()
     dress(window)
     try:
@@ -116,3 +110,17 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
         window.focus_force()
     owner.wait_window(window)
     return answer[0], str(answer[1])
+
+
+def _place(owner: tk.Misc, width: int, height: int) -> tuple[int, int]:
+    """Over LyreBot's window, a third of the way down, on whichever screen that is; while the window is
+    hidden, in the middle of the screen the pointer is on.  Whole on that screen either way."""
+    if owner.winfo_viewable():
+        left, top, right, bottom = screen_area(owner, owner.winfo_rootx() + owner.winfo_width() / 2,
+                                               owner.winfo_rooty() + owner.winfo_height() / 2)
+        x = owner.winfo_rootx() + (owner.winfo_width() - width) // 2
+        y = owner.winfo_rooty() + max((owner.winfo_height() - height) // 3, 0)
+    else:
+        left, top, right, bottom = screen_area(owner, *owner.winfo_pointerxy())
+        x, y = (left + right - width) // 2, top + (bottom - top - height) // 3
+    return min(max(x, left), right - width), min(max(y, top), bottom - height)

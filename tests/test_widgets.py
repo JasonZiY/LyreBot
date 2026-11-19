@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import struct
 import tempfile
 import time
@@ -9,8 +10,8 @@ from unittest import mock
 import zlib
 
 from lyrebot import dialogs, icons
-from lyrebot.theme import Theme
-from lyrebot.widgets import Choice, PillButton, PopupMenu, ThinScrollbar, WritingLine
+from lyrebot.theme import Theme, fit, geometry, screen_area
+from lyrebot.widgets import Choice, PillButton, PopupMenu, ThinScrollbar, Tooltip, WritingLine
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_app import hidden_window
@@ -302,6 +303,120 @@ class Dialogs(unittest.TestCase):
         self.assertIsNone(dialogs.error("无法移动", "那里已经有同名的曲谱", parent=self.root))
         self.answer("还不能录音", lambda d: d.event_generate("<Escape>"))
         self.assertIsNone(dialogs.info("还不能录音", "缺少转录工具", parent=self.root))
+
+
+LEFT_SCREEN = (-2400, 0, 0, 1290)  # a second screen left of the main one, less its taskbar
+
+
+def placed(window):
+    """Where a window was put and how big it is, as its geometry says: (x, y, width, height)."""
+    window.update_idletasks()
+    width, height, x, y = map(int, re.fullmatch(r"(\d+)x(\d+)\+(-?\d+)\+(-?\d+)", window.wm_geometry()).groups())
+    return x, y, width, height
+
+
+class Screens(unittest.TestCase):
+    """Menus, tips and dialogs open on the screen LyreBot is on, a second one at negative coordinates included."""
+
+    def setUp(self):
+        self.root = hidden_window(self)
+        self.theme = Theme(self.root)
+        self.margin = self.theme.px(4)
+
+    def test_fit_keeps_a_popup_whole_on_its_own_screen(self):
+        self.assertEqual(fit(200, 150, -900, 500, LEFT_SCREEN), (-900, 500))  # room enough: where it was asked
+        self.assertEqual(fit(200, 150, -100, 500, LEFT_SCREEN), (-200, 500))  # in from that screen's right edge
+        self.assertEqual(fit(200, 150, -900, 1200, LEFT_SCREEN, bottom_instead=1190), (-900, 1040))  # upwards
+        self.assertEqual(fit(200, 150, -150, 500, LEFT_SCREEN, left_instead=-600), (-600, 500))  # to the left
+        self.assertEqual(fit(200, 150, -2390, 1200, LEFT_SCREEN, bottom_instead=100), (-2390, 1140))  # no room up
+        above = (0, -1080, 1920, -40)  # a screen above the main one
+        self.assertEqual(fit(200, 150, 100, -100, above, bottom_instead=-110), (100, -260))
+
+    def test_tk_is_given_negative_positions_as_it_reads_them(self):
+        self.assertEqual(geometry(-300, -20, 100, 50), "100x50+-300+-20")
+        self.assertEqual(geometry(10.7, 20.2), "+10+20")
+
+    def test_the_area_is_that_of_the_screen_at_the_point(self):
+        middle = (self.root.winfo_screenwidth() // 2, self.root.winfo_screenheight() // 2)
+        left, top, right, bottom = screen_area(self.root, *middle)
+        self.assertTrue(left <= middle[0] < right and top <= middle[1] < bottom)
+        with mock.patch("lyrebot.theme.sys.platform", "linux"):  # elsewhere: the main screen
+            self.assertEqual(screen_area(self.root, -500, 300),
+                             (0, 0, self.root.winfo_screenwidth(), self.root.winfo_screenheight()))
+
+    def test_a_menu_stays_on_the_screen_it_opens_on(self):
+        menu = PopupMenu(self.root, self.theme)
+        for name in ("甲", "乙", "丙"):
+            menu.add_command(label=name, command=lambda: None)
+        self.addCleanup(menu.close)
+        with mock.patch("lyrebot.widgets.screen_area", return_value=LEFT_SCREEN):
+            menu.post(-900, 500)
+            self.assertEqual(placed(menu.window)[:2], (-900, 500))
+            menu.post(-30, 500)  # by the edge it shares with the main screen: kept on its own
+            x, y, width, _ = placed(menu.window)
+            self.assertEqual((x + width, y), (-self.margin, 500))
+            menu.post(-900, 1280)  # at the bottom: upwards, ending where it was opened
+            x, y, _, height = placed(menu.window)
+            self.assertEqual((x, y + height), (-900, 1280))
+
+    def test_a_submenu_short_of_room_opens_to_the_left_and_upwards(self):
+        menu, sub = PopupMenu(self.root, self.theme), PopupMenu(self.root, self.theme)
+        for n in range(12):
+            sub.add_command(label=f"第{n + 1}处", command=lambda: None)
+        menu.add_cascade(label="移到…", menu=sub)
+        self.addCleanup(menu.close)
+        width, height = menu.measure()
+        with mock.patch("lyrebot.widgets.screen_area", return_value=LEFT_SCREEN):
+            menu.post(-self.margin - width, LEFT_SCREEN[3] - self.margin - height)  # the bottom right corner
+            menu.window.update()
+            menu.open_child(0)
+            x, y, _, _ = placed(menu.window)
+            sub_x, sub_y, sub_width, sub_height = placed(sub.window)
+        self.assertEqual(sub_x + sub_width, x + self.theme.px(4))  # over its menu's edge by as much as on the right
+        self.assertEqual(sub_y + sub_height, y + menu.rows[0][1] + menu.metrics()["edge"])  # level with its row
+
+    def test_a_choice_opens_below_or_else_above(self):
+        value = tk.StringVar(master=self.root, value="100%")
+        choice = Choice(self.root, self.theme, value, ("80%", "100%", "120%", "150%", "200%"), lambda: None)
+        self.addCleanup(choice.menu.close)
+        gap = self.theme.px(4)
+        with mock.patch("lyrebot.widgets.screen_area", return_value=LEFT_SCREEN):
+            for top in (300, 1250):
+                with mock.patch.multiple(choice, winfo_rootx=lambda: -900, winfo_rooty=lambda top=top: top,
+                                         winfo_height=lambda: 30):
+                    choice.open()
+                    x, y, _, height = placed(choice.menu.window)
+                    if top == 300:
+                        self.assertEqual((x, y), (-900, 300 + 30 + gap))
+                    else:
+                        self.assertEqual((x, y + height), (-900, 1250 - gap))
+
+    def test_a_tip_floats_above_its_button_and_stays_on_that_screen(self):
+        tip = Tooltip(tk.Label(self.root), "下一首", self.theme)
+        gap = self.theme.px(6)
+
+        def at(x, y):
+            tip.widget = SimpleNamespace(winfo_rootx=lambda: x, winfo_rooty=lambda: y, winfo_width=lambda: 30,
+                                         winfo_height=lambda: 30)
+            return tip.position(60, 20)
+        with mock.patch("lyrebot.widgets.screen_area", return_value=LEFT_SCREEN):
+            self.assertEqual(at(-500, 600), (-515, 580 - gap))  # centred over the button
+            self.assertEqual(at(-500, 5), (-515, 35 + gap))  # at the top of the screen: under it
+            self.assertEqual(at(-20, 600), (-60, 580 - gap))  # at the edge: kept on the button's screen
+
+    def test_a_dialog_opens_over_the_window_or_where_the_pointer_is(self):
+        def owner(x, shown=True):
+            return SimpleNamespace(winfo_viewable=lambda: shown, winfo_rootx=lambda: x, winfo_rooty=lambda: 300,
+                                   winfo_width=lambda: 438, winfo_height=lambda: 800,
+                                   winfo_pointerxy=lambda: (-1200, 600))
+        with mock.patch("lyrebot.dialogs.screen_area", return_value=LEFT_SCREEN) as area:
+            window = owner(-900)
+            self.assertEqual(dialogs._place(window, 400, 230), (-881, 490))  # centred, a third of the way down
+            area.assert_called_with(window, -681, 700)  # the screen of the window's middle
+            self.assertEqual(dialogs._place(owner(-300), 400, 230), (-400, 490))  # kept on that screen
+            hidden = owner(-900, shown=False)
+            self.assertEqual(dialogs._place(hidden, 400, 230), (-1400, 353))  # in the middle of the pointer's screen
+            area.assert_called_with(hidden, -1200, 600)
 
 
 if __name__ == "__main__":

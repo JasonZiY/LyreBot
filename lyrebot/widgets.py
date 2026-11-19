@@ -15,7 +15,7 @@ from typing import Callable
 
 from . import icons
 from .theme import (FAINT, GOLD, GOLD_SOFT, HAIR, HOVER, INK, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, WARN,
-                    WARN_DEEP, WHITE, Theme, round_corners)
+                    WARN_DEEP, WHITE, Theme, fit, geometry, round_corners, screen_area)
 
 
 def rounded(canvas: tk.Canvas, x0: float, y0: float, x1: float, y1: float, radius: float, **options) -> int:
@@ -72,13 +72,19 @@ class Tooltip:
                          highlightthickness=1 if own_edge else 0, highlightbackground=HAIR)
         label.pack()
         window.update_idletasks()
-        width, height = window.winfo_reqwidth(), window.winfo_reqheight()
-        x = self.widget.winfo_rootx() + (self.widget.winfo_width() - width) // 2
-        y = self.widget.winfo_rooty() - height - self.theme.px(6)
-        if y < 0:
-            y = self.widget.winfo_rooty() + self.widget.winfo_height() + self.theme.px(6)
-        window.geometry(f"+{max(0, x)}+{y}")
+        window.geometry(geometry(*self.position(window.winfo_reqwidth(), window.winfo_reqheight())))
         window.deiconify()
+
+    def position(self, width: int, height: int) -> tuple[int, int]:
+        """Centred above the widget, or below it at the top of its screen, and whole on that screen."""
+        widget, gap = self.widget, self.theme.px(6)
+        left, top = widget.winfo_rootx(), widget.winfo_rooty()
+        area = screen_area(widget, left + widget.winfo_width() / 2, top + widget.winfo_height() / 2)
+        x = left + (widget.winfo_width() - width) // 2
+        y = top - height - gap
+        if y < area[1]:
+            y = top + widget.winfo_height() + gap
+        return min(max(x, area[0]), area[2] - width), min(y, area[3] - height)
 
     def hide(self, _: tk.Event | None = None) -> None:
         self.cancel()
@@ -237,8 +243,11 @@ class Choice(PillButton):
             self.menu.entryconfigure(index, state="normal" if allowed is None or option in allowed else "disabled")
 
     def open(self) -> None:
+        """The menu opens under the choice, or over it when the screen ends below."""
         if self.enabled:
-            self.menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height() + self.theme.px(4))
+            gap = self.theme.px(4)
+            self.menu.post(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height() + gap,
+                           bottom_instead=self.winfo_rooty() - gap)
 
 
 class PopupMenu:
@@ -375,7 +384,9 @@ class PopupMenu:
                                    fill=FAINT if not enabled else MUTED, font=fonts.small)
 
     # -- showing and hiding --
-    def post(self, x: int, y: int, parent: "PopupMenu | None" = None) -> None:
+    def post(self, x: int, y: int, parent: "PopupMenu | None" = None, bottom_instead: int | None = None) -> None:
+        """Show the menu with its top left at (x, y); where that leaves too little room below, with its
+        bottom at ``bottom_instead`` (for a menu of its own, the point it was opened at)."""
         if self.window:
             self.unpost()
         self.parent = parent
@@ -390,12 +401,21 @@ class PopupMenu:
             pass
         self.canvas = tk.Canvas(window, width=width, height=height, bg=PAPER, highlightthickness=0, borderwidth=0)
         self.canvas.pack()
-        screen_w, screen_h = window.winfo_screenwidth(), window.winfo_screenheight()
-        if x + width > screen_w - 4:
-            x = parent.window.winfo_rootx() - width + self.theme.px(4) if parent and parent.window else screen_w - width - 4
-        if y + height > screen_h - 4:
-            y = max(4, y - height)
-        window.geometry(f"{width}x{height}+{max(0, x)}+{max(0, y)}")
+        # Kept whole on the screen it opens on: a second screen may lie left of or above the main
+        # one, at negative coordinates.  A submenu that cannot open to the right of its menu opens
+        # to the left of it; one that cannot open downwards ends where it would have begun.
+        left_instead = None
+        if parent and parent.window:
+            anchor = (parent.window.winfo_rootx() + parent.size[0] / 2, parent.window.winfo_rooty() + parent.size[1] / 2)
+            left_instead = parent.window.winfo_rootx() - width + self.theme.px(4)
+        else:
+            anchor = (x, y)
+            bottom_instead = y if bottom_instead is None else bottom_instead
+        margin = self.theme.px(4)
+        left, top, right, bottom = screen_area(window, *anchor)
+        x, y = fit(width, height, x, y, (left + margin, top + margin, right - margin, bottom - margin),
+                   left_instead=left_instead, bottom_instead=bottom_instead)
+        window.geometry(geometry(x, y, width, height))
         self.own_edge = not round_corners(window, border=GOLD)
         self.active = -1
         self.redraw()
@@ -491,9 +511,11 @@ class PopupMenu:
             return
         if self.child:
             self.child.unpost()
-        top = self.rows[index][0] - self.metrics()["edge"]
+        row_top, row_bottom = self.rows[index]
+        edge, origin = self.metrics()["edge"], self.window.winfo_rooty()
         self.child = menu
-        menu.post(self.window.winfo_rootx() + self.size[0] - self.theme.px(4), self.window.winfo_rooty() + top, parent=self)
+        menu.post(self.window.winfo_rootx() + self.size[0] - self.theme.px(4), origin + row_top - edge, parent=self,
+                  bottom_instead=origin + row_bottom + edge)
 
     def key(self, event: tk.Event) -> str:
         menu = self.chain()[-1]

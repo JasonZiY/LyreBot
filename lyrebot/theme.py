@@ -145,6 +145,67 @@ def _forget_old_drawings() -> None:
                 pass
 
 
+# ---- screens -------------------------------------------------------------------
+
+class _Point(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
+class _Rect(ctypes.Structure):
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+
+class _MonitorInfo(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_ulong), ("rcMonitor", _Rect), ("rcWork", _Rect), ("dwFlags", ctypes.c_ulong)]
+
+
+MONITOR_DEFAULTTONEAREST = 2
+
+Area = tuple[int, int, int, int]  # left, top, right, bottom, in the screen's pixels
+
+
+def screen_area(widget: tk.Misc, x: float, y: float) -> Area:
+    """The part of the screen at (x, y), or the nearest one, that windows may use: less the taskbar.
+
+    A second screen to the left of or above the main one lies at negative
+    coordinates, and may be a different size, so a popup is placed by the
+    screen it opens on rather than by the main one."""
+    if sys.platform == "win32":
+        try:
+            user32 = ctypes.windll.user32
+            user32.MonitorFromPoint.argtypes = [_Point, ctypes.c_ulong]
+            user32.MonitorFromPoint.restype = ctypes.c_void_p
+            user32.GetMonitorInfoW.argtypes = [ctypes.c_void_p, ctypes.POINTER(_MonitorInfo)]
+            monitor = user32.MonitorFromPoint(_Point(round(x), round(y)), MONITOR_DEFAULTTONEAREST)
+            info = _MonitorInfo()
+            info.cbSize = ctypes.sizeof(_MonitorInfo)
+            if monitor and user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+                work = info.rcWork
+                return work.left, work.top, work.right, work.bottom
+        except (AttributeError, OSError):
+            pass
+    return 0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight()
+
+
+def fit(width: int, height: int, x: int, y: int, area: Area, left_instead: int | None = None,
+        bottom_instead: int | None = None) -> tuple[int, int]:
+    """Where a popup of this size goes so that it stays whole on its screen: at (x, y) if it fits;
+    else at ``left_instead`` across and with its bottom at ``bottom_instead``, if those fit; else
+    moved in from the screen's edge."""
+    left, top, right, bottom = area
+    if x + width > right:
+        x = left_instead if left_instead is not None and left_instead >= left else right - width
+    if y + height > bottom:
+        y = bottom_instead - height if bottom_instead is not None and bottom_instead - height >= top else bottom - height
+    return max(x, left), max(y, top)
+
+
+def geometry(x: int, y: int, width: int | None = None, height: int | None = None) -> str:
+    """A Tk geometry string, which takes negative positions as "+-200"."""
+    size = f"{width}x{height}" if width is not None and height is not None else ""
+    return f"{size}+{int(x)}+{int(y)}"
+
+
 # ---- Windows 11 dress ----------------------------------------------------------
 
 DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE = 34, 35, 36, 33
