@@ -981,25 +981,32 @@ class App:
         rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
         finder.pack(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(8), 0))
-        self.panel, self.shelves = panel, top
+        self.panel = panel
         self.dress_page()
         if self.frame is not None:  # drawn again: the title bar with the rest
             chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
 
     def dress_page(self) -> None:
-        """What the page carries besides the writing: gilt corner pieces pressed into its four corners,
-        rounding them as the window's corners are rounded; the lyre pressed faintly into the paper behind
-        the list; and the program icon's orange ribbon hanging from under the leather over the list, as a
+        """What the page carries besides the writing: a double rule of gold pressed in all round it, as on an
+        old book's page, its corners rounded; the lyre pressed faintly into the paper in the middle of the
+        window; and the program icon's orange ribbon hanging from under the leather over the list, as a
         bookmark hangs from a book's head."""
         theme, page, px = self.theme, self.page, self.theme.px
-        for right in (False, True):
-            for foot in (False, True):
-                piece = theme.corner(right, foot)
-                side = piece.width()
-                page.press(piece, lambda width, height, right=right, foot=foot, side=side: (
-                    width - side if right else 0, height - side if foot else self.head()))
+        side, depth, frame = theme.frame()
+
+        def frame_at(name: str):
+            def place(width: int, height: int) -> tuple[int, ...]:
+                head = self.head()
+                tall = height - head - 2 * side  # the sides' straight run, between their corners
+                return {"nw": (0, head), "ne": (width - side, head), "sw": (0, height - side),
+                        "se": (width - side, height - side), "n": (side, head, width - 2 * side, depth),
+                        "s": (side, height - depth, width - 2 * side, depth), "w": (0, head + side, depth, tall),
+                        "e": (width - depth, head + side, depth, tall)}[name]
+            return place
+        for name, piece in frame.items():
+            page.press(piece, frame_at(name))
         mark = theme.watermark(px(WATERMARK_SIZE))
-        page.press(mark, lambda width, height: self.behind_list(mark.width()))
+        page.press(mark, lambda width, height: ((width - mark.width()) // 2, (height - mark.height()) // 2))
         ribbon = theme.ribbon()
         page.hang(ribbon, lambda width, height: (width - px(RIBBON_FROM_RIGHT), self.head()))
 
@@ -1009,16 +1016,6 @@ class App:
         if bar is None:
             return 0
         return bar.winfo_y() + bar.winfo_height() if bar.winfo_ismapped() else bar.winfo_reqheight()
-
-    def behind_list(self, size: int) -> tuple[int, int] | None:
-        """Where a picture ``size`` square sits in the middle of the list's part of the page (None until the
-        list has a place)."""
-        shelves = self.shelves
-        width, height = shelves.winfo_width(), shelves.winfo_height()
-        if width <= 1 or height <= 1:
-            return None
-        x, y = self.page.offset(shelves)
-        return x + (width - size) // 2, y + (height - size) // 2
 
     def make_title_bar(self, first: tk.Widget) -> TitleBar:
         """The leather title bar, over ``first``, laid out for ``self.frame``; the lyre moves up into it."""

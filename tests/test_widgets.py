@@ -105,18 +105,23 @@ class Drawing(unittest.TestCase):
             x, y = rng.uniform(-5, 133), rng.uniform(-5, 133)
             self.assertEqual(line(x, y), plainly(x, y), (x, y))
 
-    def test_a_corner_piece_is_mirrored_for_each_corner_of_the_page(self):
-        size = 31
-        parts = icons.corner(size, 1.0)
-        top_left = icons.rgba(size, size, icons.paint(parts, "#000000"))
-        alpha = lambda pixels, x, y: pixels[(y * size + x) * 4 + 3]  # noqa: E731
-        self.assertGreater(alpha(top_left, 15, 4), 200)  # a line along the top edge
-        self.assertGreater(alpha(top_left, 4, 15), 200)  # and down the side
-        self.assertEqual(alpha(top_left, 4, 4), 0)  # rounding the corner on an arc, clear of the very corner
-        self.assertEqual(alpha(top_left, 25, 25), 0)  # and nothing out in the page
-        foot_right = icons.rgba(size, size, icons.paint(icons.turned(parts, size, True, True), "#000000"))
-        for x, y in ((15, 4), (4, 15), (4, 4), (13, 13), (27, 8)):
-            self.assertEqual(alpha(foot_right, size - 1 - x, size - 1 - y), alpha(top_left, x, y), (x, y))
+    def test_the_frame_is_a_double_rule_rounding_the_corners(self):
+        outer, inner = "#B08D57", "#D2BC93"
+        layers, side, depth = icons.frame(1.25, outer, inner)
+        corner = icons.rgba(side, side, layers)
+        at = lambda pixels, width, x, y: tuple(pixels[(y * width + x) * 4:(y * width + x) * 4 + 4])  # noqa: E731
+        self.assertEqual([at(corner, side, side - 1, y) for y in range(depth)],  # straight on at the corner's end:
+                         [(0, 0, 0, 0)] * 3 + [(0xB0, 0x8D, 0x57, 255)] * 2 + [(0, 0, 0, 0)] * 3
+                         + [(0xD2, 0xBC, 0x93, 255)])  # a heavier line, a gap, a fine line, on whole pixels
+        self.assertEqual(at(corner, side, 3, 3)[3], 0)  # the very corner is rounded off
+        run = icons.rgba(4, depth, icons.placed(layers, dx=side))  # a length of the top edge
+        self.assertEqual([at(run, 4, 2, y) for y in range(depth)], [at(corner, side, side - 1, y) for y in range(depth)])
+        foot = icons.rgba(side, side, icons.placed(layers, width=side, height=side))  # the foot's right corner
+        for x, y in ((3, 4), (4, 12), (6, 6), (8, 10)):
+            self.assertEqual(at(foot, side, side - 1 - x, side - 1 - y), at(corner, side, x, y), (x, y))
+        right = icons.rgba(depth, 4, icons.placed(layers, dy=side, width=depth))  # a length of the right side
+        self.assertEqual([at(right, depth, x, 1) for x in range(depth)],
+                         [at(run, 4, 2, depth - 1 - x) for x in range(depth)])
 
     def test_the_ribbon_hangs_with_a_swallowtail_and_a_shadow(self):
         band, length, notch, drop = 10, 30, 5, 2

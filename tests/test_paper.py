@@ -202,6 +202,21 @@ class OnThePage(unittest.TestCase):
         page.lay(60, 60)
         self.assertEqual(page.image.get(50, 50), (16, 32, 48))  # a fresh wash has it pressed in too
 
+    def test_a_length_of_rule_is_laid_along_its_box_and_follows_the_window(self):
+        page = self.page()  # for a window 80 x 60
+        clean = page.image.get(65, 3)
+        run = tk.PhotoImage(master=self.root, width=4, height=2)
+        run.put("#102030", to=(0, 0, 4, 2))
+        page.press(run, lambda width, height: (10, 2, width - 20, 2))  # along the top, 10 in from either side
+        page.refresh()
+        self.assertEqual({page.image.get(x, y) for x in range(10, 70) for y in (2, 3)}, {(16, 32, 48)})
+        self.assertNotEqual(page.image.get(9, 2), (16, 32, 48))
+        self.assertNotEqual(page.image.get(70, 2), (16, 32, 48))
+        page.wanted = (70, 60)  # narrower: the rule is shorter, the paper back where it ran
+        page.refresh()
+        self.assertEqual(page.image.get(59, 3), (16, 32, 48))
+        self.assertEqual(page.image.get(65, 3), clean)
+
     def test_what_hangs_over_the_page_lies_over_every_piece_it_crosses(self):
         page = self.page()
         ribbon = tk.PhotoImage(master=self.root, width=4, height=20)

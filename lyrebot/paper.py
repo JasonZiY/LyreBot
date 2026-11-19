@@ -19,7 +19,7 @@ see-through pixels would be blended afresh on every repaint, which made dragging
 clouding and the grain belong to the window's coordinates, not its size, so they keep still while it is
 resized.  The head of the page, under the title bar, is one even lamplight.
 
-Two kinds of picture go with the paper.  Marks (``Page.press``: the gilt corners, the lyre's watermark) are
+Two kinds of picture go with the paper.  Marks (``Page.press``: the gilt frame, the lyre's watermark) are
 pressed into the picture itself, so they lie under everything written on the page and show through its
 tints; when the window changes size they are taken out again, by putting back the paper kept from under
 them, and pressed in where they now go.  What hangs over the page (``Page.hang``: the bookmark's ribbon)
@@ -39,9 +39,10 @@ import zlib
 
 from . import theme
 
-# Where a picture goes on the page, its top left corner, for a window of this width and height; None while
-# there is nowhere for it yet.
-Place = Callable[[int, int], Optional[tuple[int, int]]]
+# Where a picture goes on the page, for a window of this width and height: its top left corner, or a box
+# (left, top, width, height) for it to be laid over again and again until it is filled; None while there is
+# nowhere for it yet.
+Place = Callable[[int, int], Optional[tuple[int, ...]]]
 
 HEAD = (250, 234, 200)  # lamplight over the head of the page
 CREAM = (250, 245, 236)  # the middle of the page, the paper itself
@@ -314,8 +315,8 @@ class Page:
         del old  # only now, with nothing showing it any more
 
     def press(self, image: tk.PhotoImage, place: Place) -> None:
-        """Press ``image`` into the paper at ``place``: an ornament or a watermark, under everything written
-        on the page and showing through its tints."""
+        """Press ``image`` into the paper at ``place``: an ornament, a watermark, or a length of a rule that
+        ``place`` lays along a box, under everything written on the page and showing through its tints."""
         self.marks.append((image, place))
         self.pressed = None
         self.schedule()
@@ -349,15 +350,19 @@ class Page:
         for (mark, _), at in zip(self.marks, places):
             if at is None:
                 continue
-            x, y = at
+            x, y = at[0], at[1]
+            width, height = (at[2], at[3]) if len(at) == 4 else (mark.width(), mark.height())
             left, top = max(x, 0), max(y, 0)
-            far, low = min(x + mark.width(), right), min(y + mark.height(), foot)
+            far, low = min(x + width, right), min(y + height, foot)
             if far <= left or low <= top:
                 continue
             patch = tk.PhotoImage(master=self.root, width=far - left, height=low - top)
             patch.tk.call(patch, "copy", image, "-from", left, top, far, low)
-            image.tk.call(image, "copy", mark, "-from", left - x, top - y, far - x, low - y, "-to", left, top,
-                          "-compositingrule", "overlay")
+            if len(at) == 4:  # laid over and over (Tk tiles a picture over a bigger box)
+                image.tk.call(image, "copy", mark, "-to", left, top, far, low, "-compositingrule", "overlay")
+            else:
+                image.tk.call(image, "copy", mark, "-from", left - x, top - y, far - x, low - y, "-to", left, top,
+                              "-compositingrule", "overlay")
             self.patches.append((patch, left, top))
         self.pressed = places
         self.edition += 1

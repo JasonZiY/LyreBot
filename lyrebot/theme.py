@@ -56,9 +56,9 @@ VEIL_FAINT = "#FFFFFF33"
 CHOSEN_TINT = "#D9775729"  # the chosen song: a breath of orange
 HOVER_TINT = "#8A81741A"  # under the pointer: a shade
 
-# What the page itself carries (``App.dress_page``): gilt corners pressed into it, the lyre pressed so faintly
-# that it is more felt than seen, and the program icon's orange ribbon lying over it.
-CORNER_GILT = "#B08D57EB"
+# What the page itself carries (``App.dress_page``): a double rule of gold framing it, the lyre pressed so
+# faintly that it is more felt than seen, and the program icon's orange ribbon lying over it.
+FRAME_OUTER, FRAME_INNER = "#B08D57D7", "#D2BC93E6"
 WATERMARK = "#B08D5712"
 RIBBON, RIBBON_FOLD, RIBBON_TUCK = ORANGE, "#C7684A", "#96513A"
 RIBBON_SHADE, RIBBON_SHADE_FAR = "#5A322038", "#5A32201A"
@@ -153,12 +153,20 @@ class Theme:
         width = icons.fleuron_width(height)
         return self.image(f"fleuron:{color}", width, height, lambda: icons.paint(icons.fleuron(width, height), color))
 
-    def corner(self, right: bool, foot: bool) -> tk.PhotoImage:
-        """The page's gilt corner piece for one of its corners."""
-        size = self.px(icons.CORNER)
-        return self.image(f"corner:{right}:{foot}:{CORNER_GILT}:{self.scale:.4f}", size, size,
-                          lambda: icons.paint(icons.turned(icons.corner(size, self.scale), size, right, foot),
-                                              CORNER_GILT))
+    def frame(self) -> tuple[int, int, dict[str, tk.PhotoImage]]:
+        """The double rule framing the page, in pieces: each corner ("nw", "ne", "sw", "se") in a square of
+        its own, and a short length of each edge ("n", "s", "w", "e") to be laid along it, over and over;
+        with the side of a corner's square and how deep the rules lie from the edge."""
+        layers, side, depth = icons.frame(self.scale, FRAME_OUTER, FRAME_INNER)
+        run = 16  # the length of edge in each piece
+        views = {"nw": (side, side, {}), "ne": (side, side, {"width": side}), "sw": (side, side, {"height": side}),
+                 "se": (side, side, {"width": side, "height": side}), "n": (run, depth, {"dx": side}),
+                 "s": (run, depth, {"dx": side, "height": depth}), "w": (depth, run, {"dy": side}),
+                 "e": (depth, run, {"dy": side, "width": depth})}
+        pieces = {name: self.image(f"frame:{name}:{FRAME_OUTER}:{FRAME_INNER}:{self.scale:.4f}", width, height,
+                                   lambda view=view: icons.placed(layers, **view))  # type: ignore[arg-type]
+                  for name, (width, height, view) in views.items()}
+        return side, depth, pieces
 
     def watermark(self, size: int) -> tk.PhotoImage:
         """The lyre, pressed into the paper."""

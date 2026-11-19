@@ -534,55 +534,28 @@ def lyre(size: int) -> list[Shape]:
 
 # ---- the page's ornaments ----------------------------------------------------------
 
-CORNER = 31  # the side of a corner piece's square, at 100%
+def frame(unit: float, outer: str, inner: str) -> tuple[Layers, int, int]:
+    """The double rule framing the page, as on an old book's page (文武边栏): a heavier line outside, ``outer``,
+    and a fine one inside, ``inner``, rounding each corner on arcs of one centre.  Laid out from the page's
+    top left corner, running on past any picture.  Also gives the side of the square holding a corner's
+    curves, past which the rules run straight, and how deep they lie from the edge.  The lines are whole
+    pixels wide, on whole rows and columns of pixels, as in the icons."""
+    pen, fine = max(1, round(1.6 * unit)), max(1, round(0.8 * unit))
+    edge, gap = max(1, round(2.4 * unit)), max(2, round(2.4 * unit))
+    radius = max(pen + gap + fine + 1, round(7 * unit))
+    inside, far = edge + pen + gap, 1 << 16
+    return ([(outer, outline(edge, edge, far, far, radius, pen)),
+             (inner, outline(inside, inside, far, far, radius - (inside - edge), fine))],
+            edge + radius + 1, inside + fine)
 
 
-def curl(end: tuple[float, float], along: tuple[float, float], inward: tuple[float, float], radius: float,
-         turn: float = 320, steps: int = 40) -> list[tuple[float, float]]:
-    """A curl at the end of a line, as on the horns of the lyre: from ``end`` it carries on ``along`` the way
-    the line went, turns towards ``inward`` and winds in, its radius closing from ``radius`` to a third."""
-    cx, cy = end[0] + inward[0] * radius, end[1] + inward[1] * radius
-    points = []
-    for i in range(steps + 1):
-        t = i / steps
-        angle, r = math.radians(turn * t), radius * (1 - 0.62 * t)
-        points.append((cx + r * (-inward[0] * math.cos(angle) + along[0] * math.sin(angle)),
-                       cy + r * (-inward[1] * math.cos(angle) + along[1] * math.sin(angle))))
-    return points
-
-
-def _arc(cx: float, cy: float, r: float, start: float, end: float, steps: int = 24) -> list[tuple[float, float]]:
-    return [(cx + r * math.cos(math.radians(start + (end - start) * i / steps)),
-             cy + r * math.sin(math.radians(start + (end - start) * i / steps))) for i in range(steps + 1)]
-
-
-def corner(size: int, unit: float) -> list[Shape]:
-    """A gilt corner piece for the page's top left corner, on a square of ``size``, its measures at 100%
-    times ``unit``.  A line runs along each edge and rounds the corner on an arc, as the window's own corner
-    is rounded, its two ends winding into curls like the lyre's horns; a finer line follows it inside, on an
-    arc of the same centre, and a small lozenge points from the corner into the page.  The lines along the
-    edges are whole pixels wide, on whole rows and columns of pixels, as in the icons."""
-    pen, fine = max(1, round(1.5 * unit)), max(1, round(unit))
-    edge, radius, arm = snap(4 * unit, pen), 10.5 * unit, 25 * unit
-    inner_edge, inner_arm = snap(7.5 * unit, fine), 15.5 * unit
-    inner_radius = radius - (inner_edge - edge)
-    outer = [(arm, edge)] + _arc(edge + radius, edge + radius, radius, 270, 180) + [(edge, arm)]
-    inner = [(inner_arm, inner_edge)] + _arc(inner_edge + inner_radius, inner_edge + inner_radius, inner_radius,
-                                             270, 180) + [(inner_edge, inner_arm)]
-    winding = [pen * (1 - 0.4 * i / 40) for i in range(41)]  # thinning as it winds in, like a pen's stroke
-    c, reach, half = 13 * unit, 2.7 * unit, 1.5 * unit  # the lozenge, along the diagonal
-    d = 1 / math.sqrt(2)
-    lozenge = polygon((c - reach * d, c - reach * d), (c + half * d, c - half * d), (c + reach * d, c + reach * d),
-                      (c - half * d, c + half * d))
-    return [stroke(outer, pen), stroke(curl((arm, edge), (1, 0), (0, 1), 2.7 * unit), winding),
-            stroke(curl((edge, arm), (0, 1), (1, 0), 2.7 * unit), winding), stroke(inner, fine), lozenge]
-
-
-def turned(shapes: list[Shape], size: int, right: bool, foot: bool) -> list[Shape]:
-    """``shapes`` drawn for the top left corner of a square of ``size``, mirrored for another corner."""
-    def mirror(shape: Shape) -> Shape:
-        return lambda x, y: shape(size - x if right else x, size - y if foot else y)
-    return [mirror(shape) for shape in shapes]
+def placed(layers: Layers, dx: float = 0, dy: float = 0, width: float | None = None,
+           height: float | None = None) -> Layers:
+    """``layers`` as a picture shows them: mirrored left for right across a picture ``width`` wide, or head
+    for foot across one ``height`` tall, where those are given, and moved on by (dx, dy)."""
+    def view(shape: Shape) -> Shape:
+        return lambda x, y: shape((x if width is None else width - x) + dx, (y if height is None else height - y) + dy)
+    return [(color, view(shape)) for color, shape in layers]
 
 
 def ribbon(band: int, length: int, notch: int, drop: int, body: str, fold: str, tuck: str,

@@ -356,18 +356,21 @@ class Folders(unittest.TestCase):
         self.assertIn(app.title_bar, adopt.call_args.kwargs["see_through"])
         self.corners.assert_called_once_with(app.root, border=None)  # rounded and shadowed, with no outline
 
-    def test_the_page_carries_gilt_corners_a_watermark_and_a_ribbon_over_the_list(self):
+    def test_the_page_carries_a_gilt_frame_a_watermark_and_a_ribbon_over_the_list(self):
         from lyrebot.app import RIBBON_FROM_RIGHT
         app, _ = self.framed_app(True)
         page, px = app.page, app.theme.px
         width, height = page.window()
         head = app.title_bar.winfo_reqheight()  # (the window is never shown: the bar's height as it asks)
         self.assertEqual(app.head(), head)
-        side = app.theme.corner(False, False).width()
+        side, depth, _ = app.theme.frame()
         places = [place(width, height) for _, place in page.marks]
-        self.assertEqual(sorted(places[:4]), sorted([(0, head), (0, height - side), (width - side, head),
-                                                     (width - side, height - side)]))  # the four corners
-        self.assertIsNone(places[4])  # the watermark waits for the list to have a place
+        self.assertEqual(sorted(places[:8]), sorted([
+            (0, head), (width - side, head), (0, height - side), (width - side, height - side),  # its corners
+            (side, head, width - 2 * side, depth), (side, height - depth, width - 2 * side, depth),  # its edges
+            (0, head + side, depth, height - head - 2 * side), (width - depth, head + side, depth, height - head - 2 * side)]))
+        size = app.theme.watermark(px(136)).width()
+        self.assertEqual(places[8], ((width - size) // 2, (height - size) // 2))  # the lyre: the window's middle
         [(ribbon, place)] = page.over
         self.assertEqual(place(width, height), (width - px(RIBBON_FROM_RIGHT), head))  # from under the leather
         browser = app.browser
