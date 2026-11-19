@@ -850,7 +850,7 @@ class App:
         heading.pack(fill="x")
         self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))
         self.time_label.pack(side="right", anchor="s")
-        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))  # 2/20: bar 2 of 20
+        self.bar_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))  # 2|20: bar 2 of 20
         self.bar_label.pack(side="right", anchor="s", padx=(0, px(10)))
         self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, TITLE_FONT, "bold"), anchor="w")
         self.title_label.pack(side="left", fill="x", expand=True)
@@ -1483,8 +1483,8 @@ class App:
         self.worker.start()
 
     def show_bar(self, bar: int, score: Score) -> None:
-        """Show bar ``bar`` (from 0) of all the score's bars, as 2/20."""
-        self.bar_label.configure(text=f"{bar + 1}/{len(score.bars)}" if score.bars else "")
+        """Show bar ``bar`` (from 0) of all the score's bars, as 2|20."""
+        self.bar_label.configure(text=f"{bar + 1}|{len(score.bars)}" if score.bars else "")
 
     def restart(self) -> None:
         """↺: the chosen song from the top, whatever bar it stopped in."""
@@ -1623,7 +1623,7 @@ class App:
                 self.time_label.configure(text=f"{clock(value)} / {clock(self.duration)}")
                 if self.bar_starts:
                     bar = max(bisect_right(self.bar_starts, value + 1e-6), 1)
-                    self.bar_label.configure(text=f"{bar}/{len(self.bar_starts)}")
+                    self.bar_label.configure(text=f"{bar}|{len(self.bar_starts)}")
                 self.say("正在演奏 · 按 F8 或切换窗口停止")
             elif kind == "error":
                 self.say("出错，已停止", warn=True)
