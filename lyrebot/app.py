@@ -54,6 +54,7 @@ ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0  # seconds to switch to the game after starting a song from the window; F7 needs none
 HOTKEY_POLL = 30  # milliseconds between looks at F7
 READY = "请切换到游戏窗口，按F7立刻开始"  # under the bar once a song is chosen
+GO_ON = "点▶或按F7从该小节继续"  # once it was stopped part way: the bar counter shows which bar
 FAMILY = "Microsoft YaHei UI"
 
 # Claude's palette: warm paper, ink, and one orange accent.
@@ -1122,7 +1123,7 @@ class App:
             bar = self.resume[1]
             if score.duration_seconds:
                 self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds)
-            self.say(f"停在第 {bar + 1} 小节 · 点 ▶ 或按 F7 从这里接着弹，点 ↺ 从头弹")
+            self.say(GO_ON)
             return
         self.say(self.notice[1] if self.notice else READY)
 
@@ -1508,7 +1509,7 @@ class App:
         self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds if score.duration_seconds else 0.0)
         self.time_label.configure(text=f"{clock(bar_seconds(score, bar, speed))} / {clock(score.duration_seconds / speed)}")
         self.show_bar(bar, score)
-        self.say(f"{why} · 点 ▶ 或按 F7 从第 {bar + 1} 小节接着弹")
+        self.say(f"{why} · {GO_ON}")
 
     def seek(self, event: tk.Event) -> None:
         if self.worker:

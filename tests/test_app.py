@@ -477,10 +477,11 @@ class Folders(unittest.TestCase):
         app.select(path)
         self.stopped_at(app, path, 5.5)  # in the second bar, which starts at 4 s
         self.assertEqual(app.resume, (path, 1))
-        self.assertIn("从第 2 小节接着弹", app.status_label.cget("text"))
+        self.assertEqual(app.status_label.cget("text"), "已停止 · 点▶或按F7从该小节继续")
+        self.assertEqual(app.bar_label.cget("text"), "2|3")
         self.assertAlmostEqual(app.fraction, 4 / 12)
         app.show_selected()  # the list redrawn: still remembered
-        self.assertIn("停在第 2 小节", app.status_label.cget("text"))
+        self.assertEqual(app.status_label.cget("text"), "点▶或按F7从该小节继续")
         self.assertEqual(self.started(app), (path, 4.0, None))  # ▶ goes on, after the countdown
         self.assertIsNone(app.resume)  # and then it is used up
 
