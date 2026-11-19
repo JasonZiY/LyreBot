@@ -340,16 +340,20 @@ class Folders(unittest.TestCase):
         unfiled = self.cell(app, "song", "未分")
         self.assertEqual((unfiled.box[0], unfiled.box[2]), (0, width))
 
-        edges = browser.column_edges(width)
         region = self.cell(app, "region", "蒙德")
         below = self.cell(app, "region", "璃月").box[1]
-        self.assertEqual(region.box[0], edges[0])
+        regions_end = browser.shelf_width + browser.region_width
+        self.assertEqual((region.box[0], region.box[2]), (browser.shelf_width, regions_end))
         self.click(app, region)
         songs = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "蒙德"]
-        self.assertEqual(sorted({cell.box[0] for cell in songs}), [edges[1], edges[2]])  # two columns beside it
+        beside = browser.column_edges(regions_end, width)
+        self.assertEqual(sorted({cell.box[0] for cell in songs}), beside[:2])  # two columns beside the narrow one
+        self.assertEqual(max(cell.box[2] for cell in songs), width)
         self.assertEqual(self.cell(app, "region", "璃月").box[1], below + browser.row)  # 2 rows: the next moves down
         shelf = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "歌曲"]
-        self.assertEqual(sorted({cell.box[0] for cell in shelf}), edges[:3])  # three, under those columns
+        across = browser.column_edges(browser.shelf_width, width)
+        self.assertEqual(sorted({cell.box[0] for cell in shelf}), across[:2])  # two, over the same width as before
+        self.assertEqual(max(cell.box[2] for cell in shelf), width)
 
         self.click(app, self.cell(app, "region", "蒙德"))
         self.assertNotIn(self.scores / "OST" / "蒙德" / "甲.txt", browser.visible_songs())

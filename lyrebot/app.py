@@ -42,7 +42,7 @@ TXT_FOLDER = "打开曲谱文件夹（txt）"
 OST, SONGS = "OST", "歌曲"  # the two folders of txt that are playlists; other scores are unfiled
 OTHER_REGION = "其他"  # the last region of OST, which also takes scores not in any region's folder
 REGIONS = ("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬", "夏日", OTHER_REGION)
-REGION_COLUMNS, SONG_COLUMNS = 2, 3  # columns of songs beside a region, and across the 歌曲 shelf
+SONG_COLUMNS = 2  # beside an open region, and across the 歌曲 shelf
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
 MIDI_FILE_SUFFIX = "-MIDI"  # and the score arranged from a MIDI file of it, 飞鼠进行曲.mid, as 飞鼠进行曲-MIDI
@@ -473,14 +473,14 @@ class SongBrowser(tk.Canvas):
     """The song list: unfiled scores across the top, then OST by region and 歌曲.
 
     The shelves start open and the regions closed.  An open region's songs
-    run down two columns beside it, and the 歌曲 shelf's three columns line up
-    with the region column and those two.
+    run down two columns beside the narrow column of regions, and the 歌曲
+    shelf's two columns share all the width after the shelf's name.
     """
 
     def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
                  on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
         px = lambda n: max(1, round(n * scale))  # noqa: E731
-        self.row, self.shelf_width, self.pad = px(ROW_HEIGHT), px(52), px(6)
+        self.row, self.shelf_width, self.region_width, self.pad = px(ROW_HEIGHT), px(52), px(76), px(6)
         super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
                          width=px(460), height=px(300), yscrollincrement=self.row)
         self.locked, self.on_select, self.on_play, self.on_delete = locked, on_select, on_play, on_delete
@@ -508,16 +508,19 @@ class SongBrowser(tk.Canvas):
         self.library, self.bad = library, bad
         self.lay_out()
 
-    def column_edges(self, width: int) -> list[float]:
-        column = (width - self.shelf_width) / SONG_COLUMNS
-        return [self.shelf_width + index * column for index in range(SONG_COLUMNS + 1)]
+    @staticmethod
+    def column_edges(left: float, right: float) -> list[float]:
+        column = (right - left) / SONG_COLUMNS
+        return [left + index * column for index in range(SONG_COLUMNS + 1)]
 
     def lay_out(self) -> None:
         library = self.library
         if library is None:
             return
         width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
-        edges = self.column_edges(width)
+        regions_end = self.shelf_width + self.region_width
+        beside_region = self.column_edges(regions_end, width)
+        across_shelf = self.column_edges(self.shelf_width, width)
         row = self.row
         cells: list[Cell] = []
         rules: list[int] = []
@@ -526,10 +529,11 @@ class SongBrowser(tk.Canvas):
             mark = "⚠ " if path in self.bad else ""
             cells.append(Cell("song", "", (left, top, right, top + row), mark + path.stem, path))
 
-        def run_down(columns: list[tuple[Path, ...]], first: int, top: int) -> int:
-            for offset, paths in enumerate(columns):
-                for line, path in enumerate(paths):
-                    song(path, edges[first + offset], top + line * row, edges[first + offset + 1])
+        def run_down(paths: tuple[Path, ...], edges: list[float], top: int) -> int:
+            columns = in_columns(paths, SONG_COLUMNS)
+            for index, column in enumerate(columns):
+                for line, path in enumerate(column):
+                    song(path, edges[index], top + line * row, edges[index + 1])
             return max(map(len, columns), default=0) * row
 
         def opener(is_open: bool, name: str) -> str:
@@ -546,15 +550,16 @@ class SongBrowser(tk.Canvas):
         if is_open:
             for name, paths in library.regions:
                 expanded = name in self.open_regions
-                cells.append(Cell("region", name, (edges[0], y, edges[1], y + row), opener(expanded, name)))
-                height = run_down(in_columns(paths, REGION_COLUMNS), 1, y) if expanded else 0
+                box = (self.shelf_width, y, regions_end, y + row)
+                cells.append(Cell("region", name, box, opener(expanded, name)))
+                height = run_down(paths, beside_region, y) if expanded else 0
                 y += max(height, row)
         else:
             y += row
         rules.append(y)
         is_open = SONGS not in self.closed_shelves
         cells.append(Cell("shelf", SONGS, (0, y, self.shelf_width, y + row), opener(is_open, SONGS)))
-        height = run_down(in_columns(library.songs, SONG_COLUMNS), 0, y) if is_open else 0
+        height = run_down(library.songs, across_shelf, y) if is_open else 0
         y += max(height, row)
 
         self.cells, self.total = cells, y
