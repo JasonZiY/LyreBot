@@ -22,6 +22,7 @@ from typing import Callable
 
 from . import chrome, dialogs, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
+from .audition import HARP, Audition, AuditionError
 from .collate import pinyin_key
 from .jianpu import export as export_jianpu
 from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
@@ -35,7 +36,7 @@ from .score import Score, ScoreError, load_score, score_files
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
                     ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
                     screen_holding)
-from .timeline import compile_timeline
+from .timeline import compile_ringing, compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
 from .widgets import (Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar, TitleBar,
                       Words)
@@ -64,6 +65,8 @@ HOTKEY_POLL = 30  # milliseconds between looks at F7
 READY = "请切换到游戏窗口，按 F7 立刻开始"  # under the bar once a song is chosen
 GO_ON = "点 ▶ 或按 F7 从该小节继续"  # once it was stopped part way: the bar counter shows which bar
 LET_GO = "松开后从该小节开始"  # while the knob is dragged: the bar counter shows which bar
+HEARING = "正在试听 · 点 ■ 或按 F8 停止，拖进度条换小节"  # while a song is heard on the computer
+PLAY_TIP, HALT_TIP = "播放（F7 立刻开始）", "停止试听（F8）"  # ▶, and the ■ in its place while hearing a song
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
@@ -837,6 +840,11 @@ class App:
         self.worker: threading.Thread | None = None  # playing or recording
         self.recording = False
         self.listening = False
+        self.auditioning = False  # hearing a song on the computer (``audition``)
+        self.timbre = HARP  # the General MIDI instrument it is heard on
+        self.leaping = threading.Event()  # set when the knob is let go while hearing: go on from ``leap_to``
+        self.leap_to = 0.0  # seconds into the song
+        self.hearing = 0  # counts the stretches heard, so that progress from one cut short is not shown
         self.written: tuple[Path, str] | None = None  # a score just written from the keys played
         self.transcriber: threading.Thread | None = None
         self.stop_transcribing = threading.Event()
@@ -918,6 +926,8 @@ class App:
         root.bind("<MouseWheel>", self.browser.wheel)
         self.song_menu = PopupMenu(root, theme)  # for a song
         self.move_menu = PopupMenu(root, theme)
+        self.song_menu.add_command(label="试听", command=self.audition, icon=icons.headphones)
+        self.song_menu.add_separator()
         self.song_menu.add_cascade(label="移到…", menu=self.move_menu, icon=icons.move_to)
         self.song_menu.add_separator()
         self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange, icon=icons.quill)
@@ -966,7 +976,7 @@ class App:
         # (the game loses focus), and a live button would start it again on release.
         self.next_button = IconButton(controls, self.next_images, self.play_next, "下一首", theme)
         self.next_button.pack(side="right")
-        self.button = IconButton(controls, self.play_images, self.start, "播放（F7 立刻开始）", theme)
+        self.button = IconButton(controls, self.play_images, self.press_play, PLAY_TIP, theme)
         self.button.pack(side="right", padx=(0, px(6)))
         self.restart_button = IconButton(controls, self.restart_images, self.restart, "从头开始", theme)
         self.restart_button.pack(side="right", padx=(0, px(6)))  # as far from ▶ as ⏭, on the other side
@@ -1089,6 +1099,10 @@ class App:
                             "disabled": picture("play-disabled", big, face(PEACH, HAIR, icons.play))}
         stop = picture("play-stop", big, face(PEACH, HAIR, icons.stop))
         self.stop_images = {"normal": stop, "hover": stop, "disabled": stop}
+        # While a song is heard on the computer LyreBot stays in front, so ■ is live, in ▶'s colours.
+        self.halt_images = {"normal": picture("halt-normal", big, face(ORANGE, GOLD, icons.stop)),
+                            "hover": picture("halt-hover", big, face(ORANGE_DEEP, GOLD, icons.stop)),
+                            "disabled": stop}
 
         def halo(color: str = HOVER_TINT) -> tuple[str, icons.Shape]:  # a shade over the page
             return color, icons.circle(s, s, s - 0.5)
@@ -1179,7 +1193,7 @@ class App:
             bar.create_image(at, middle, image=self.knob_images[self.bar_hover])
 
     def hover_bar(self, inside: bool) -> None:
-        self.bar_hover = (inside or self.dragging is not None) and self.worker is None
+        self.bar_hover = (inside or self.dragging is not None) and (self.worker is None or self.auditioning)
         self.draw_bar()
 
     def set_fraction(self, fraction: float) -> None:
@@ -1350,9 +1364,9 @@ class App:
         self.fill_move_menu(chosen)
         idle = "normal" if not self.worker else "disabled"
         can = not self.worker and midi_for(chosen, self.midi_dir) is not None
-        self.song_menu.entryconfigure(0, state=idle)
-        self.song_menu.entryconfigure(2, state="normal" if can else "disabled")
-        self.song_menu.entryconfigure(5, state=idle)
+        for index in (0, 2, 7):  # 试听, 移到…, 删除
+            self.song_menu.entryconfigure(index, state=idle)
+        self.song_menu.entryconfigure(4, state="normal" if can else "disabled")
         self.song_menu.tk_popup(event.x_root, event.y_root)
 
     def places(self) -> list[tuple[str, Path] | None]:
@@ -1670,6 +1684,17 @@ class App:
             return
         speed = self.speed_factor()
         timeline = compile_timeline(score, speed)
+        begin = self.begin_at(path, score, speed, bar, from_top)
+        self.duration = timeline.duration
+        self.set_fraction(begin / timeline.duration if timeline.duration else 0.0)
+        self.set_playing(True)
+        args = (path, timeline, begin, speed, self.mode.get(), self.playlist(path), countdown)
+        self.worker = threading.Thread(target=self.run, args=args, daemon=True)
+        self.worker.start()
+
+    def begin_at(self, path: Path, score: Score, speed: float, bar: int | None, from_top: bool = False) -> float:
+        """Where ``path`` starts, in seconds at ``speed``: at bar ``bar`` (from 0); else, if it was stopped part
+        way, at the start of the bar it stopped in; else at the top.  The song is chosen, and its place used."""
         if bar is not None:
             begin = bar_seconds(score, bar, speed)
         elif not from_top and self.resume and self.resume[0] == path:
@@ -1678,13 +1703,70 @@ class App:
             begin = 0.0
         self.resume = None
         self.select(path)
+        self.cancel = threading.Event()
+        return begin
+
+    def press_play(self) -> None:
+        """▶ plays in the game; while a song is heard on the computer, ■ in its place stops it."""
+        if self.auditioning:
+            self.stop()
+        else:
+            self.start()
+
+    def audition(self, path: Path | None = None, bar: int | None = None) -> None:
+        """Hear the chosen song through the computer's speakers, once, at the chosen speed: from bar ``bar``,
+        else from where it was stopped, else from the top.  LyreBot stays in front; ■ or F8 stops it."""
+        if self.worker or time.monotonic() < self.quiet_until:
+            return
+        path = path or self.selected()
+        if path is None:
+            return
+        self.cache.pop(path, None)
+        score = self.read(path)
+        if isinstance(score, ScoreError):
+            dialogs.error("曲谱有误", f"{path.stem}：{score}", parent=self.root)
+            self.refresh()
+            return
+        speed = self.speed_factor()
+        timeline = compile_ringing(score, speed)
+        begin = self.begin_at(path, score, speed, bar)
         self.duration = timeline.duration
         self.set_fraction(begin / timeline.duration if timeline.duration else 0.0)
-        self.cancel = threading.Event()
-        self.set_playing(True)
-        args = (path, timeline, begin, speed, self.mode.get(), self.playlist(path), countdown)
-        self.worker = threading.Thread(target=self.run, args=args, daemon=True)
+        self.leaping.clear()
+        self.auditioning = True
+        self.set_playing(False, auditioning=True)
+        self.say("正在打开系统的 MIDI 合成器…")
+        self.worker = threading.Thread(target=self.run_audition, args=(path, timeline, begin, speed), daemon=True)
         self.worker.start()
+
+    def run_audition(self, path: Path, timeline, begin: float, speed: float) -> None:
+        post = self.updates.put
+        try:
+            post(("song", (path, timeline.duration)))
+            while True:
+                hearing = self.hearing
+                reached = [begin]
+
+                def progress(at: float) -> None:
+                    reached[0] = at
+                    post(("heard", (hearing, at)))
+                synth = Audition(self.timbre, interrupt=self.leaping.is_set)
+                reason = play(timeline, synth, synth.foreground(), self.cancel, progress, start=begin)
+                if self.leaping.is_set() and not self.cancel.is_set():  # the knob let go in another bar
+                    self.leaping.clear()
+                    begin = self.leap_to
+                    continue
+                if reason == "done":
+                    post(("status", "试听完毕"))
+                else:
+                    post(("interrupted", (path, reached[0], speed, "已停止试听")))
+                return
+        except AuditionError as error:
+            post(("audition failed", str(error)))
+        except Exception as error:  # report anything to the user rather than dying silently
+            post(("error", str(error)))
+        finally:
+            post(("done", None))
 
     def show_bar(self, bar: int, score: Score) -> None:
         """Show bar ``bar`` (from 0) of all the score's bars, as 2|20."""
@@ -1720,9 +1802,10 @@ class App:
         return bar_at(score, min(max((x - left) / (right - left), 0.0), 1.0) * score.duration_seconds, 1.0)
 
     def pick_up(self, event: tk.Event) -> None:
-        """Pressing the progress bar takes hold of its knob, which then follows the pointer a bar at a time."""
+        """Pressing the progress bar takes hold of its knob, which then follows the pointer a bar at a time.
+        While a song is heard on the computer, it goes on being heard until the knob is let go."""
         path = self.selected()
-        if self.worker or path is None:
+        if (self.worker and not self.auditioning) or path is None:
             return
         score = self.read(path)
         if isinstance(score, ScoreError) or not score.bars or not score.duration_seconds:
@@ -1745,24 +1828,38 @@ class App:
         self.say(LET_GO)
 
     def let_go(self, _: tk.Event) -> None:
-        """Letting go of the knob plays from the start of its bar, after the countdown, as ▶ does."""
+        """Letting go of the knob plays from the start of its bar, after the countdown, as ▶ does; while the
+        song is heard on the computer, it is heard on from there."""
         if self.dragging is None:
             return
-        path, _ = self.dragging
+        path, score = self.dragging
         self.dragging = None
+        if self.auditioning:
+            self.leap_to = bar_seconds(score, self.drag_bar, self.speed_factor())
+            self.hearing += 1  # what is still to come from before is not shown
+            self.leaping.set()
+            self.say(HEARING)
+            self.draw_bar()
+            return
         self.start(path, bar=self.drag_bar)
         self.bar_hover = self.worker is None  # the pointer is still on the bar, but not while it plays
         if self.worker is None:  # nothing started (let go just after a stop): the song as it was
             self.show_selected()
         self.draw_bar()
 
-    def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
-        busy = playing or recording or listening
-        self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
+    def set_playing(self, playing: bool, recording: bool = False, listening: bool = False,
+                    auditioning: bool = False) -> None:
+        busy = playing or recording or listening or auditioning
+        if auditioning:  # LyreBot stays in front: ■ is live, and the knob can be moved
+            self.button.set(self.halt_images, enabled=True)
+        else:
+            self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
+        if self.button.tooltip is not None:
+            self.button.tooltip.text = HALT_TIP if auditioning else PLAY_TIP
         self.restart_button.set(enabled=not busy)
         self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
-        self.bar.configure(cursor="arrow" if busy else "hand2")
+        self.bar.configure(cursor="hand2" if auditioning or not busy else "arrow")
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,
                                enabled=recording or (not busy and self.transcriber is None))
@@ -1831,6 +1928,14 @@ class App:
         finally:
             post(("done", None))
 
+    def show_progress(self, at: float) -> None:
+        """The knob, the time and the bar counter at ``at`` seconds into the song playing."""
+        self.set_fraction(at / self.duration if self.duration else 0)
+        self.time_label.configure(text=f"{clock(at)} / {clock(self.duration)}")
+        if self.bar_starts:
+            bar = max(bisect_right(self.bar_starts, at + 1e-6), 1)
+            self.bar_label.configure(text=f"{bar}|{len(self.bar_starts)}")
+
     def notated(self, path: Path, faithful: float) -> None:
         self.say(f"已写成曲谱 {path.name}")
         self.written = (path, f"刚从演奏记录好，{faithful:.0%} 的按键照原样弹回")
@@ -1874,16 +1979,17 @@ class App:
                 score = self.read(path)
                 tempo = None if isinstance(score, ScoreError) else score.tempo_map(self.speed_factor())
                 self.bar_starts = [float(tempo.seconds(Fraction(start))) for start in score.bars] if tempo else []
-                self.root.title(f"{path.stem} · LyreBot")
+                self.root.title(f"{path.stem} · 试听 · LyreBot" if self.auditioning else f"{path.stem} · LyreBot")
             elif kind == "interrupted":
                 self.interrupted(*value)
             elif kind == "progress":
-                self.set_fraction(value / self.duration if self.duration else 0)
-                self.time_label.configure(text=f"{clock(value)} / {clock(self.duration)}")
-                if self.bar_starts:
-                    bar = max(bisect_right(self.bar_starts, value + 1e-6), 1)
-                    self.bar_label.configure(text=f"{bar}|{len(self.bar_starts)}")
+                self.show_progress(value)
                 self.say("正在演奏 · 按 F8 或切换窗口停止")
+            elif kind == "heard":
+                hearing, at = value
+                if hearing == self.hearing and self.dragging is None:  # not while the knob is held
+                    self.show_progress(at)
+                    self.say(HEARING)
             elif kind == "error":
                 self.say("出错，已停止", warn=True)
                 if not self.closing:
@@ -1900,6 +2006,8 @@ class App:
                     self.start_transcription(path)
             elif kind == "record failed":
                 self.say(f"录音失败：{value}", warn=True)
+            elif kind == "audition failed":
+                self.say(f"不能试听：{value}", warn=True)
             elif kind == "listening":
                 state, seconds, count = value
                 if state == "listening":
@@ -1915,6 +2023,7 @@ class App:
                 self.worker = None
                 self.recording = False
                 self.listening = False
+                self.auditioning = False
                 self.quiet_until = time.monotonic() + COOLDOWN
                 self.browser.set_playing(None)
                 self.set_playing(False)

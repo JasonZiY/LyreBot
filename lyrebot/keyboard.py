@@ -110,14 +110,23 @@ class Keyboard:
 _watcher: _User32 | None = None
 
 
-def start_pressed() -> bool:
-    """Whether F7 is held down now, whichever window has the focus; never on other systems."""
+def _held(virtual_key: int) -> bool:
     global _watcher
     if sys.platform != "win32":
         return False
     if _watcher is None:
         _watcher = _User32()
-    return _watcher.key_held(START_KEY)
+    return _watcher.key_held(virtual_key)
+
+
+def start_pressed() -> bool:
+    """Whether F7 is held down now, whichever window has the focus; never on other systems."""
+    return _held(START_KEY)
+
+
+def stop_pressed() -> bool:
+    """Whether F8 is held down now, whichever window has the focus; never on other systems."""
+    return _held(STOP_KEY)
 
 
 def foreground_title_and_pid(hwnd: int) -> tuple[str, int]:
