@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import sys
+import threading
 import time
 from typing import Any, Callable
 
@@ -18,7 +19,9 @@ from .arrange import KEY_OF
 from .keyboard import stop_pressed
 
 NOTE_OF = {key: pitch for pitch, key in KEY_OF.items()}  # z = C3 (48), a = C4 (60), q = C5 (72), u = B5
-HARP = 47  # General MIDI's Orchestral Harp, numbered from 1 as in the GM list
+PIANO, HARP = 1, 47  # General MIDI's Acoustic Grand Piano and Orchestral Harp, numbered from 1 as in its list
+INSTRUMENTS = ((PIANO, "钢琴"), (HARP, "竖琴"), (9, "钢片琴"), (10, "钟琴"), (11, "八音盒"), (12, "颤音琴"),
+               (13, "马林巴"), (16, "扬琴"), (25, "尼龙弦吉他"), (46, "弦乐拨奏"), (108, "筝"), (109, "卡林巴"))
 VELOCITY = 96  # every note alike: the lyre has no loud and soft
 CHANNEL = 0
 SYNTH = "GS Wavetable"  # part of the name of Windows' own synthesizer
@@ -99,14 +102,16 @@ class Audition:
     The synthesizer is open from creation until ``release_all``, which the player always calls at the end.
     A key's press starts its note (ending the one still ringing on it); its release ends the note, which
     then fades as the instrument does.  Listening is never stopped by another window coming to the front;
-    F8 stops it in any window, and so does ``interrupt`` once it answers true.
+    F8 stops it in any window, and so does ``interrupt`` once it answers true.  ``instrument`` may be
+    called from another thread while it plays.
     """
 
-    def __init__(self, program: int = HARP, interrupt: Callable[[], bool] | None = None, *, api: Any = None,
+    def __init__(self, program: int = PIANO, interrupt: Callable[[], bool] | None = None, *, api: Any = None,
                  stop_key: Callable[[], bool] = stop_pressed, sleep: Callable[[float], None] = time.sleep):
         self._api = api or _WinMM()
         self.interrupt = interrupt or (lambda: False)
         self.stop_key, self.sleep = stop_key, sleep
+        self.lock = threading.Lock()  # one message at a time, and none once closed
         names = self._api.devices()
         if not names:
             raise AuditionError("这台电脑没有可以发声的 MIDI 设备")
@@ -115,10 +120,17 @@ class Audition:
         self.handle: int | None = self._api.open(self.device)
         self.sounding: set[int] = set()
         try:
-            self._api.short(self.handle, message(PROGRAM | CHANNEL, program - 1))
+            self.instrument(program)
         except AuditionError:
             self.release_all()
             raise
+
+    def instrument(self, program: int) -> None:
+        """Sound the notes from now on as General MIDI instrument ``program`` (numbered from 1); those
+        already ringing keep theirs."""
+        with self.lock:
+            if self.handle is not None:
+                self._api.short(self.handle, message(PROGRAM | CHANNEL, program - 1))
 
     def foreground(self) -> int:
         return HEARD
@@ -127,25 +139,29 @@ class Audition:
         return self.interrupt() or self.stop_key()
 
     def send(self, keys: tuple[str, ...], down: bool) -> None:
-        if self.handle is None:
-            return
-        for key in keys:
-            note = NOTE_OF[key]
-            if note in self.sounding:  # released, or struck again while it rang
-                self._api.short(self.handle, message(NOTE_OFF | CHANNEL, note))
-                self.sounding.discard(note)
-            if down:
-                self._api.short(self.handle, message(NOTE_ON | CHANNEL, note, VELOCITY))
-                self.sounding.add(note)
+        with self.lock:
+            if self.handle is None:
+                return
+            for key in keys:
+                note = NOTE_OF[key]
+                if note in self.sounding:  # released, or struck again while it rang
+                    self._api.short(self.handle, message(NOTE_OFF | CHANNEL, note))
+                    self.sounding.discard(note)
+                if down:
+                    self._api.short(self.handle, message(NOTE_ON | CHANNEL, note, VELOCITY))
+                    self.sounding.add(note)
 
     def release_all(self) -> None:
         """Silence and close.  Stopped part way, it falls silent at once; at the end of the song, once every
         note was let go, the last ones are given ``TAIL`` to fade first."""
-        if self.handle is None:
-            return
-        handle, self.handle = self.handle, None
+        with self.lock:  # from here on nothing else goes to the synthesizer
+            if self.handle is None:
+                return
+            handle, self.handle = self.handle, None
+            cut = bool(self.sounding)
+            self.sounding.clear()
         try:
-            if self.sounding:
+            if cut:
                 self._api.short(handle, message(CONTROL | CHANNEL, ALL_SOUND_OFF))
             else:
                 self.sleep(TAIL)
@@ -153,6 +169,5 @@ class Audition:
         except AuditionError:
             pass
         finally:
-            self.sounding.clear()
             self._api.reset(handle)
             self._api.close(handle)

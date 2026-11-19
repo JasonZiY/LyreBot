@@ -715,7 +715,7 @@ class Folders(unittest.TestCase):
 
     def test_a_song_is_heard_from_its_menu_with_the_player_working_as_usual(self):
         from unittest import mock
-        from lyrebot.app import HALT_TIP, HARP, HEARING, PLAY_TIP, App
+        from lyrebot.app import HALT_TIP, HEARING, PIANO, PLAY_TIP, App
         path, other = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
         app.select(path)
@@ -751,7 +751,7 @@ class Folders(unittest.TestCase):
 
         app.worker = None
         made = self.heard(app, path, lambda synth, start, progress: progress(5.5) or "done")
-        self.assertEqual(made[0].program, HARP)
+        self.assertEqual(made[0].program, PIANO)  # unless another was chosen
         self.assertEqual(app.title_label.cget("text"), path.stem)
         self.assertEqual(app.bar_label.cget("text"), "2|3")
         self.assertEqual(app.time_label.cget("text"), "0:06 / 0:12")
@@ -839,6 +839,71 @@ class Folders(unittest.TestCase):
         self.assertEqual(len(made), 2)  # the synthesizer was closed and opened again
         self.assertEqual(app.status_label.cget("text"), "试听完毕")
         self.assertIsNone(app.resume)
+
+    def test_the_instrument_is_chosen_from_the_menu_kept_and_heard_at_once(self):
+        import json
+        from unittest import mock
+        from lyrebot.app import App, INSTRUMENTS, PIANO, read_timbre, write_timbre
+        path, _ = self.three_bars()
+        settings = self.root / "settings.json"
+        app = App(self.window(), self.scores, self.midi, settings=settings)
+        self.assertEqual((app.timbre, app.timbre_name.get()), (PIANO, "钢琴"))  # the piano unless chosen
+        app.select(path)
+        menu = self.right_click(app, app.browser.cell_of(path))
+        self.assertEqual((menu.type(1), menu.entrycget(1, "label")), ("cascade", "试听音色"))
+        names = self.labels(app.timbre_menu)
+        self.assertEqual(names, [name for _, name in INSTRUMENTS])
+        app.timbre_menu.invoke(names.index("竖琴"))
+        self.assertEqual(app.timbre, 47)
+        self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"timbre": 47})
+        self.assertEqual(read_timbre(settings), 47)  # chosen again next time
+
+        made = self.heard(app, path, lambda synth, start, progress: "done")
+        self.assertEqual(made[0].program, 47)
+        app.worker = object()  # while a song is heard it may change, and is heard on the new one at once
+        app.synth = mock.Mock()
+        menu = self.right_click(app, app.browser.cell_of(path))
+        self.assertEqual((menu.entrycget(0, "state"), menu.entrycget(1, "state")), ("disabled", "normal"))
+        app.timbre_menu.invoke(names.index("筝"))
+        app.synth.instrument.assert_called_once_with(108)
+        app.synth, app.worker = None, None
+
+        app.timbre = 13
+        made = []
+
+        def factory(program, interrupt):
+            synth = mock.Mock(program=program)
+            synth.foreground.return_value = 0
+            app.timbre = 16  # chosen while the synthesizer was opening
+            made.append(synth)
+            return synth
+
+        def play(timeline, synth, *args, **options):
+            self.assertIs(app.synth, synth)  # the one open while it plays
+            return "done"
+        with mock.patch("lyrebot.app.Audition", side_effect=factory), mock.patch("lyrebot.app.play", side_effect=play):
+            app.auditioning = True
+            app.run_audition(path, mock.Mock(duration=12.0), 0.0, 1.0)
+        self.assertEqual(made[0].program, 13)
+        made[0].instrument.assert_called_once_with(16)  # so it plays on the one chosen
+        self.assertIsNone(app.synth)  # closed with the song
+        app.poll()
+
+        settings.write_text("{not json", encoding="utf-8")
+        self.assertEqual(read_timbre(settings), PIANO)
+        settings.write_text(json.dumps({"timbre": 200, "other": 1}), encoding="utf-8")
+        self.assertEqual(read_timbre(settings), PIANO)  # not one offered
+        write_timbre(108, settings)
+        self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"timbre": 108, "other": 1})
+        self.assertEqual(read_timbre(self.root / "nothing.json"), PIANO)
+
+    def test_without_a_settings_file_the_choice_lasts_only_while_open(self):
+        from lyrebot.app import App
+        app = App(self.window(), self.scores, self.midi)
+        app.timbre_name.set("筝")
+        app.pick_timbre()
+        self.assertEqual(app.timbre, 108)
+        self.assertEqual(list(self.root.glob("*.json")), [])
 
     def test_a_synthesizer_that_will_not_open_says_why(self):
         from unittest import mock
@@ -1103,7 +1168,8 @@ class Folders(unittest.TestCase):
 
         self.click(app, self.cell(app, "region", "蒙德"))
         menu = self.right_click(app, self.cell(app, "song", "甲"))
-        self.assertEqual(self.labels(menu), ["试听", "—", "移到…", "—", "从 MIDI 重新编配", "导出简谱", "—", "删除"])
+        self.assertEqual(self.labels(menu), ["试听", "试听音色", "—", "移到…", "—", "从 MIDI 重新编配", "导出简谱", "—",
+                                            "删除"])
         self.assertEqual(app.selected(), self.scores / "OST" / "蒙德" / "甲.txt")
         places = self.labels(app.move_menu)
         self.assertEqual(places, ["未归类", "—", *REGIONS, "—", "歌曲"])
@@ -1162,7 +1228,7 @@ class Folders(unittest.TestCase):
         (self.scores / "小曲.txt").write_text("speed=90\na-s-d-f-|z----\n", encoding="utf-8")
         root = self.window()
         app = App(root, self.scores, self.midi, jianpu_dir=self.root / "jianpu_output")
-        self.assertEqual(app.song_menu.entrycget(5, "label"), "导出简谱")
+        self.assertEqual(app.song_menu.entrycget(6, "label"), "导出简谱")
         app.select(self.scores / "小曲.txt")
         with mock.patch.object(app, "open_file") as opened:
             target = app.export_jianpu()
@@ -1249,7 +1315,7 @@ class Folders(unittest.TestCase):
         (pages / "冰湖-录音.html").write_text("<html></html>", encoding="utf-8")
         (pages / "林中晨歌.html").write_text("<html></html>", encoding="utf-8")
         app = App(root, self.scores, self.midi, jianpu_dir=pages)
-        self.assertEqual(app.song_menu.entrycget(7, "label"), "删除")
+        self.assertEqual(app.song_menu.entrycget(8, "label"), "删除")
         app.select(recorded)
         gone = []
 

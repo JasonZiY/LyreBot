@@ -3,8 +3,8 @@
 import threading
 import unittest
 
-from lyrebot.audition import (ALL_NOTES_OFF, ALL_SOUND_OFF, CONTROL, HARP, MIDI_MAPPER, NOTE_OF, NOTE_OFF, NOTE_ON,
-                              PROGRAM, TAIL, VELOCITY, Audition, AuditionError, message)
+from lyrebot.audition import (ALL_NOTES_OFF, ALL_SOUND_OFF, CONTROL, HARP, INSTRUMENTS, MIDI_MAPPER, NOTE_OF, NOTE_OFF,
+                              NOTE_ON, PIANO, PROGRAM, TAIL, VELOCITY, Audition, AuditionError, message)
 from lyrebot.player import play
 from lyrebot.score import KEYS, parse_score
 from lyrebot.timeline import RING, compile_ringing, compile_timeline
@@ -67,14 +67,33 @@ class Pitches(unittest.TestCase):
 
 
 class Synthesizer(unittest.TestCase):
-    def test_it_opens_windows_own_synthesizer_on_the_harp(self):
+    def test_it_opens_windows_own_synthesizer_on_the_piano(self):
         synth, api, _ = opened(FakeWinMM(["USB MIDI", "Microsoft GS Wavetable Synth"]))
         self.assertEqual(synth.device, 1)
-        self.assertEqual(api.log, [("open", 1), ("short", 0x5150, PROGRAM, HARP - 1, 0)])
-        synth, api, _ = opened(FakeWinMM(["Some Synth"]), program=1)  # no GS synth: whatever Windows maps to
-        self.assertEqual(api.log, [("open", MIDI_MAPPER), ("short", 0x5150, PROGRAM, 0, 0)])
+        self.assertEqual(api.log, [("open", 1), ("short", 0x5150, PROGRAM, PIANO - 1, 0)])
+        synth, api, _ = opened(FakeWinMM(["Some Synth"]), program=HARP)  # no GS synth: whatever Windows maps to
+        self.assertEqual(api.log, [("open", MIDI_MAPPER), ("short", 0x5150, PROGRAM, HARP - 1, 0)])
         with self.assertRaises(AuditionError):
             opened(FakeWinMM([]))  # nothing to play on at all
+
+    def test_the_instrument_can_change_while_it_plays_and_not_once_it_is_closed(self):
+        synth, api, _ = opened()
+        synth.send(("a",), True)
+        synth.instrument(108)
+        synth.send(("s",), True)
+        self.assertEqual(api.log[2:5], [("short", 0x5150, NOTE_ON, 60, VELOCITY), ("short", 0x5150, PROGRAM, 107, 0),
+                                        ("short", 0x5150, NOTE_ON, 62, VELOCITY)])
+        synth.release_all()
+        count = len(api.log)
+        synth.instrument(1)
+        self.assertEqual(len(api.log), count)
+
+    def test_the_instruments_offered_are_distinct_general_midi_ones_piano_first(self):
+        programs = [program for program, _ in INSTRUMENTS]
+        self.assertEqual(programs[:2], [PIANO, HARP])
+        self.assertEqual(len(set(programs)), len(programs))
+        self.assertEqual(len({name for _, name in INSTRUMENTS}), len(INSTRUMENTS))
+        self.assertTrue(all(1 <= program <= 128 for program in programs))
 
     def test_a_press_starts_its_note_and_a_release_or_a_new_strike_ends_it(self):
         synth, api, _ = opened()

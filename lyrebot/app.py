@@ -22,7 +22,7 @@ from typing import Callable
 
 from . import chrome, dialogs, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
-from .audition import HARP, Audition, AuditionError
+from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .collate import pinyin_key
 from .jianpu import export as export_jianpu
 from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
@@ -811,10 +811,12 @@ class SongBrowser(OnPage, tk.Canvas):
 class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
                  tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR, own_frame: bool = False,
-                 place: tuple[int, int, int, int] | None = None):
-        """``place`` is where the window was left (see ``read_place``)."""
+                 place: tuple[int, int, int, int] | None = None, settings: Path | None = None):
+        """``place`` is where the window was left (see ``read_place``); ``settings`` the file the instrument
+        songs are heard on is kept in (see ``read_timbre``), if it is to be kept."""
         self.root = root
         self.place = place
+        self.settings = settings
         self.scores_dir = scores_dir
         self.midi_dir = midi_dir
         self.jianpu_dir = jianpu_dir
@@ -841,7 +843,8 @@ class App:
         self.recording = False
         self.listening = False
         self.auditioning = False  # hearing a song on the computer (``audition``)
-        self.timbre = HARP  # the General MIDI instrument it is heard on
+        self.timbre = read_timbre(settings) if settings else PIANO  # the General MIDI instrument it is heard on
+        self.synth: Audition | None = None  # the synthesizer open while a song is heard
         self.leaping = threading.Event()  # set when the knob is let go while hearing: go on from ``leap_to``
         self.leap_to = 0.0  # seconds into the song
         self.hearing = 0  # counts the stretches heard, so that progress from one cut short is not shown
@@ -867,6 +870,7 @@ class App:
         root.bind("<ButtonPress>", self.click_away, add="+")
         self.speed = tk.StringVar(master=root, value="100%")
         self.mode = tk.StringVar(master=root, value=SINGLE)
+        self.timbre_name = tk.StringVar(master=root, value=dict(INSTRUMENTS)[self.timbre])
 
         self.build()
         self.refresh()
@@ -926,7 +930,12 @@ class App:
         root.bind("<MouseWheel>", self.browser.wheel)
         self.song_menu = PopupMenu(root, theme)  # for a song
         self.move_menu = PopupMenu(root, theme)
+        self.timbre_menu = PopupMenu(root, theme)
+        for _, name in INSTRUMENTS:
+            self.timbre_menu.add_radiobutton(label=name, value=name, variable=self.timbre_name,
+                                             command=self.pick_timbre)
         self.song_menu.add_command(label="试听", command=self.audition, icon=icons.headphones)
+        self.song_menu.add_cascade(label="试听音色", menu=self.timbre_menu, icon=icons.tuning_fork)
         self.song_menu.add_separator()
         self.song_menu.add_cascade(label="移到…", menu=self.move_menu, icon=icons.move_to)
         self.song_menu.add_separator()
@@ -1364,9 +1373,9 @@ class App:
         self.fill_move_menu(chosen)
         idle = "normal" if not self.worker else "disabled"
         can = not self.worker and midi_for(chosen, self.midi_dir) is not None
-        for index in (0, 2, 7):  # 试听, 移到…, 删除
+        for index in (0, 3, 8):  # 试听, 移到…, 删除; 试听音色 can change while a song is heard
             self.song_menu.entryconfigure(index, state=idle)
-        self.song_menu.entryconfigure(4, state="normal" if can else "disabled")
+        self.song_menu.entryconfigure(5, state="normal" if can else "disabled")
         self.song_menu.tk_popup(event.x_root, event.y_root)
 
     def places(self) -> list[tuple[str, Path] | None]:
@@ -1739,6 +1748,18 @@ class App:
         self.worker = threading.Thread(target=self.run_audition, args=(path, timeline, begin, speed), daemon=True)
         self.worker.start()
 
+    def pick_timbre(self) -> None:
+        """The instrument chosen from the menu: kept for next time, and heard at once if a song is playing."""
+        self.timbre = dict((name, program) for program, name in INSTRUMENTS)[self.timbre_name.get()]
+        if self.settings:
+            write_timbre(self.timbre, self.settings)
+        synth = self.synth
+        if synth is not None:
+            try:
+                synth.instrument(self.timbre)
+            except AuditionError:
+                pass  # closing just then: the next one opens on it
+
     def run_audition(self, path: Path, timeline, begin: float, speed: float) -> None:
         post = self.updates.put
         try:
@@ -1750,8 +1771,14 @@ class App:
                 def progress(at: float) -> None:
                     reached[0] = at
                     post(("heard", (hearing, at)))
-                synth = Audition(self.timbre, interrupt=self.leaping.is_set)
-                reason = play(timeline, synth, synth.foreground(), self.cancel, progress, start=begin)
+                program = self.timbre
+                synth = self.synth = Audition(program, interrupt=self.leaping.is_set)
+                if self.timbre != program:  # changed while it opened
+                    synth.instrument(self.timbre)
+                try:
+                    reason = play(timeline, synth, synth.foreground(), self.cancel, progress, start=begin)
+                finally:
+                    self.synth = None
                 if self.leaping.is_set() and not self.cancel.is_set():  # the knob let go in another bar
                     self.leaping.clear()
                     begin = self.leap_to
@@ -2049,6 +2076,31 @@ class App:
 
 
 PLACE = CACHE_ROOT.parent / "window.json"  # where the window was left
+SETTINGS = CACHE_ROOT.parent / "settings.json"  # what was chosen, to be chosen again next time
+
+
+def read_timbre(path: Path) -> int:
+    """The instrument songs were last heard on, if it is one offered; else the piano."""
+    try:
+        program = json.loads(path.read_text(encoding="utf-8"))["timbre"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return PIANO
+    return program if type(program) is int and program in dict(INSTRUMENTS) else PIANO
+
+
+def write_timbre(program: int, path: Path) -> None:
+    """Keep the instrument songs are heard on, beside whatever else ``path`` keeps."""
+    try:
+        kept = json.loads(path.read_text(encoding="utf-8"))
+        kept = kept if isinstance(kept, dict) else {}
+    except (OSError, ValueError):
+        kept = {}
+    kept["timbre"] = program
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(kept, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def write_place(box: tuple[int, int, int, int], dpi: int, path: Path | None = None) -> None:
@@ -2102,7 +2154,7 @@ def main() -> None:
     except tk.TclError:
         pass
     try:
-        App(root, own_frame=True, place=read_place(round(root.winfo_fpixels("1i"))))
+        App(root, own_frame=True, place=read_place(round(root.winfo_fpixels("1i"))), settings=SETTINGS)
     except Exception:
         if sys.stderr is not None:
             raise

@@ -477,6 +477,23 @@ def headphones(size: int) -> list[Part]:
                        block(right - half, cup_top, right + half, low, s * 0.05)))]
 
 
+def tuning_fork(size: int) -> list[Part]:
+    """A tuning fork in line: two prongs joined by a round bend, its handle in gilt.  The sound a score is
+    heard in.  Mirrored about the middle; the handle is a pixel wider where the middle falls between two."""
+    s, pen = size, pen_width(size)
+    left = snap(s * 0.33, pen)
+    right = s - left
+    middle, radius = s / 2, (right - left) / 2
+    top, shoulder = snap(s * 0.12, pen), snap(s * 0.46, pen)
+    steps = 16
+    bend = [(middle - radius * math.cos(math.pi * i / steps), shoulder + radius * math.sin(math.pi * i / steps))
+            for i in range(steps + 1)]
+    handle = pen if snap(middle, pen) == middle else pen + 1
+    return [crisp([(left, top), (left, shoulder)], pen), crisp([(right, top), (right, shoulder)], pen),
+            stroke(bend, pen),
+            gilt(block(middle - handle / 2, shoulder + radius, middle + handle / 2, round(s * 0.90), handle * 0.3))]
+
+
 def fleuron(width: int, height: int) -> list[Shape]:
     """·◆·: a small lozenge between two dots, the ornament set into a rule."""
     c, m = math.floor(width / 2) + 0.5, height / 2
