@@ -36,6 +36,18 @@ class NextSong(unittest.TestCase):
         self.assertIsNone(next_song([], None, IN_ORDER))
 
 
+class TypedSpeed(unittest.TestCase):
+    def test_a_percentage_may_be_written_several_ways(self):
+        from lyrebot.app import parse_speed
+        for text, percent in (("135", 135.0), (" 87.5% ", 87.5), ("90％", 90.0), ("25", 25.0), ("300%", 300.0)):
+            self.assertEqual(parse_speed(text), percent)
+
+    def test_what_cannot_be_played_is_refused(self):
+        from lyrebot.app import parse_speed
+        for text in ("", "%", "快", "24.9", "300.1", "-100", "nan", "inf"):
+            self.assertIsNone(parse_speed(text))
+
+
 class Folders(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -299,6 +311,30 @@ class Folders(unittest.TestCase):
         (self.scores / "ost" / "新的.txt").write_text("speed=60\na-\n", encoding="utf-8")
         app.refresh()  # the list is rebuilt; the folder stays closed
         self.assertFalse(tree.item(FOLDER + "ost", "open"))
+
+    def test_the_speed_menu_takes_a_percentage_typed_in(self):
+        from unittest import mock
+        from lyrebot.app import App, clock
+        (self.scores / "小曲.txt").write_text("speed=60\na-s-d-f-\n", encoding="utf-8")
+        root = self.window()
+        app = App(root, self.scores, self.midi)
+        app.select(self.scores / "小曲.txt")
+        menu = app.speed_choice.menu
+        last = menu.index("end")
+        self.assertEqual(menu.entrycget(last, "label"), "自定义…")
+        with mock.patch("lyrebot.app.simpledialog.askstring", side_effect=["快一点", "400", "125%"]) as asked:
+            menu.invoke(last)
+        self.assertEqual(asked.call_count, 3)
+        self.assertIn("25 到 300", asked.call_args.args[1])
+        self.assertEqual(app.speed.get(), "125%")
+        self.assertEqual(app.speed_factor(), 1.25)
+        self.assertTrue(app.speed_choice.cget("text").startswith("125%"))
+        self.assertEqual(app.time_label.cget("text"), clock(4 / 1.25))
+        with mock.patch("lyrebot.app.simpledialog.askstring", return_value=None):
+            menu.invoke(last)  # cancelling keeps the speed
+        self.assertEqual(app.speed.get(), "125%")
+        menu.invoke(0)  # and the usual speeds are still there
+        self.assertEqual(app.speed.get(), "80%")
 
     def test_the_menu_exports_a_score_as_jianpu(self):
         from unittest import mock

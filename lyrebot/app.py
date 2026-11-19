@@ -63,9 +63,20 @@ HOVER = "#EFE9DF"
 WARN = "#B5502F"
 
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
+CUSTOM_SPEED = "自定义…"
+SLOWEST_SPEED, FASTEST_SPEED = 25.0, 300.0  # percent
 SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
+
+
+def parse_speed(text: str) -> float | None:
+    """The percentage typed for the speed, as in 135 or 87.5%, or None if it is not one to play at."""
+    try:
+        percent = float(text.strip().rstrip("%％").strip())
+    except ValueError:
+        return None
+    return percent if SLOWEST_SPEED <= percent <= FASTEST_SPEED else None
 
 
 def clock(seconds: float) -> str:
@@ -347,7 +358,8 @@ class Choice(tk.Label):
     """Flat text like "100% ▾" that opens a small menu of options."""
 
     def __init__(self, parent: tk.Widget, variable: tk.StringVar, options: tuple[str, ...],
-                 on_change: Callable[[], None], font: tuple):
+                 on_change: Callable[[], None], font: tuple,
+                 actions: tuple[tuple[str, Callable[[], None]], ...] = ()):
         super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=8, pady=3)
         self.variable, self.enabled = variable, True
         self.menu = tk.Menu(self, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
@@ -355,6 +367,8 @@ class Choice(tk.Label):
         for option in options:
             self.menu.add_radiobutton(label=option, value=option, variable=variable,
                                       selectcolor=ORANGE, command=on_change)
+        for label, command in actions:
+            self.menu.add_command(label=label, command=command)
         variable.trace_add("write", lambda *_: self.redraw())
         self.bind("<Enter>", lambda _: self.enabled and self.configure(bg=HOVER))
         self.bind("<Leave>", lambda _: self.configure(bg=PAPER))
@@ -489,7 +503,8 @@ class App:
         controls.pack(fill="x", pady=(px(10), 0))
         self.speed = tk.StringVar(value="100%")
         self.mode = tk.StringVar(value=SINGLE)
-        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, 10))
+        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, 10),
+                                   ((CUSTOM_SPEED, self.ask_speed),))
         self.speed_choice.pack(side="left")
         self.mode_choice = Choice(controls, self.mode, MODES, lambda: None, (FAMILY, 10))
         self.mode_choice.pack(side="left", padx=(px(4), 0))
@@ -670,7 +685,22 @@ class App:
         self.show_selected()
 
     def speed_factor(self) -> float:
-        return int(self.speed.get().rstrip("%")) / 100
+        return float(self.speed.get().rstrip("%")) / 100
+
+    def ask_speed(self) -> None:
+        limits = f"{SLOWEST_SPEED:g} 到 {FASTEST_SPEED:g}"
+        prompt = f"演奏速度是原速的百分之几（{limits}）："
+        answer = self.speed.get().rstrip("%")
+        while True:
+            answer = simpledialog.askstring("自定义速度", prompt, initialvalue=answer, parent=self.root)
+            if answer is None:
+                return
+            percent = parse_speed(answer)
+            if percent is not None:
+                self.speed.set(f"{percent:g}%")
+                self.show_selected()
+                return
+            prompt = f"速度请填 {limits} 之间的数字："
 
     def show_selected(self) -> None:
         if self.worker:
