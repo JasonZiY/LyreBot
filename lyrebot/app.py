@@ -53,8 +53,8 @@ NO_TOOLS = ("录音编配要用到 audio.cpp 和 MuScriptor 模型，LyreBot 没
 ICON = PROJECT / "assets" / "lyrebot.ico"
 COUNTDOWN = 2.0  # seconds to switch to the game after starting a song from the window; F7 needs none
 HOTKEY_POLL = 30  # milliseconds between looks at F7
-READY = "请切换到游戏窗口，按F7立刻开始"  # under the bar once a song is chosen
-GO_ON = "点▶或按F7从该小节继续"  # once it was stopped part way: the bar counter shows which bar
+READY = "请切换到游戏窗口，按 F7 立刻开始"  # under the bar once a song is chosen
+GO_ON = "点 ▶ 或按 F7 从该小节继续"  # once it was stopped part way: the bar counter shows which bar
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 FAMILY = "Microsoft YaHei UI"

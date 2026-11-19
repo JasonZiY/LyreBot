@@ -386,7 +386,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(app.selected(), one)
         self.assertEqual(app.title_label.cget("text"), "一")
         self.assertTrue(app.button.enabled)
-        self.assertEqual(app.status_label.cget("text"), "请切换到游戏窗口，按F7立刻开始")  # no BPM or tempo changes
+        self.assertEqual(app.status_label.cget("text"), "请切换到游戏窗口，按 F7 立刻开始")  # no BPM or tempo changes
         with mock.patch.object(app.browser, "on_play") as play:
             self.click(app, self.cell(app, "song", "二"), double=True)
         play.assert_called_once_with()
@@ -477,11 +477,11 @@ class Folders(unittest.TestCase):
         app.select(path)
         self.stopped_at(app, path, 5.5)  # in the second bar, which starts at 4 s
         self.assertEqual(app.resume, (path, 1))
-        self.assertEqual(app.status_label.cget("text"), "已停止 · 点▶或按F7从该小节继续")
+        self.assertEqual(app.status_label.cget("text"), "已停止 · 点 ▶ 或按 F7 从该小节继续")
         self.assertEqual(app.bar_label.cget("text"), "2|3")
         self.assertAlmostEqual(app.fraction, 4 / 12)
         app.show_selected()  # the list redrawn: still remembered
-        self.assertEqual(app.status_label.cget("text"), "点▶或按F7从该小节继续")
+        self.assertEqual(app.status_label.cget("text"), "点 ▶ 或按 F7 从该小节继续")
         self.assertEqual(self.started(app), (path, 4.0, None))  # ▶ goes on, after the countdown
         self.assertIsNone(app.resume)  # and then it is used up
 
