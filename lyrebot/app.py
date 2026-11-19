@@ -70,7 +70,9 @@ WARN = "#B5502F"
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
 CUSTOM_SPEED = "自定义…"
 SLOWEST_SPEED, FASTEST_SPEED = 25.0, 300.0  # percent
-SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
+SINGLE, REPEAT, SHUFFLE, IN_ORDER = MODES = ("单曲", "单曲循环", "随机演奏", "顺序演奏")
+ON_ITS_OWN = (SINGLE, REPEAT)  # the modes a song in no playlist can play in
+UNFILED = "未归类"
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 LIST_FONT, SMALL_FONT, TITLE_FONT = 9, 8, 10  # points
@@ -460,9 +462,9 @@ class Choice(tk.Label):
                  on_change: Callable[[], None], font: tuple,
                  actions: tuple[tuple[str, Callable[[], None]], ...] = ()):
         super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=6, pady=2)
-        self.variable, self.enabled = variable, True
+        self.variable, self.options, self.enabled = variable, options, True
         self.menu = tk.Menu(self, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
-                            activeforeground=INK, borderwidth=0, font=font)
+                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=font)
         for option in options:
             self.menu.add_radiobutton(label=option, value=option, variable=variable,
                                       selectcolor=ORANGE, command=on_change)
@@ -483,6 +485,11 @@ class Choice(tk.Label):
         self.configure(bg=PAPER)
         self.redraw()
 
+    def allow(self, allowed: tuple[str, ...] | None) -> None:
+        """Grey out the options not in ``allowed``; None allows them all."""
+        for index, option in enumerate(self.options):
+            self.menu.entryconfigure(index, state="normal" if allowed is None or option in allowed else "disabled")
+
     def open(self, _: tk.Event) -> None:
         if self.enabled:
             self.menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height())
@@ -496,6 +503,7 @@ class Cell:
     box: tuple[float, float, float, float]
     text: str
     path: Path | None = None
+    count: int | None = None  # of the songs in a shelf or region, shown after its name
 
 
 class SongBrowser(tk.Canvas):
@@ -581,18 +589,19 @@ class SongBrowser(tk.Canvas):
         if library.unfiled:
             rules.append(y)
         is_open = OST not in self.closed_shelves
-        cells.append(Cell("shelf", OST, (left, y, right, y + row), opener(is_open, OST)))
+        cells.append(Cell("shelf", OST, (left, y, right, y + row), opener(is_open, OST), count=len(library.ost)))
         y += row
         if is_open:
             for name, paths in library.regions:
                 expanded = name in self.open_regions
-                cells.append(Cell("region", name, (left, y, right, y + row), opener(expanded, name)))
+                cells.append(Cell("region", name, (left, y, right, y + row), opener(expanded, name), count=len(paths)))
                 y += row
                 if expanded:
                     y += run_down(paths, columns, y)
         rules.append(y)
         is_open = SONGS not in self.closed_shelves
-        cells.append(Cell("shelf", SONGS, (left, y, right, y + row), opener(is_open, SONGS)))
+        cells.append(Cell("shelf", SONGS, (left, y, right, y + row), opener(is_open, SONGS),
+                          count=len(library.songs)))
         y += row
         if is_open:
             y += run_down(library.songs, columns, y)
@@ -605,9 +614,14 @@ class SongBrowser(tk.Canvas):
             left, top, right, bottom = cell.box
             bold = cell.kind == "shelf"
             color = WARN if cell.path in self.bad else INK
-            self.create_text(left + self.pad, (top + bottom) / 2, anchor="w", fill=color, tags="content",
-                             font=(FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT),
-                             text=self.fit(cell.text, self.room(cell), bold))
+            font = (FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT)
+            text = self.fit(cell.text, self.room(cell), bold)
+            middle = (top + bottom) / 2
+            self.create_text(left + self.pad, middle, anchor="w", fill=color, tags="content", font=font, text=text)
+            if cell.count is not None:
+                after = left + self.pad + int(self.tk.call("font", "measure", font, text)) + self.pad
+                self.create_text(after, middle, anchor="w", fill=MUTED, tags="content",
+                                 font=(FAMILY, LIST_FONT), text=str(cell.count))
         self.configure(scrollregion=(0, 0, width, max(y, 1)))
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
@@ -794,15 +808,18 @@ class App:
         self.browser.configure(yscrollcommand=self.scrolled)
         self.browser.bind("<Button-3>", self.context_menu)
         root.bind("<MouseWheel>", self.browser.wheel)
-        self.menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
-                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, LIST_FONT))
-        self.menu.add_command(label=TXT_FOLDER, command=lambda: self.open_folder(self.menu_folder))
-        self.menu.add_command(label="打开 MIDI 和录音文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
-        self.menu.add_separator()
-        self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
-        self.menu.add_command(label="导出简谱", command=self.export_jianpu)
-        self.menu.add_separator()
-        self.menu.add_command(label="删除", accelerator="Delete", command=self.delete)
+        look = dict(tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT, activeforeground=INK,
+                    disabledforeground=FAINT, borderwidth=0, font=(FAMILY, LIST_FONT))
+        self.song_menu = tk.Menu(root, **look)  # for a song
+        self.move_menu = tk.Menu(self.song_menu, **look)
+        self.song_menu.add_cascade(label="移到…", menu=self.move_menu)
+        self.song_menu.add_separator()
+        self.song_menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
+        self.song_menu.add_command(label="导出简谱", command=self.export_jianpu)
+        self.song_menu.add_separator()
+        self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete)
+        self.folder_menu = tk.Menu(root, **look)  # for OST, 歌曲, a region, or the empty list below them
+        self.folder_menu.add_command(label=TXT_FOLDER, command=lambda: self.open_folder(self.menu_folder))
 
         rule = tk.Frame(root, bg=LINE, height=1)
 
@@ -832,7 +849,7 @@ class App:
         self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, LIST_FONT),
                                    ((CUSTOM_SPEED, self.ask_speed),))
         self.speed_choice.pack(side="left")
-        self.mode_choice = Choice(controls, self.mode, MODES, lambda: None, (FAMILY, LIST_FONT))
+        self.mode_choice = Choice(controls, self.mode, MODES, self.mode_picked, (FAMILY, LIST_FONT))
         self.mode_choice.pack(side="left", padx=(px(4), 0))
         # While a song plays these stay disabled: clicking LyreBot already stops the song
         # (the game loses focus), and a live button would start it again on release.
@@ -960,7 +977,7 @@ class App:
             self.told_empty = True
             self.title_label.configure(text="还没有曲谱")
             self.time_label.configure(text="")
-            self.say("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹（右键列表可以打开它们），"
+            self.say("把 .txt 曲谱放进 txt 文件夹（右键列表的空白处可以打开它），或把 MIDI 放进 midi 文件夹，"
                      "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")
 
     def selected(self) -> Path | None:
@@ -996,24 +1013,24 @@ class App:
         return self.library.playlist(path) if self.library else []
 
     def sync_mode(self, busy: bool) -> None:
-        """An unfiled song is in no playlist: it plays alone, with no next song to go to.
-        With no song chosen there is nothing to play."""
+        """An unfiled song is in no playlist: it plays once or over again, with no next song
+        to go to.  With no song chosen there is nothing to play."""
         chosen = self.selected()
         if not busy:
             self.button.set(enabled=chosen is not None)
-        if chosen is None:
-            self.mode_choice.set_enabled(not busy)
-            self.next_button.set(enabled=False)
-            return
-        alone = not self.playlist(chosen)
-        if alone and self.held_mode is None:
+        alone = chosen is not None and not self.playlist(chosen)
+        if alone and self.held_mode is None and self.mode.get() not in ON_ITS_OWN:
             self.held_mode = self.mode.get()
             self.mode.set(SINGLE)
         elif not alone and self.held_mode is not None:
             self.mode.set(self.held_mode)
             self.held_mode = None
-        self.mode_choice.set_enabled(not busy and not alone)
-        self.next_button.set(enabled=not busy and not alone)
+        self.mode_choice.allow(ON_ITS_OWN if alone else None)
+        self.mode_choice.set_enabled(not busy)
+        self.next_button.set(enabled=not busy and chosen is not None and not alone)
+
+    def mode_picked(self) -> None:
+        self.held_mode = None  # chosen for this song: kept when a song of a playlist comes next
 
     def speed_factor(self) -> float:
         return float(self.speed.get().rstrip("%")) / 100
@@ -1061,21 +1078,64 @@ class App:
         os.startfile(folder)  # type: ignore[attr-defined]
 
     def context_menu(self, event: tk.Event) -> None:
+        """A song's menu on a song; on OST, 歌曲 or a region, one to open its folder (txt's, below them)."""
         cell = self.browser.cell_at(event)
-        if not self.worker and cell is not None and cell.path is not None:
+        if cell is None or cell.path is None:
+            self.menu_folder, label = self.scores_dir, TXT_FOLDER
+            if cell is not None:
+                self.menu_folder = self.scores_dir / (cell.name if cell.kind == "shelf" else Path(OST, cell.name))
+                label = f"打开「{cell.name}」文件夹"
+            self.folder_menu.entryconfigure(0, label=label)
+            self.folder_menu.tk_popup(event.x_root, event.y_root)
+            return
+        if not self.worker:
             self.select(cell.path, reveal=False)
-        self.menu_folder, label = self.scores_dir, TXT_FOLDER
-        if cell is not None and cell.kind == "shelf":
-            self.menu_folder, label = self.scores_dir / cell.name, f"打开「{cell.name}」文件夹"
-        elif cell is not None and cell.kind == "region":
-            self.menu_folder, label = self.scores_dir / OST / cell.name, f"打开「{cell.name}」文件夹"
-        self.menu.entryconfigure(0, label=label)
         chosen = self.selected()
-        can = not self.worker and chosen is not None and midi_for(chosen, self.midi_dir) is not None
-        self.menu.entryconfigure(3, state="normal" if can else "disabled")
-        self.menu.entryconfigure(4, state="normal" if chosen is not None else "disabled")
-        self.menu.entryconfigure(6, state="normal" if chosen is not None and not self.worker else "disabled")
-        self.menu.tk_popup(event.x_root, event.y_root)
+        if chosen is None:
+            return
+        self.fill_move_menu(chosen)
+        idle = "normal" if not self.worker else "disabled"
+        can = not self.worker and midi_for(chosen, self.midi_dir) is not None
+        self.song_menu.entryconfigure(0, state=idle)
+        self.song_menu.entryconfigure(2, state="normal" if can else "disabled")
+        self.song_menu.entryconfigure(5, state=idle)
+        self.song_menu.tk_popup(event.x_root, event.y_root)
+
+    def places(self) -> list[tuple[str, Path] | None]:
+        """Where a score can be moved to, by name, with None between the groups."""
+        regions = [(name, self.scores_dir / OST / name) for name, _ in (self.library.regions if self.library else ())]
+        return [(UNFILED, self.scores_dir), None, *regions, None, (SONGS, self.scores_dir / SONGS)]
+
+    def fill_move_menu(self, score: Path) -> None:
+        self.move_menu.delete(0, "end")
+        here = str(score.parent).casefold()
+        for place in self.places():
+            if place is None:
+                self.move_menu.add_separator()
+                continue
+            name, folder = place
+            self.move_menu.add_command(label=name, command=lambda name=name, folder=folder: self.move(score, folder, name),
+                                       state="disabled" if str(folder).casefold() == here else "normal")
+
+    def move(self, score: Path, folder: Path, name: str) -> Path | None:
+        """Move a score into another region, 歌曲 or unfiled, and keep it selected there."""
+        if self.worker:
+            return None
+        target = folder / score.name
+        if target.exists():
+            messagebox.showerror("无法移动", f"「{name}」里已经有 {score.name}", parent=self.root)
+            return None
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            score.rename(target)
+        except OSError as error:
+            messagebox.showerror("无法移动", f"{score.name}：{error}", parent=self.root)
+            return None
+        self.cache.pop(score, None)
+        self.refresh()
+        self.notice = (target, f"已移到「{name}」")
+        self.select(target)
+        return target
 
     def shown(self, path: Path) -> str:
         """A file's name as the user sees it, from the LyreBot folder: txt\\OST\\曲名.txt."""
@@ -1408,6 +1468,16 @@ class App:
                 if reason != "done" or mode == SINGLE:
                     post(("status", {"done": "演奏完成", "stopped": "已停止", "focus": "切换了窗口，已停止"}[reason]))
                     return
+                if mode == REPEAT:  # the same song again, as the file is now
+                    try:
+                        timeline, begin = compile_timeline(load_score(path), speed), 0.0
+                    except (ScoreError, OSError) as error:
+                        post(("status", f"曲谱有误，没有再弹：{error}"))
+                        return
+                    if self.cancel.wait(GAP):
+                        post(("status", "已停止"))
+                        return
+                    continue
                 for _ in songs:  # skip scores with mistakes, but give up after one lap
                     path = next_song(songs, path, mode)
                     try:
