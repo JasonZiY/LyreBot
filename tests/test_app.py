@@ -177,7 +177,7 @@ class Folders(unittest.TestCase):
         self.assertTrue(target.exists())
         self.assertEqual(app.selected(), target)
         root.update()  # the selection event that follows must not wipe the note
-        self.assertIn("刚从录音编配好 · ", app.status_label.cget("text"))
+        self.assertEqual(app.status_label.cget("text"), "刚从录音编配好")
         self.assertTrue(app.record_button.enabled)
 
         (tools_dir / "mode.txt").write_text("broken")
@@ -327,16 +327,21 @@ class Folders(unittest.TestCase):
         return next(cell for cell in app.browser.cells
                     if cell.kind == kind and (cell.name == name or (cell.path and cell.path.stem == name)))
 
-    def test_the_list_opens_with_shelves_open_and_regions_closed(self):
+    def test_the_list_opens_with_ost_open_and_the_rest_closed(self):
         from lyrebot.app import App
         self.write_scores("未分.txt", "OST/蒙德/甲.txt", "OST/蒙德/乙.txt", "OST/蒙德/丙.txt",
                           "歌曲/一.txt", "歌曲/二.txt", "歌曲/三.txt", "歌曲/四.txt")
         app = App(self.window(), self.scores, self.midi)
         browser = app.browser
         width = int(browser.cget("width"))
-        self.assertEqual(app.selected(), self.scores / "未分.txt")
-        self.assertEqual({path.stem for path in browser.visible_songs()}, {"未分", "一", "二", "三", "四"})
+        self.assertIsNone(app.selected())  # no song is made ready: the player asks for one
+        self.assertEqual(app.title_label.cget("text"), "选择乐曲")
+        self.assertEqual(app.time_label.cget("text"), "")
+        self.assertFalse(app.button.enabled)
+        self.assertEqual({path.stem for path in browser.visible_songs()}, {"未分"})  # 歌曲 is closed
         self.assertEqual([cell.name for cell in browser.cells if cell.kind == "region"], list(REGIONS))
+        self.click(app, self.cell(app, "shelf", "歌曲"))
+        self.assertEqual({path.stem for path in browser.visible_songs()}, {"未分", "一", "二", "三", "四"})
         left, right = browser.margin, width - browser.margin  # a little room from either side
         self.assertGreater(browser.indent, 0)
         unfiled = self.cell(app, "song", "未分")
@@ -373,9 +378,12 @@ class Folders(unittest.TestCase):
         from lyrebot.app import App
         one, two = self.write_scores("歌曲/一.txt", "歌曲/二.txt")
         app = App(self.window(), self.scores, self.midi)
+        self.click(app, self.cell(app, "shelf", "歌曲"))
         self.click(app, self.cell(app, "song", "一"))
         self.assertEqual(app.selected(), one)
         self.assertEqual(app.title_label.cget("text"), "一")
+        self.assertTrue(app.button.enabled)
+        self.assertEqual(app.status_label.cget("text"), "")  # no BPM or tempo changes under the bar
         with mock.patch.object(app.browser, "on_play") as play:
             self.click(app, self.cell(app, "song", "二"), double=True)
         play.assert_called_once_with()
@@ -503,7 +511,7 @@ class Folders(unittest.TestCase):
         self.assertTrue(target.exists())
         self.assertEqual(app.selected(), target)
         root.update()  # the selection event that follows must not wipe the note
-        self.assertIn("刚从 MIDI 编配好 · ", app.status_label.cget("text"))
+        self.assertEqual(app.status_label.cget("text"), "刚从 MIDI 编配好")
         (self.scores / "另一首.txt").write_text("speed=60\na-\n", encoding="utf-8")
         app.refresh()
         app.select(self.scores / "另一首.txt")

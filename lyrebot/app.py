@@ -475,8 +475,8 @@ class SongBrowser(tk.Canvas):
 
     Everything starts at one left edge and opens downwards: a shelf's
     regions (or 歌曲's songs) on the lines under its name, a region's songs
-    under its own.  Songs run down two columns.  The shelves start open and
-    the regions closed.
+    under its own.  Songs run down two columns.  It starts with OST open,
+    its regions closed, and 歌曲 closed.
     """
 
     def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
@@ -492,7 +492,7 @@ class SongBrowser(tk.Canvas):
         self.library: Library | None = None
         self.bad: frozenset[Path] = frozenset()
         self.chosen: Path | None = None
-        self.closed_shelves: set[str] = set()
+        self.closed_shelves: set[str] = {SONGS}  # it opens with OST's regions in sight, each closed
         self.open_regions: set[str] = set()
         self.cells: list[Cell] = []
         self.total = 0
@@ -812,9 +812,7 @@ class App:
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(6), 0))
 
         self.refresh()
-        if self.songs:  # the first song in sight, leaving the regions closed
-            self.select(next(iter(self.browser.visible_songs()), self.songs[0]), reveal=False)
-        self.sync_mode(False)
+        self.show_selected()  # nothing is chosen yet: it asks for a song
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
         root.after(600, self.transcribe_next)
@@ -939,8 +937,16 @@ class App:
         return self.library.playlist(path) if self.library else []
 
     def sync_mode(self, busy: bool) -> None:
-        """An unfiled song is in no playlist: it plays alone, with no next song to go to."""
-        alone = not self.playlist(self.selected())
+        """An unfiled song is in no playlist: it plays alone, with no next song to go to.
+        With no song chosen there is nothing to play."""
+        chosen = self.selected()
+        if not busy:
+            self.button.set(enabled=chosen is not None)
+        if chosen is None:
+            self.mode_choice.set_enabled(not busy)
+            self.next_button.set(enabled=False)
+            return
+        alone = not self.playlist(chosen)
         if alone and self.held_mode is None:
             self.held_mode = self.mode.get()
             self.mode.set(SINGLE)
@@ -974,6 +980,10 @@ class App:
         path = self.selected()
         self.sync_mode(False)
         if path is None:
+            if self.songs:
+                self.title_label.configure(text="选择乐曲")
+                self.time_label.configure(text="")
+                self.set_fraction(0.0)
             return
         score = self.read(path)
         self.title_label.configure(text=path.stem)
@@ -985,8 +995,7 @@ class App:
             self.say(f"曲谱有误：{score}", warn=True)
             return
         self.time_label.configure(text=clock(score.duration_seconds / self.speed_factor()))
-        tempo = f"{score.bpm:g} BPM" + (f" · 变速 {score.tempo_changes} 处" if score.tempo_changes else "")
-        self.say(f"{self.notice[1]} · {tempo}" if self.notice else tempo)
+        self.say(self.notice[1] if self.notice else "")
 
     def open_folder(self, folder: Path) -> None:
         folder.mkdir(parents=True, exist_ok=True)
