@@ -394,12 +394,13 @@ def load_score(path: str | Path) -> Score:
 
 
 def score_files(folder: str | Path) -> list[Path]:
-    """The scores in ``folder`` and in the folders directly inside it (such as
-    ``txt/OST``), sorted by path."""
+    """The scores in ``folder`` and up to two folders down (such as
+    ``txt/歌曲`` and ``txt/OST/蒙德``), sorted by path."""
     folder = Path(folder)
     if not folder.is_dir():
         return []
-    return sorted(path for path in (*folder.glob("*.txt"), *folder.glob("*/*.txt")) if path.is_file())
+    found = (*folder.glob("*.txt"), *folder.glob("*/*.txt"), *folder.glob("*/*/*.txt"))
+    return sorted(path for path in found if path.is_file())
 
 
 def find_score(folder: str | Path, name: str) -> Path | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+from dataclasses import dataclass
 import math
 import os
 from pathlib import Path
@@ -37,7 +38,11 @@ TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
-FOLDER = "folder:"  # the list's id for a folder row; songs have their index as id
+TXT_FOLDER = "打开曲谱文件夹（txt）"
+OST, SONGS = "OST", "歌曲"  # the two folders of txt that are playlists; other scores are unfiled
+OTHER_REGION = "其他"  # the last region of OST, which also takes scores not in any region's folder
+REGIONS = ("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬", "夏日", OTHER_REGION)
+REGION_COLUMNS, SONG_COLUMNS = 2, 3  # columns of songs beside a region, and across the 歌曲 shelf
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
 MIDI_FILE_SUFFIX = "-MIDI"  # and the score arranged from a MIDI file of it, 飞鼠进行曲.mid, as 飞鼠进行曲-MIDI
@@ -68,6 +73,8 @@ SLOWEST_SPEED, FASTEST_SPEED = 25.0, 300.0  # percent
 SINGLE, SHUFFLE, IN_ORDER = MODES = ("单曲", "随机演奏", "顺序演奏")
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
+LIST_FONT, SMALL_FONT, TITLE_FONT = 9, 8, 10  # points
+ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
 
 
 def parse_speed(text: str) -> float | None:
@@ -153,20 +160,83 @@ def score_names(scores_dir: Path) -> set[str]:
     return {path.stem.casefold() for path in score_files(scores_dir)}
 
 
-def song_list(scores_dir: Path) -> list[tuple[str, list[Path]]]:
-    """The scores as the list shows them: (folder name, its scores) for each
-    folder inside the txt folder, in pinyin order, then ("", the scores
-    directly in it).  Scores sort by pinyin within each."""
-    groups: dict[str, list[Path]] = {}
+@dataclass(frozen=True)
+class Library:
+    """The scores as the list shows them, each group in pinyin order."""
+    unfiled: tuple[Path, ...]  # in no playlist
+    regions: tuple[tuple[str, tuple[Path, ...]], ...]  # of OST, in playing order
+    songs: tuple[Path, ...]
+
+    @property
+    def ost(self) -> list[Path]:
+        return [path for _, paths in self.regions for path in paths]
+
+    @property
+    def everything(self) -> list[Path]:
+        return [*self.unfiled, *self.ost, *self.songs]
+
+    def playlist(self, path: Path | None) -> list[Path]:
+        """The songs ``path`` plays on with: all of OST, region after region, or all of 歌曲."""
+        ost = self.ost
+        return ost if path in ost else list(self.songs) if path in self.songs else []
+
+    def region_of(self, path: Path) -> str | None:
+        return next((name for name, paths in self.regions if path in paths), None)
+
+
+def read_library(scores_dir: Path) -> Library:
+    """Sort the scores of the txt folder into the list's groups.
+
+    Scores in txt/OST/地区 belong to that region, and those directly in txt/OST
+    to 其他; a folder of OST with another name is one more region, before 其他.
+    Everything in txt/歌曲 is one list.  The rest is unfiled.
+    """
+    unfiled: list[Path] = []
+    songs: list[Path] = []
+    regions: dict[str, list[Path]] = {name: [] for name in REGIONS}
+    known = {name.casefold(): name for name in REGIONS}
+    extra: set[str] = set()
+
+    def region(folder: str) -> str:
+        name = known.get(folder.casefold())
+        if name is None:
+            name = folder
+            extra.add(name)
+        return name
+
     for path in score_files(scores_dir):
-        folder = "" if path.parent == scores_dir else path.parent.name
-        groups.setdefault(folder, []).append(path)
+        folders = path.relative_to(scores_dir).parts[:-1]
+        shelf = folders[0].casefold() if folders else ""
+        if shelf == OST.casefold():
+            regions.setdefault(region(folders[1]) if len(folders) > 1 else OTHER_REGION, []).append(path)
+        elif shelf == SONGS.casefold():
+            songs.append(path)
+        else:
+            unfiled.append(path)
     if scores_dir.is_dir():  # an empty folder still shows, ready to drop scores into
-        for folder in scores_dir.iterdir():
-            if folder.is_dir():
-                groups.setdefault(folder.name, [])
-    order = sorted((name for name in groups if name), key=pinyin_key) + ([""] if "" in groups else [])
-    return [(name, sorted(groups[name], key=lambda path: pinyin_key(path.stem))) for name in order]
+        for shelf in scores_dir.iterdir():
+            if shelf.is_dir() and shelf.name.casefold() == OST.casefold():
+                for folder in shelf.iterdir():
+                    if folder.is_dir():
+                        regions.setdefault(region(folder.name), [])
+    named = [name for name in REGIONS if name != OTHER_REGION]
+    order = [*named, *sorted(extra, key=pinyin_key), OTHER_REGION]
+
+    def sort(paths: list[Path]) -> tuple[Path, ...]:
+        return tuple(sorted(paths, key=lambda path: pinyin_key(path.stem)))
+
+    return Library(sort(unfiled), tuple((name, sort(regions[name])) for name in order), sort(songs))
+
+
+def in_columns(paths: tuple[Path, ...], count: int) -> list[tuple[Path, ...]]:
+    """``paths`` run down ``count`` columns, as even as they go, the first ones longer."""
+    size, longer = divmod(len(paths), count)
+    columns, start = [], 0
+    for column in range(count):
+        end = start + size + (column < longer)
+        columns.append(paths[start:end])
+        start = end
+    return columns
 
 
 def arranged_from(scores_dir: Path) -> dict[str, Path]:
@@ -360,7 +430,7 @@ class Choice(tk.Label):
     def __init__(self, parent: tk.Widget, variable: tk.StringVar, options: tuple[str, ...],
                  on_change: Callable[[], None], font: tuple,
                  actions: tuple[tuple[str, Callable[[], None]], ...] = ()):
-        super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=8, pady=3)
+        super().__init__(parent, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=6, pady=2)
         self.variable, self.enabled = variable, True
         self.menu = tk.Menu(self, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
                             activeforeground=INK, borderwidth=0, font=font)
@@ -389,6 +459,226 @@ class Choice(tk.Label):
             self.menu.tk_popup(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height())
 
 
+@dataclass(frozen=True)
+class Cell:
+    """One clickable place in the song list."""
+    kind: str  # "song", "region" or "shelf"
+    name: str  # of the region or shelf
+    box: tuple[float, float, float, float]
+    text: str
+    path: Path | None = None
+
+
+class SongBrowser(tk.Canvas):
+    """The song list: unfiled scores across the top, then OST by region and 歌曲.
+
+    The shelves start open and the regions closed.  An open region's songs
+    run down two columns beside it, and the 歌曲 shelf's three columns line up
+    with the region column and those two.
+    """
+
+    def __init__(self, parent: tk.Widget, scale: float, locked: Callable[[], object],
+                 on_select: Callable[[], None], on_play: Callable[[], None], on_delete: Callable[[], None]):
+        px = lambda n: max(1, round(n * scale))  # noqa: E731
+        self.row, self.shelf_width, self.pad = px(ROW_HEIGHT), px(52), px(6)
+        super().__init__(parent, bg=PAPER, highlightthickness=0, borderwidth=0, takefocus=True,
+                         width=px(460), height=px(300), yscrollincrement=self.row)
+        self.locked, self.on_select, self.on_play, self.on_delete = locked, on_select, on_play, on_delete
+        self.library: Library | None = None
+        self.bad: frozenset[Path] = frozenset()
+        self.chosen: Path | None = None
+        self.closed_shelves: set[str] = set()
+        self.open_regions: set[str] = set()
+        self.cells: list[Cell] = []
+        self.total = 0
+        self.fitted: dict[tuple[str, int, bool], str] = {}
+        self.hover_box = self.create_rectangle(0, 0, 0, 0, fill=HOVER, width=0, state="hidden")
+        self.chosen_box = self.create_rectangle(0, 0, 0, 0, fill=HIGHLIGHT, width=0, state="hidden")
+        self.bind("<Configure>", lambda _: self.lay_out())
+        self.bind("<Button-1>", self.click)
+        self.bind("<Double-Button-1>", self.double_click)
+        self.bind("<Motion>", self.hover)
+        self.bind("<Leave>", lambda _: self.itemconfigure(self.hover_box, state="hidden"))
+        for key, step in (("Up", -1), ("Down", 1), ("Prior", -8), ("Next", 8), ("Home", -10 ** 6), ("End", 10 ** 6)):
+            self.bind(f"<KeyPress-{key}>", lambda _, step=step: self.step(step))
+        self.bind("<Return>", lambda _: None if self.locked() else self.on_play())
+        self.bind("<Delete>", lambda _: None if self.locked() else self.on_delete())
+
+    def show(self, library: Library, bad: frozenset[Path]) -> None:
+        self.library, self.bad = library, bad
+        self.lay_out()
+
+    def column_edges(self, width: int) -> list[float]:
+        column = (width - self.shelf_width) / SONG_COLUMNS
+        return [self.shelf_width + index * column for index in range(SONG_COLUMNS + 1)]
+
+    def lay_out(self) -> None:
+        library = self.library
+        if library is None:
+            return
+        width = self.winfo_width() if self.winfo_width() > 1 else int(self.cget("width"))
+        edges = self.column_edges(width)
+        row = self.row
+        cells: list[Cell] = []
+        rules: list[int] = []
+
+        def song(path: Path, left: float, top: int, right: float) -> None:
+            mark = "⚠ " if path in self.bad else ""
+            cells.append(Cell("song", "", (left, top, right, top + row), mark + path.stem, path))
+
+        def run_down(columns: list[tuple[Path, ...]], first: int, top: int) -> int:
+            for offset, paths in enumerate(columns):
+                for line, path in enumerate(paths):
+                    song(path, edges[first + offset], top + line * row, edges[first + offset + 1])
+            return max(map(len, columns), default=0) * row
+
+        def opener(is_open: bool, name: str) -> str:
+            return f"{'▾' if is_open else '▸'} {name}"
+
+        y = 0
+        for path in library.unfiled:
+            song(path, 0, y, width)
+            y += row
+        if library.unfiled:
+            rules.append(y)
+        is_open = OST not in self.closed_shelves
+        cells.append(Cell("shelf", OST, (0, y, self.shelf_width, y + row), opener(is_open, OST)))
+        if is_open:
+            for name, paths in library.regions:
+                expanded = name in self.open_regions
+                cells.append(Cell("region", name, (edges[0], y, edges[1], y + row), opener(expanded, name)))
+                height = run_down(in_columns(paths, REGION_COLUMNS), 1, y) if expanded else 0
+                y += max(height, row)
+        else:
+            y += row
+        rules.append(y)
+        is_open = SONGS not in self.closed_shelves
+        cells.append(Cell("shelf", SONGS, (0, y, self.shelf_width, y + row), opener(is_open, SONGS)))
+        height = run_down(in_columns(library.songs, SONG_COLUMNS), 0, y) if is_open else 0
+        y += max(height, row)
+
+        self.cells, self.total = cells, y
+        self.delete("content")
+        for rule in rules:
+            self.create_line(0, rule, width, rule, fill=LINE, tags="content")
+        for cell in cells:
+            left, top, right, bottom = cell.box
+            bold = cell.kind == "shelf"
+            color = MUTED if bold else WARN if cell.path in self.bad else INK
+            self.create_text(left + self.pad, (top + bottom) / 2, anchor="w", fill=color, tags="content",
+                             font=(FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT),
+                             text=self.fit(cell.text, int(right - left) - 2 * self.pad, bold))
+        self.configure(scrollregion=(0, 0, width, max(y, 1)))
+        self.itemconfigure(self.hover_box, state="hidden")
+        self.mark_chosen()
+
+    def fit(self, text: str, width: int, bold: bool) -> str:
+        """``text``, cut short with … if it is wider than ``width``."""
+        key = (text, width, bold)
+        if key not in self.fitted:
+            font = (FAMILY, LIST_FONT, "bold") if bold else (FAMILY, LIST_FONT)
+            measure = lambda piece: int(self.tk.call("font", "measure", font, piece))  # noqa: E731
+            short = text
+            if measure(text) > width:
+                low, high = 0, len(text)
+                while low < high:
+                    middle = (low + high + 1) // 2
+                    if measure(text[:middle] + "…") <= width:
+                        low = middle
+                    else:
+                        high = middle - 1
+                short = text[:low] + "…"
+            self.fitted[key] = short
+        return self.fitted[key]
+
+    def cell_of(self, path: Path) -> Cell | None:
+        return next((cell for cell in self.cells if cell.path == path), None)
+
+    def mark_chosen(self) -> None:
+        cell = self.cell_of(self.chosen) if self.chosen else None
+        if cell is None:
+            self.itemconfigure(self.chosen_box, state="hidden")
+        else:
+            self.coords(self.chosen_box, *cell.box)
+            self.itemconfigure(self.chosen_box, state="normal")
+
+    def visible_songs(self) -> list[Path]:
+        return [cell.path for cell in self.cells if cell.path is not None]
+
+    def choose(self, path: Path | None, reveal: bool = True) -> None:
+        """Select ``path``; with ``reveal``, open what it is in and scroll to it."""
+        self.chosen = path
+        if reveal and path is not None and self.library is not None:
+            region = self.library.region_of(path)
+            shelf = OST if region else SONGS if path in self.library.songs else None
+            if shelf in self.closed_shelves or (region and region not in self.open_regions):
+                self.closed_shelves.discard(shelf)
+                if region:
+                    self.open_regions.add(region)
+                self.lay_out()
+        self.mark_chosen()
+        cell = self.cell_of(path) if reveal and path else None
+        if cell is not None and self.total:
+            view = self.winfo_height()
+            top = self.canvasy(0)
+            if cell.box[1] < top:
+                self.yview_moveto(cell.box[1] / self.total)
+            elif cell.box[3] > top + view:
+                self.yview_moveto(max(cell.box[3] - view, 0) / self.total)
+
+    def cell_at(self, event: tk.Event) -> Cell | None:
+        x, y = self.canvasx(event.x), self.canvasy(event.y)
+        return next((cell for cell in self.cells
+                     if cell.box[0] <= x < cell.box[2] and cell.box[1] <= y < cell.box[3]), None)
+
+    def toggle(self, cell: Cell) -> None:
+        folders = self.closed_shelves if cell.kind == "shelf" else self.open_regions
+        (folders.discard if cell.name in folders else folders.add)(cell.name)
+        self.lay_out()
+
+    def click(self, event: tk.Event) -> str:
+        self.focus_set()
+        cell = self.cell_at(event)
+        if cell is None or self.locked():
+            return "break"
+        if cell.path is None:
+            self.toggle(cell)
+        else:
+            self.choose(cell.path, reveal=False)
+            self.on_select()
+        return "break"
+
+    def double_click(self, event: tk.Event) -> str:
+        cell = self.cell_at(event)
+        if cell is None or self.locked():
+            return "break"
+        if cell.path is None:  # the second click of a quick pair toggles it again
+            self.toggle(cell)
+        else:
+            self.on_play()
+        return "break"
+
+    def hover(self, event: tk.Event) -> None:
+        cell = self.cell_at(event)
+        if cell is None:
+            self.itemconfigure(self.hover_box, state="hidden")
+        else:
+            self.coords(self.hover_box, *cell.box)
+            self.itemconfigure(self.hover_box, state="normal")
+
+    def step(self, by: int) -> str:
+        songs = self.visible_songs()
+        if songs and not self.locked():
+            place = songs.index(self.chosen) if self.chosen in songs else (-1 if by > 0 else len(songs))
+            self.choose(songs[min(max(place + by, 0), len(songs) - 1)])
+            self.on_select()
+        return "break"
+
+    def wheel(self, event: tk.Event) -> None:
+        if self.total > self.winfo_height():
+            self.yview_scroll(-round(event.delta / 120) * 2, "units")
+
+
 class App:
     def __init__(self, root: tk.Tk, scores_dir: Path = SCORES_DIR, midi_dir: Path = MIDI_DIR,
                  tool_dirs: list[Path] | None = None, jianpu_dir: Path = JIANPU_DIR):
@@ -400,7 +690,10 @@ class App:
         self.failed_midi: dict[Path, float] = {}  # MIDI files that could not be arranged, by change time
         self.failed_audio: dict[Path, float] = {}  # audio files that could not be transcribed, likewise
         self.songs: list[Path] = []
-        self.rows: list[tuple[str, str, str, tuple[str, ...]]] = []
+        self.library: Library | None = None
+        self.bad: frozenset[Path] = frozenset()
+        self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
+        self.menu_folder = scores_dir
         self.told_empty = False
         # A note such as "just arranged" kept in front of a song's details while it stays selected:
         # selecting a row also fires <<TreeviewSelect>> later, which redraws the details.
@@ -423,22 +716,15 @@ class App:
         scale = self.scale = root.winfo_fpixels("1i") / 96
         px = lambda n: max(1, round(n * scale))  # noqa: E731
         root.title(self.base_title)
-        root.geometry(f"{px(340)}x{px(500)}")
-        root.minsize(px(300), px(360))
+        root.geometry(f"{px(500)}x{px(640)}")
+        root.minsize(px(400), px(360))
         root.configure(bg=PAPER)
         root.protocol("WM_DELETE_WINDOW", self.close)
         root.bind("<F8>", lambda _: self.stop())
-        self.build_images(px(40), px(34))
+        self.build_images(px(30), px(25))
 
         style = ttk.Style(root)
         style.theme_use("clam")
-        style.configure("Songs.Treeview", background=PAPER, fieldbackground=PAPER, foreground=INK,
-                        font=(FAMILY, 11), rowheight=px(32), borderwidth=0, relief="flat", indent=0)
-        style.layout("Songs.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
-        # Folders show their own ▾ / ▸, so the rows draw no indicator of their own.
-        style.layout("Songs.Treeview.Item", [("Treeitem.padding", {"sticky": "nswe", "children": [
-            ("Treeitem.image", {"side": "left", "sticky": ""}), ("Treeitem.text", {"sticky": "nswe"})]})])
-        style.map("Songs.Treeview", background=[("selected", HIGHLIGHT)], foreground=[("selected", INK)])
         style.configure("Thin.Vertical.TScrollbar", background=LINE, troughcolor=PAPER, bordercolor=PAPER,
                         lightcolor=LINE, darkcolor=LINE, gripcount=0, arrowsize=px(6))
         style.map("Thin.Vertical.TScrollbar", background=[("active", FAINT)])
@@ -447,66 +733,51 @@ class App:
 
         # ---- song list ----
         top = tk.Frame(root, bg=PAPER)
-        top.pack(fill="both", expand=True, padx=px(10), pady=(px(10), 0))
-        self.tree = ttk.Treeview(top, show="tree", selectmode="browse", style="Songs.Treeview")
-        self.tree.column("#0", stretch=True)
-        self.tree.tag_configure("bad", foreground=WARN)
-        self.tree.tag_configure("folder", foreground=MUTED, font=(FAMILY, 10, "bold"))
-        self.tree.pack(side="left", fill="both", expand=True)
-        self.scrollbar = ttk.Scrollbar(top, command=self.tree.yview, style="Thin.Vertical.TScrollbar")
-        self.tree.configure(yscrollcommand=self.scrolled)
-        self.tree.bind("<<TreeviewSelect>>", lambda _: self.show_selected())
-        self.tree.bind("<Double-Button-1>", lambda event: self.locked() or self.folder_at(event) or self.start())
-        self.tree.bind("<<TreeviewOpen>>", lambda _: self.mark_folders())
-        self.tree.bind("<<TreeviewClose>>", lambda _: self.mark_folders())
-        self.tree.bind("<Return>", lambda _: self.locked() or self.start())
-        for sequence in ("<Button-1>", "<KeyPress-Up>", "<KeyPress-Down>", "<KeyPress-Home>", "<KeyPress-End>",
-                         "<KeyPress-Prior>", "<KeyPress-Next>"):
-            self.tree.bind(sequence, self.locked, add=True)
-        self.tree.bind("<Button-1>", self.toggle_folder, add=True)
-        self.closed: set[str] = set()  # folders the user closed
+        self.browser = SongBrowser(top, scale, self.locked, self.show_selected, self.start, self.delete)
+        self.browser.pack(side="left", fill="both", expand=True)
+        self.scrollbar = ttk.Scrollbar(top, command=self.browser.yview, style="Thin.Vertical.TScrollbar")
+        self.browser.configure(yscrollcommand=self.scrolled)
+        self.browser.bind("<Button-3>", self.context_menu)
+        root.bind("<MouseWheel>", self.browser.wheel)
         self.menu = tk.Menu(root, tearoff=False, bg="#FFFFFF", fg=INK, activebackground=HIGHLIGHT,
-                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, 10))
-        self.menu.add_command(label="打开曲谱文件夹（txt）", command=lambda: self.open_folder(self.scores_dir))
+                            activeforeground=INK, disabledforeground=FAINT, borderwidth=0, font=(FAMILY, LIST_FONT))
+        self.menu.add_command(label=TXT_FOLDER, command=lambda: self.open_folder(self.menu_folder))
         self.menu.add_command(label="打开 MIDI 和录音文件夹（midi）", command=lambda: self.open_folder(self.midi_dir))
         self.menu.add_separator()
         self.menu.add_command(label="从 MIDI 重新编配", command=self.rearrange)
         self.menu.add_command(label="导出简谱", command=self.export_jianpu)
         self.menu.add_separator()
         self.menu.add_command(label="删除", accelerator="Delete", command=self.delete)
-        self.tree.bind("<Button-3>", self.context_menu)
-        self.tree.bind("<Delete>", lambda _: self.locked() or self.delete())
 
-        tk.Frame(root, bg=LINE, height=1).pack(fill="x", padx=px(14), pady=(px(6), 0))
+        rule = tk.Frame(root, bg=LINE, height=1)
 
         # ---- now playing ----
         panel = tk.Frame(root, bg=PAPER)
-        panel.pack(fill="x", padx=px(18), pady=(px(12), px(14)))
         heading = tk.Frame(panel, bg=PAPER)
         heading.pack(fill="x")
-        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, 9))
+        self.time_label = tk.Label(heading, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT))
         self.time_label.pack(side="right", anchor="s")
-        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, 13, "bold"), anchor="w")
+        self.title_label = tk.Label(heading, bg=PAPER, fg=INK, font=(FAMILY, TITLE_FONT, "bold"), anchor="w")
         self.title_label.pack(side="left", fill="x", expand=True)
 
-        self.bar_height = px(14)  # the clickable band; the drawn track is thinner
+        self.bar_height = px(10)  # the clickable band; the drawn track is thinner
         self.bar = tk.Canvas(panel, height=self.bar_height, bg=PAPER, highlightthickness=0, cursor="hand2")
-        self.bar.pack(fill="x", pady=(px(6), 0))
+        self.bar.pack(fill="x", pady=(px(3), 0))
         self.bar.bind("<Configure>", lambda _: self.draw_bar())
         self.bar.bind("<Button-1>", self.seek)
 
-        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=(FAMILY, 9), anchor="w", justify="left")
-        self.status_label.pack(fill="x", pady=(px(2), 0))
+        self.status_label = tk.Label(panel, bg=PAPER, fg=MUTED, font=(FAMILY, SMALL_FONT), anchor="w", justify="left")
+        self.status_label.pack(fill="x", pady=(px(1), 0))
         panel.bind("<Configure>", lambda event: self.status_label.configure(wraplength=event.width))
 
         controls = tk.Frame(panel, bg=PAPER)
-        controls.pack(fill="x", pady=(px(10), 0))
+        controls.pack(fill="x", pady=(px(5), 0))
         self.speed = tk.StringVar(value="100%")
         self.mode = tk.StringVar(value=SINGLE)
-        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, 10),
+        self.speed_choice = Choice(controls, self.speed, SPEEDS, self.show_selected, (FAMILY, LIST_FONT),
                                    ((CUSTOM_SPEED, self.ask_speed),))
         self.speed_choice.pack(side="left")
-        self.mode_choice = Choice(controls, self.mode, MODES, lambda: None, (FAMILY, 10))
+        self.mode_choice = Choice(controls, self.mode, MODES, lambda: None, (FAMILY, LIST_FONT))
         self.mode_choice.pack(side="left", padx=(px(4), 0))
         # While a song plays these stay disabled: clicking LyreBot already stops the song
         # (the game loses focus), and a live button would start it again on release.
@@ -519,9 +790,15 @@ class App:
         self.keys_button = IconButton(controls, self.keys_images, self.listen)
         self.keys_button.pack(side="right", padx=(0, px(2)))
 
+        # The player goes in first, so that a short window takes its room from the list.
+        panel.pack(side="bottom", fill="x", padx=px(14), pady=(px(7), px(8)))
+        rule.pack(side="bottom", fill="x", padx=px(10), pady=(px(4), 0))
+        top.pack(fill="both", expand=True, padx=px(8), pady=(px(6), 0))
+
         self.refresh()
-        if self.songs:
-            self.select(self.songs[0])
+        if self.songs:  # the first song in sight, leaving the regions closed
+            self.select(next(iter(self.browser.visible_songs()), self.songs[0]), reveal=False)
+        self.sync_mode(False)
         root.after(30, self.poll)
         root.after(300, self.arrange_next)
         root.after(600, self.transcribe_next)
@@ -572,7 +849,7 @@ class App:
         if float(first) <= 0 and float(last) >= 1:
             self.scrollbar.pack_forget()
         else:
-            self.scrollbar.pack(side="right", fill="y")
+            self.scrollbar.pack(side="right", fill="y", before=self.browser)
         self.scrollbar.set(first, last)
 
     def locked(self, _: tk.Event | None = None) -> str | None:
@@ -615,29 +892,15 @@ class App:
         if self.worker:
             return
         chosen = self.selected()
-        groups = song_list(self.scores_dir)
-        songs = [path for _, paths in groups for path in paths]
-        rows = []  # (parent iid, iid, text, tags)
-        for folder, paths in groups:
-            parent = ""
-            if folder:
-                parent = FOLDER + folder
-                rows.append(("", parent, folder, ("folder",)))
-            for path in paths:
-                wrong = isinstance(self.read(path), ScoreError)
-                indent = "      " if folder else "  "
-                rows.append((parent, str(songs.index(path)), indent + ("⚠ " if wrong else "") + path.stem,
-                             ("bad",) if wrong else ()))
-        if songs != self.songs or rows != self.rows:
-            self.songs, self.rows = songs, rows
-            self.tree.delete(*self.tree.get_children())
-            for parent, iid, text, tags in rows:
-                self.tree.insert(parent, "end", iid=iid, text=text, tags=tags,
-                                 open=iid.startswith(FOLDER) and iid not in self.closed)
-            self.mark_folders()
-            if chosen in songs:
-                self.select(chosen)
+        library = read_library(self.scores_dir)
+        songs = library.everything
+        bad = frozenset(path for path in songs if isinstance(self.read(path), ScoreError))
+        if library != self.library or bad != self.bad:
+            self.library, self.songs, self.bad = library, songs, bad
+            self.browser.show(library, bad)
+            self.browser.choose(chosen if chosen in songs else None, reveal=False)
             self.show_selected()
+            self.sync_mode(False)
             self.told_empty = False
         if not songs and not self.told_empty:  # once, so it does not cover later messages
             self.told_empty = True
@@ -647,42 +910,29 @@ class App:
                      "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")
 
     def selected(self) -> Path | None:
-        chosen = self.tree.selection()
-        index = int(chosen[0]) if chosen and chosen[0].isdigit() else -1
-        return self.songs[index] if 0 <= index < len(self.songs) else None
+        chosen = self.browser.chosen
+        return chosen if chosen in self.songs else None
 
-    def mark_folders(self) -> None:
-        """Put ▾ before an open folder and ▸ before a closed one, and remember which are closed."""
-        for iid in self.tree.get_children():
-            if iid.startswith(FOLDER):
-                is_open = bool(self.tree.item(iid, "open"))
-                (self.closed.discard if is_open else self.closed.add)(iid)
-                self.tree.item(iid, text=("  ▾ " if is_open else "  ▸ ") + iid[len(FOLDER):])
-
-    def folder_at(self, event: tk.Event) -> str | None:
-        """"break" when the click is on a folder: double-clicking one plays nothing."""
-        return "break" if self.tree.identify_row(event.y).startswith(FOLDER) else None
-
-    def toggle_folder(self, event: tk.Event) -> str | None:
-        """A click on a folder opens or closes it, without selecting it."""
-        if self.worker:
-            return "break"
-        row = self.tree.identify_row(event.y)
-        if not row.startswith(FOLDER):
-            return None
-        self.tree.item(row, open=not self.tree.item(row, "open"))
-        self.mark_folders()
-        return "break"
-
-    def select(self, path: Path) -> None:
+    def select(self, path: Path, reveal: bool = True) -> None:
         if path not in self.songs:
             return
-        iid = str(self.songs.index(path))
-        self.tree.selection_set(iid)
-        self.tree.focus(iid)
-        self.tree.see(iid)  # opens its folder
-        self.mark_folders()
+        self.browser.choose(path, reveal)
         self.show_selected()
+
+    def playlist(self, path: Path | None) -> list[Path]:
+        return self.library.playlist(path) if self.library else []
+
+    def sync_mode(self, busy: bool) -> None:
+        """An unfiled song is in no playlist: it plays alone, with no next song to go to."""
+        alone = not self.playlist(self.selected())
+        if alone and self.held_mode is None:
+            self.held_mode = self.mode.get()
+            self.mode.set(SINGLE)
+        elif not alone and self.held_mode is not None:
+            self.mode.set(self.held_mode)
+            self.held_mode = None
+        self.mode_choice.set_enabled(not busy and not alone)
+        self.next_button.set(enabled=not busy and not alone)
 
     def speed_factor(self) -> float:
         return float(self.speed.get().rstrip("%")) / 100
@@ -706,6 +956,7 @@ class App:
         if self.worker:
             return
         path = self.selected()
+        self.sync_mode(False)
         if path is None:
             return
         score = self.read(path)
@@ -722,15 +973,19 @@ class App:
         self.say(f"{self.notice[1]} · {tempo}" if self.notice else tempo)
 
     def open_folder(self, folder: Path) -> None:
-        folder.mkdir(exist_ok=True)
+        folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)  # type: ignore[attr-defined]
 
     def context_menu(self, event: tk.Event) -> None:
-        if not self.worker:
-            row = self.tree.identify_row(event.y)
-            if row:
-                self.tree.selection_set(row)
-                self.tree.focus(row)
+        cell = self.browser.cell_at(event)
+        if not self.worker and cell is not None and cell.path is not None:
+            self.select(cell.path, reveal=False)
+        self.menu_folder, label = self.scores_dir, TXT_FOLDER
+        if cell is not None and cell.kind == "shelf":
+            self.menu_folder, label = self.scores_dir / cell.name, f"打开「{cell.name}」文件夹"
+        elif cell is not None and cell.kind == "region":
+            self.menu_folder, label = self.scores_dir / OST / cell.name, f"打开「{cell.name}」文件夹"
+        self.menu.entryconfigure(0, label=label)
         chosen = self.selected()
         can = not self.worker and chosen is not None and midi_for(chosen, self.midi_dir) is not None
         self.menu.entryconfigure(3, state="normal" if can else "disabled")
@@ -1015,14 +1270,16 @@ class App:
         self.set_fraction(fraction)
         self.cancel = threading.Event()
         self.set_playing(True)
-        args = (path, timeline, fraction * timeline.duration, speed, self.mode.get(), list(self.songs))
+        args = (path, timeline, fraction * timeline.duration, speed, self.mode.get(), self.playlist(path))
         self.worker = threading.Thread(target=self.run, args=args, daemon=True)
         self.worker.start()
 
     def play_next(self) -> None:
         if self.worker:
             return
-        self.start(next_song(self.songs, self.selected(), self.mode.get()))
+        songs = self.playlist(self.selected())
+        if songs:
+            self.start(next_song(songs, self.selected(), self.mode.get()))
 
     def seek(self, event: tk.Event) -> None:
         if self.worker:
@@ -1033,9 +1290,8 @@ class App:
     def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
         busy = playing or recording or listening
         self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
-        self.next_button.set(enabled=not busy)
+        self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
-        self.mode_choice.set_enabled(not busy)
         self.bar.configure(cursor="arrow" if busy else "hand2")
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,

@@ -7,7 +7,7 @@
 也可以用命令行导出，一次可以给多个曲谱：
 
 ```text
-python -m lyrebot.jianpu txt/OST/柔灯轻漾时.txt
+python -m lyrebot.jianpu txt/OST/枫丹/柔灯轻漾时.txt
 ```
 
 导出的文件不放进仓库，随时可以重新生成。版式和各类曲谱的导出方式见 [原理与开发记录](../docs/原理与开发记录.md#导出简谱)。

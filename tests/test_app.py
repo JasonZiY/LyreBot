@@ -5,8 +5,8 @@ import tempfile
 import time
 import unittest
 
-from lyrebot.app import (IN_ORDER, SETTLE, SHUFFLE, SINGLE, midi_for, name_problem, next_song, pending_audio, song_list,
-                         pending_midi, recording_name, score_name, song_files)
+from lyrebot.app import (IN_ORDER, REGIONS, SETTLE, SHUFFLE, SINGLE, in_columns, midi_for, name_problem, next_song,
+                         pending_audio, pending_midi, read_library, recording_name, score_name, song_files)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_arrange import song
@@ -270,47 +270,171 @@ class Folders(unittest.TestCase):
         source = self.add_midi("录音 0101-1200.mid")
         self.assertEqual(midi_for(renamed, self.midi), source)
 
-    def test_scores_in_folders(self):
-        """Folders inside txt list first, each with its scores; a score in a
-        folder still keeps its MIDI file and recording, and its name."""
-        (self.scores / "ost").mkdir()
-        (self.scores / "其他").mkdir()
-        (self.scores / "空的").mkdir()
-        for path in ("ost/林中晨歌.txt", "ost/风清月白.txt", "其他/春日影.txt", "新歌.txt"):
-            (self.scores / path).write_text("speed=60\na-\n", encoding="utf-8")
-        self.assertEqual([(name, [path.name for path in paths]) for name, paths in song_list(self.scores)],
-                         [("ost", ["风清月白.txt", "林中晨歌.txt"]), ("空的", []), ("其他", ["春日影.txt"]),
-                          ("", ["新歌.txt"])])  # in pinyin order: feng before lin, kong before qi
+    def write_scores(self, *names):
+        for name in names:
+            path = self.scores / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("speed=60\na-\n", encoding="utf-8")
+        return [self.scores / name for name in names]
+
+    def test_scores_sort_into_regions_songs_and_unfiled(self):
+        self.write_scores("OST/璃月/清润玉响.txt", "OST/蒙德/风息.txt", "OST/蒙德/白日梦.txt", "OST/散落.txt",
+                          "OST/新地区/新歌.txt", "歌曲/春日影.txt", "歌曲/分组/Lemon.txt", "未分.txt", "别的/杂项.txt")
+        (self.scores / "OST" / "须弥").mkdir()
+        library = read_library(self.scores)
+        self.assertEqual([name for name, _ in library.regions], [*REGIONS[:-1], "新地区", "其他"])
+        regions = {name: [path.stem for path in paths] for name, paths in library.regions}
+        self.assertEqual(regions["蒙德"], ["白日梦", "风息"])  # in pinyin order
+        self.assertEqual(regions["其他"], ["散落"])  # directly in OST
+        self.assertEqual(regions["须弥"], [])
+        self.assertEqual({path.stem for path in library.songs}, {"春日影", "Lemon"})
+        self.assertEqual({path.stem for path in library.unfiled}, {"未分", "杂项"})
+        self.assertEqual([path.stem for path in library.ost], ["白日梦", "风息", "清润玉响", "新歌", "散落"])
+
+    def test_scores_in_folders_keep_their_midi_and_names(self):
+        self.write_scores("OST/蒙德/林中晨歌.txt", "歌曲/春日影.txt")
         self.add_midi("林中晨歌.mid")
         self.add_audio("春日影.wav")
         self.assertEqual(pending_midi(self.midi, self.scores, {}), [])
         self.assertEqual(pending_audio(self.midi, self.scores, {}), [])
-        self.assertIn("已经有", name_problem("风清月白", self.scores, self.midi))
+        self.assertIn("已经有", name_problem("林中晨歌", self.scores, self.midi))
 
-        from lyrebot.app import App, FOLDER
-        root = self.window()
-        app = App(root, self.scores, self.midi)
-        tree = app.tree
-        self.assertEqual(tree.get_children(), (FOLDER + "ost", FOLDER + "空的", FOLDER + "其他", "3"))
-        self.assertEqual(tree.item(FOLDER + "ost", "text"), "  ▾ ost")
-        self.assertEqual(app.songs[0], self.scores / "ost" / "风清月白.txt")
-        app.select(self.scores / "其他" / "春日影.txt")
-        self.assertEqual(app.selected(), self.scores / "其他" / "春日影.txt")
-        tree.selection_set(FOLDER + "ost")
-        self.assertIsNone(app.selected())
+    def test_playlists_stay_apart_and_go_region_by_region(self):
+        last, first, song_one, song_two, alone = self.write_scores(
+            "OST/璃月/璃月曲.txt", "OST/蒙德/蒙德曲.txt", "歌曲/a.txt", "歌曲/b.txt", "未分.txt")
+        library = read_library(self.scores)
+        self.assertEqual(library.playlist(first), [first, last])
+        self.assertEqual(next_song(library.playlist(first), first, IN_ORDER), last)
+        self.assertEqual(next_song(library.playlist(last), last, IN_ORDER), first)  # back to the first region
+        self.assertEqual(library.playlist(song_two), [song_one, song_two])
+        self.assertEqual(library.playlist(alone), [])
+        for _ in range(30):
+            self.assertEqual(next_song(library.playlist(first), first, SHUFFLE), last)
 
+    def test_columns_run_down_and_the_first_are_longer(self):
+        self.assertEqual([len(column) for column in in_columns(tuple(range(7)), 2)], [4, 3])
+        self.assertEqual([len(column) for column in in_columns(tuple(range(13)), 3)], [5, 4, 4])
+        self.assertEqual(in_columns(tuple(range(3)), 2), [(0, 1), (2,)])
+        self.assertEqual(in_columns((), 3), [(), (), ()])
+
+    def click(self, app, cell, double=False):
+        class Click:
+            x = (cell.box[0] + cell.box[2]) / 2
+            y = (cell.box[1] + cell.box[3]) / 2
+        return (app.browser.double_click if double else app.browser.click)(Click)
+
+    def cell(self, app, kind, name):
+        return next(cell for cell in app.browser.cells
+                    if cell.kind == kind and (cell.name == name or (cell.path and cell.path.stem == name)))
+
+    def test_the_list_opens_with_shelves_open_and_regions_closed(self):
+        from lyrebot.app import App
+        self.write_scores("未分.txt", "OST/蒙德/甲.txt", "OST/蒙德/乙.txt", "OST/蒙德/丙.txt",
+                          "歌曲/一.txt", "歌曲/二.txt", "歌曲/三.txt", "歌曲/四.txt")
+        app = App(self.window(), self.scores, self.midi)
+        browser = app.browser
+        width = int(browser.cget("width"))
+        self.assertEqual(app.selected(), self.scores / "未分.txt")
+        self.assertEqual({path.stem for path in browser.visible_songs()}, {"未分", "一", "二", "三", "四"})
+        self.assertEqual([cell.name for cell in browser.cells if cell.kind == "region"], list(REGIONS))
+        unfiled = self.cell(app, "song", "未分")
+        self.assertEqual((unfiled.box[0], unfiled.box[2]), (0, width))
+
+        edges = browser.column_edges(width)
+        region = self.cell(app, "region", "蒙德")
+        below = self.cell(app, "region", "璃月").box[1]
+        self.assertEqual(region.box[0], edges[0])
+        self.click(app, region)
+        songs = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "蒙德"]
+        self.assertEqual(sorted({cell.box[0] for cell in songs}), [edges[1], edges[2]])  # two columns beside it
+        self.assertEqual(self.cell(app, "region", "璃月").box[1], below + browser.row)  # 2 rows: the next moves down
+        shelf = [cell for cell in browser.cells if cell.path and cell.path.parent.name == "歌曲"]
+        self.assertEqual(sorted({cell.box[0] for cell in shelf}), edges[:3])  # three, under those columns
+
+        self.click(app, self.cell(app, "region", "蒙德"))
+        self.assertNotIn(self.scores / "OST" / "蒙德" / "甲.txt", browser.visible_songs())
+        self.click(app, self.cell(app, "shelf", "OST"))
+        self.assertEqual([cell for cell in browser.cells if cell.kind == "region"], [])
+        app.select(self.scores / "OST" / "蒙德" / "甲.txt")  # playing or choosing a song opens the way to it
+        self.assertIn(self.scores / "OST" / "蒙德" / "甲.txt", browser.visible_songs())
+        (self.scores / "OST" / "蒙德" / "新.txt").write_text("speed=60\na-\n", encoding="utf-8")
+        app.refresh()  # the list is rebuilt; what was open stays open
+        self.assertIn(self.scores / "OST" / "蒙德" / "新.txt", browser.visible_songs())
+
+    def test_clicks_choose_and_double_clicks_play(self):
         from unittest import mock
+        from lyrebot.app import App
+        one, two = self.write_scores("歌曲/一.txt", "歌曲/二.txt")
+        app = App(self.window(), self.scores, self.midi)
+        self.click(app, self.cell(app, "song", "一"))
+        self.assertEqual(app.selected(), one)
+        self.assertEqual(app.title_label.cget("text"), "一")
+        with mock.patch.object(app.browser, "on_play") as play:
+            self.click(app, self.cell(app, "song", "二"), double=True)
+        play.assert_called_once_with()
+        songs = app.browser.visible_songs()
+        app.browser.step(songs.index(two) - songs.index(one))
+        self.assertEqual(app.selected(), two)
+        app.worker = object()  # while something plays, the list stays as it is
+        self.click(app, self.cell(app, "song", "一"))
+        self.assertEqual(app.selected(), two)
+        app.worker = None
+
+    def test_an_unfiled_song_plays_alone(self):
+        from unittest import mock
+        from lyrebot.app import App
+        alone, first, second = self.write_scores("未分.txt", "OST/蒙德/甲.txt", "OST/璃月/乙.txt")
+        app = App(self.window(), self.scores, self.midi)
+        app.select(first)
+        app.mode.set(IN_ORDER)
+        app.select(alone)
+        self.assertEqual(app.mode.get(), SINGLE)
+        self.assertFalse(app.mode_choice.enabled)
+        self.assertFalse(app.next_button.enabled)
+        with mock.patch.object(app, "start") as start:
+            app.play_next()
+        start.assert_not_called()
+        app.select(first)
+        self.assertEqual(app.mode.get(), IN_ORDER)  # the choice comes back with a playlist
+        self.assertTrue(app.mode_choice.enabled)
+        self.assertTrue(app.next_button.enabled)
+        with mock.patch.object(app, "start") as start:
+            app.play_next()
+        start.assert_called_once_with(second)
+
+    def test_playing_on_finishes_a_region_before_the_next(self):
+        from unittest import mock
+        from lyrebot.app import App
+        second, first, third, _ = self.write_scores("OST/蒙德/风.txt", "OST/蒙德/白.txt", "OST/璃月/月.txt", "未分.txt")
+        app = App(self.window(), self.scores, self.midi)
+        results = iter(["done", "done", "stopped"])
+        with mock.patch("lyrebot.app.COUNTDOWN", 0), mock.patch("lyrebot.app.GAP", 0), \
+                mock.patch("lyrebot.app.Keyboard"), mock.patch("lyrebot.app.play", side_effect=lambda *a, **k: next(results)), \
+                mock.patch("lyrebot.app.foreground_title_and_pid", return_value=("游戏", os.getpid() + 1)):
+            app.run(first, mock.Mock(duration=1.0), 0.0, 1.0, IN_ORDER, app.playlist(first))
+        played = []
+        while not app.updates.empty():
+            kind, value = app.updates.get()
+            if kind == "song":
+                played.append(value[0])
+        self.assertEqual(played, [first, second, third])
+
+    def test_the_menu_opens_the_folder_clicked(self):
+        from unittest import mock
+        from lyrebot.app import App
+        self.write_scores("OST/蒙德/甲.txt")
+        app = App(self.window(), self.scores, self.midi)
+        cell = self.cell(app, "region", "须弥")
 
         class Click:
-            y = 5
-        with mock.patch.object(tree, "identify_row", return_value=FOLDER + "ost"):  # the window is never drawn
-            self.assertEqual(app.toggle_folder(Click), "break")
-            self.assertEqual(app.folder_at(Click), "break")  # double-clicking a folder plays nothing
-        self.assertFalse(tree.item(FOLDER + "ost", "open"))
-        self.assertEqual(tree.item(FOLDER + "ost", "text"), "  ▸ ost")
-        (self.scores / "ost" / "新的.txt").write_text("speed=60\na-\n", encoding="utf-8")
-        app.refresh()  # the list is rebuilt; the folder stays closed
-        self.assertFalse(tree.item(FOLDER + "ost", "open"))
+            x, y = (cell.box[0] + 1, cell.box[1] + 1)
+            x_root = y_root = 0
+        with mock.patch.object(app.menu, "tk_popup"), mock.patch("lyrebot.app.os.startfile", create=True) as opened:
+            app.context_menu(Click)
+            self.assertEqual(app.menu.entrycget(0, "label"), "打开「须弥」文件夹")
+            app.menu.invoke(0)
+        opened.assert_called_once_with(self.scores / "OST" / "须弥")
+        self.assertTrue((self.scores / "OST" / "须弥").is_dir())
 
     def test_the_speed_menu_takes_a_percentage_typed_in(self):
         from unittest import mock
