@@ -495,12 +495,43 @@ class Folders(unittest.TestCase):
         self.stopped_at(app, path, 5.0)
         self.assertEqual(self.started(app, from_top=True), (path, 0.0, None))  # ↺
         self.stopped_at(app, path, 5.0)
-        self.assertEqual(self.started(app, fraction=0.5)[1], 3.0)  # a click on the bar goes where it says
+        self.assertEqual(self.started(app, bar=2)[1], 4.0)  # a bar picked on the progress bar: from its start
         self.stopped_at(app, path, 5.0)
         app.select(other)  # another song chosen: no going on with the first
         self.assertIsNone(app.resume)
         app.select(path)
         self.assertEqual(self.started(app)[1], 0.0)
+
+    def test_dragging_the_knob_plays_from_the_bar_it_is_let_go_in(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        from lyrebot.app import App, LET_GO
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        app.select(path)
+        with mock.patch.object(app, "track", return_value=(0.0, 120.0)):  # 40 px a bar
+            app.pick_up(SimpleNamespace(x=10))
+            self.assertEqual(app.bar_label.cget("text"), "1|3")
+            app.slide(SimpleNamespace(x=70))  # into the second bar, which runs from 4 s to 8 s
+            self.assertEqual(app.bar_label.cget("text"), "2|3")
+            self.assertAlmostEqual(app.fraction, 4 / 12)  # the knob at the start of that bar
+            self.assertEqual(app.time_label.cget("text"), "0:04 / 0:12")
+            self.assertEqual(app.status_label.cget("text"), LET_GO)
+            app.slide(SimpleNamespace(x=900))  # past the end: the last bar
+            self.assertEqual(app.bar_label.cget("text"), "3|3")
+            app.slide(SimpleNamespace(x=-50))  # before the start: the first
+            self.assertEqual(app.bar_label.cget("text"), "1|3")
+            app.slide(SimpleNamespace(x=95))
+            with mock.patch.object(app, "start") as start:
+                app.let_go(SimpleNamespace(x=95))
+            start.assert_called_once_with(path, bar=2)  # with the usual countdown
+            self.assertIsNone(app.dragging)
+            app.let_go(SimpleNamespace(x=95))  # a second release holds nothing: nothing more happens
+            app.worker = object()  # while something plays, the knob cannot be taken hold of
+            app.pick_up(SimpleNamespace(x=70))
+            self.assertIsNone(app.dragging)
+            app.worker = None
+        self.assertEqual(self.started(app, bar=1), (path, 4.0, None))  # None: the 2 s countdown
 
     def test_an_empty_library_says_how_to_add_songs(self):
         from lyrebot.app import App, EMPTY

@@ -58,6 +58,7 @@ COUNTDOWN = 2.0  # seconds to switch to the game after starting a song from the 
 HOTKEY_POLL = 30  # milliseconds between looks at F7
 READY = "请切换到游戏窗口，按 F7 立刻开始"  # under the bar once a song is chosen
 GO_ON = "点 ▶ 或按 F7 从该小节继续"  # once it was stopped part way: the bar counter shows which bar
+LET_GO = "松开后从该小节开始"  # while the knob is dragged: the bar counter shows which bar
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
@@ -733,6 +734,8 @@ class App:
         self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
         self.last_search = ""  # searching for it again goes on to the next song that matches
         self.resume: tuple[Path, int] | None = None  # a song stopped part way, and the bar it stopped in
+        self.dragging: tuple[Path, Score] | None = None  # the song whose progress knob is held
+        self.drag_bar = 0  # the bar (from 0) the held knob is at
         self.bar_starts: list[float] = []  # of the song playing, in seconds
         self.start_held = False  # F7, at the last look
         self.menu_folder = scores_dir
@@ -818,7 +821,9 @@ class App:
         self.bar = tk.Canvas(panel, height=self.bar_height, bg=PAPER, highlightthickness=0, cursor="hand2")
         self.bar.pack(fill="x", pady=(px(4), 0))
         self.bar.bind("<Configure>", lambda _: self.draw_bar())
-        self.bar.bind("<Button-1>", self.seek)
+        self.bar.bind("<ButtonPress-1>", self.pick_up)
+        self.bar.bind("<B1-Motion>", self.slide)
+        self.bar.bind("<ButtonRelease-1>", self.let_go)
         self.bar.bind("<Enter>", lambda _: self.hover_bar(True))
         self.bar.bind("<Leave>", lambda _: self.hover_bar(False))
 
@@ -982,7 +987,7 @@ class App:
             bar.create_image(at, middle, image=self.knob_images[self.bar_hover])
 
     def hover_bar(self, inside: bool) -> None:
-        self.bar_hover = inside and self.worker is None
+        self.bar_hover = (inside or self.dragging is not None) and self.worker is None
         self.draw_bar()
 
     def set_fraction(self, fraction: float) -> None:
@@ -1455,9 +1460,9 @@ class App:
             self.arrange_one(target, "刚从录音编配好")
 
     # ---- playing ----
-    def start(self, path: Path | None = None, fraction: float | None = None, countdown: float | None = None,
+    def start(self, path: Path | None = None, bar: int | None = None, countdown: float | None = None,
               from_top: bool = False) -> None:
-        """Play ``path`` (the chosen song): from ``fraction`` of the way through; else, if it was stopped
+        """Play ``path`` (the chosen song): from the start of bar ``bar`` (from 0); else, if it was stopped
         part way, from the start of the bar it stopped in; else from the top."""
         # The click that pulls focus back to LyreBot stops the song; it must not start one too.
         if self.worker or time.monotonic() < self.quiet_until:
@@ -1473,8 +1478,8 @@ class App:
             return
         speed = self.speed_factor()
         timeline = compile_timeline(score, speed)
-        if fraction is not None:
-            begin = fraction * timeline.duration
+        if bar is not None:
+            begin = bar_seconds(score, bar, speed)
         elif not from_top and self.resume and self.resume[0] == path:
             begin = bar_seconds(score, self.resume[1], speed)
         else:
@@ -1517,11 +1522,47 @@ class App:
         self.show_bar(bar, score)
         self.say(f"{why} · {GO_ON}")
 
-    def seek(self, event: tk.Event) -> None:
-        if self.worker:
-            return
+    def bar_under(self, x: float, score: Score) -> int:
+        """The bar (from 0) of ``score`` at ``x`` along the progress track."""
         left, right = self.track()
-        self.start(fraction=min(max((event.x - left) / (right - left), 0.0), 0.999))
+        return bar_at(score, min(max((x - left) / (right - left), 0.0), 1.0) * score.duration_seconds, 1.0)
+
+    def pick_up(self, event: tk.Event) -> None:
+        """Pressing the progress bar takes hold of its knob, which then follows the pointer a bar at a time."""
+        path = self.selected()
+        if self.worker or path is None:
+            return
+        score = self.read(path)
+        if isinstance(score, ScoreError) or not score.bars or not score.duration_seconds:
+            self.start(path)  # says what is wrong, as ▶ would
+            return
+        self.dragging = (path, score)
+        self.slide(event)
+
+    def slide(self, event: tk.Event) -> None:
+        """The held knob to the start of the bar under the pointer, with that bar and its time shown."""
+        if self.dragging is None:
+            return
+        _, score = self.dragging
+        bar = self.drag_bar = self.bar_under(event.x, score)
+        speed = self.speed_factor()
+        self.bar_hover = True
+        self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds)
+        self.time_label.configure(text=f"{clock(bar_seconds(score, bar, speed))} / {clock(score.duration_seconds / speed)}")
+        self.show_bar(bar, score)
+        self.say(LET_GO)
+
+    def let_go(self, _: tk.Event) -> None:
+        """Letting go of the knob plays from the start of its bar, after the countdown, as ▶ does."""
+        if self.dragging is None:
+            return
+        path, _ = self.dragging
+        self.dragging = None
+        self.start(path, bar=self.drag_bar)
+        self.bar_hover = self.worker is None  # the pointer is still on the bar, but not while it plays
+        if self.worker is None:  # nothing started (let go just after a stop): the song as it was
+            self.show_selected()
+        self.draw_bar()
 
     def set_playing(self, playing: bool, recording: bool = False, listening: bool = False) -> None:
         busy = playing or recording or listening
