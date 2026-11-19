@@ -857,10 +857,31 @@ class Folders(unittest.TestCase):
             with mock.patch.object(app.root, "grab_current", return_value=app.root):
                 app.poll()
             rescale.assert_not_called()  # a dialog is open: not under it
+            app.frame.moving = True
+            app.poll()
+            rescale.assert_not_called()  # nor while the window is being dragged
+            app.frame.moving = False
             app.poll()
             rescale.assert_called_once_with(dpi)
             app.poll()
             rescale.assert_called_once_with(dpi)
+
+    def test_drawn_again_it_takes_its_new_size_out_of_sight(self):
+        from unittest import mock
+        app, _ = self.framed_app(True)
+        app.frame.hwnd = 5
+        dpi = 96 if app.dpi != 96 else 144
+        scaling = app.root.tk.call("tk", "scaling")
+        self.addCleanup(app.root.tk.call, "tk", "scaling", scaling)
+        steps = []
+        with mock.patch("lyrebot.app.chrome.hold", side_effect=lambda hwnd, held: steps.append(("hold", held))), \
+                mock.patch("lyrebot.app.chrome.place", side_effect=lambda hwnd, box: steps.append(("place", box))), \
+                mock.patch("lyrebot.app.chrome.box_of", return_value=(-1800, 60, 350, 640)), \
+                mock.patch("lyrebot.app.screen_holding", return_value=(dpi, (-1920, 0, 0, 1040))):
+            ratio = dpi / app.dpi
+            app.rescale(dpi)
+        self.assertEqual(steps, [("hold", True), ("place", (-1800, 60, round(350 * ratio), round(640 * ratio))),
+                                 ("hold", False)])  # held, made over and sized, then shown whole
 
     def test_closing_keeps_the_place(self):
         from unittest import mock

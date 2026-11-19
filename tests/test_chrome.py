@@ -53,17 +53,23 @@ class Hits(unittest.TestCase):
 
 
 class Scaling(unittest.TestCase):
-    def test_on_a_screen_scaled_otherwise_it_takes_the_size_windows_suggests(self):
-        if chrome._user32 is None:
-            self.skipTest("Windows only")
+    def test_moved_to_a_screen_scaled_otherwise_it_is_drawn_for_it_with_the_size_windows_suggests(self):
         frame = Frame(edge=6, caption=40)
-        frame.hwnd = 77
         suggested = ctypes.wintypes.RECT(-1500, 60, -1150, 760)
-        moved = []
-        with mock.patch.object(chrome, "_user32", SimpleNamespace(SetWindowPos=lambda *args: moved.append(args))):
-            frame.dpi_changed(96 | (96 << 16), ctypes.addressof(suggested))
-        self.assertEqual(moved[0][:6], (77, None, -1500, 60, 350, 700))
-        self.assertEqual((frame.dpi, frame.rescaled), (96, 1))
+        frame.dpi_changed(96 | (96 << 16), ctypes.addressof(suggested))  # by Win+Shift+arrow, say
+        self.assertEqual((frame.dpi, frame.rescaled, frame.suggested), (96, 1, (-1500, 60, 350, 700)))
+
+    def test_dragged_across_it_keeps_its_size_and_picture_until_let_go(self):
+        frame = Frame(edge=6, caption=40)
+        suggested = ctypes.wintypes.RECT(-1500, 60, -1150, 760)
+        frame.moving = True  # WM_ENTERSIZEMOVE: a drag
+        frame.dpi_changed(96 | (96 << 16), ctypes.addressof(suggested))
+        self.assertEqual((frame.dpi, frame.rescaled, frame.suggested), (96, 0, None))  # nothing in mid-drag
+        frame.let_go()  # WM_EXITSIZEMOVE
+        self.assertEqual((frame.moving, frame.rescaled, frame.suggested), (False, 1, None))  # now: drawn for it
+        frame.moving = True
+        frame.let_go()  # a drag that crossed nothing
+        self.assertEqual(frame.rescaled, 1)
 
 
 class Adopting(unittest.TestCase):

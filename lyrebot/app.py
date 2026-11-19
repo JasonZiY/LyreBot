@@ -1020,9 +1020,46 @@ class App:
         return False
 
     def rescale(self, dpi: int) -> None:
-        """Draw the window again for the screen it has moved to, whose scaling is ``dpi`` (Windows has made it
-        the right size there already), showing what it showed: the same songs open, chosen and in view, the
-        same search, the same words under the player, the same buttons live."""
+        """Draw the window again for the screen it has moved to, whose scaling is ``dpi``, showing what it
+        showed: the same songs open, chosen and in view, the same search, the same words under the player,
+        the same buttons live.  It is made over out of sight (``chrome.hold``): the screen keeps the old
+        picture while the pieces are made again and the window takes its size for the new scaling, and
+        then shows all of it at once."""
+        frame = self.frame
+        box = self.box_for(dpi)
+        held = frame is not None and bool(frame.hwnd)
+        if held:
+            chrome.hold(frame.hwnd, True)
+        try:
+            self.make_over(dpi, box)
+        finally:
+            if held:
+                chrome.hold(frame.hwnd, False)  # (asks every piece to paint, at once)
+                self.root.update()  # and they all do, before the screen shows any of them
+
+    def box_for(self, dpi: int) -> tuple[int, int, int, int] | None:
+        """Where the window goes for its new scaling: where Windows suggested, or else (let go after a drag
+        across) its size made over by the scalings' ratio from where it lies, all of it on that screen."""
+        frame = self.frame
+        if frame is None or not frame.hwnd:
+            return None
+        if frame.suggested is not None:
+            box, frame.suggested = frame.suggested, None
+            return box
+        found = chrome.box_of(frame.hwnd)
+        if found is None:
+            return None
+        left, top, width, height = found
+        width, height = round(width * dpi / self.dpi), round(height * dpi / self.dpi)
+        screen = screen_holding(left, top, left + width, top + height)
+        if screen is not None:
+            _, (area_left, area_top, area_right, area_bottom) = screen
+            width, height = min(width, area_right - area_left), min(height, area_bottom - area_top)
+            left = min(max(left, area_left), area_right - width)
+            top = min(max(top, area_top), area_bottom - height)
+        return left, top, width, height
+
+    def make_over(self, dpi: int, box: tuple[int, int, int, int] | None) -> None:
         root, browser = self.root, self.browser
         shown = (set(browser.closed_shelves), set(browser.open_regions), browser.chosen, browser.playing,
                  browser.yview()[0])
@@ -1036,8 +1073,10 @@ class App:
         self.page.close()
         for child in root.winfo_children():
             child.destroy()
+        if box is not None and self.frame is not None:  # the new size first, so the new page is made for it
+            chrome.place(self.frame.hwnd, box)
         root.tk.call("tk", "scaling", dpi / 72.0)
-        self.build(size=(root.winfo_width(), root.winfo_height()))
+        self.build(size=(box[2], box[3]) if box else (root.winfo_width(), root.winfo_height()))
         browser = self.browser
         browser.closed_shelves, browser.open_regions, browser.chosen, browser.playing, top = shown
         if self.library is not None:
@@ -1051,6 +1090,7 @@ class App:
         if self.recording or self.listening:
             self.breathe()
         self.draw_bar()
+        root.update_idletasks()  # laid out at the new size, still out of sight
 
     def keep_place(self) -> None:
         """Write down where the window is, for it to open there next time (see ``read_place``)."""
@@ -1858,7 +1898,8 @@ class App:
         if frame is not None and frame.presses != self.frame_presses:
             self.frame_presses = frame.presses  # pressed on the title bar or an edge
             self.leave_search()
-        if frame is not None and frame.rescaled != self.rescaled and self.root.grab_current() is None:
+        if frame is not None and frame.rescaled != self.rescaled and not frame.moving \
+                and self.root.grab_current() is None:
             self.rescaled = frame.rescaled  # (with a dialog open, once it has closed)
             if frame.dpi and frame.dpi != self.dpi:
                 self.rescale(frame.dpi)
