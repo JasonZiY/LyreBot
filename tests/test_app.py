@@ -5,7 +5,8 @@ import tempfile
 import time
 import unittest
 
-from lyrebot.app import (IN_ORDER, REGIONS, SETTLE, SHUFFLE, SINGLE, in_columns, midi_for, name_problem, next_song,
+from lyrebot.app import (IN_ORDER, REGIONS, SETTLE, SHUFFLE, SINGLE, in_columns, midi_for, name_problem, next_match,
+                         next_song,
                          pending_audio, pending_midi, read_library, recording_name, score_name, song_files)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
@@ -433,6 +434,49 @@ class Folders(unittest.TestCase):
             if kind == "song":
                 played.append(value[0])
         self.assertEqual(played, [first, second, third])
+
+    def test_searching_goes_through_the_matches_in_list_order(self):
+        songs = [Path("寂夜月如锋-录音.txt"), Path("静夜的轻语.txt"), Path("Lemon.txt"), Path("夜阑安暇时.txt")]
+        self.assertEqual(next_match(songs, "夜"), songs[0])
+        self.assertEqual(next_match(songs, "夜", songs[0]), songs[1])
+        self.assertEqual(next_match(songs, "夜", songs[2]), songs[3])  # from a song that does not match
+        self.assertEqual(next_match(songs, "夜", songs[3]), songs[0])  # round to the top
+        self.assertEqual(next_match(songs, " lemon "), songs[2])
+        self.assertIsNone(next_match(songs, "雪"))
+        self.assertIsNone(next_match(songs, "  "))
+
+    def test_the_search_box_jumps_to_each_match(self):
+        from lyrebot.app import App
+        first, second, third = self.write_scores("OST/蒙德/风息的离别诗.txt", "OST/纳塔/风清月白.txt", "歌曲/春风.txt")
+        app = App(self.window(), self.scores, self.midi)
+        app.search_entry.insert(0, "风")
+        app.search()
+        self.assertEqual(app.selected(), first)
+        self.assertIn(first, app.browser.visible_songs())  # its region opened
+        self.assertIn("第 1 首，共 3 首", app.status_label.cget("text"))
+        app.search()
+        self.assertEqual(app.selected(), second)
+        app.search()
+        self.assertEqual(app.selected(), third)  # 歌曲 opened too
+        self.assertIn(third, app.browser.visible_songs())
+        app.search()
+        self.assertEqual(app.selected(), first)
+        app.search_entry.delete(0, "end")
+        app.search_entry.insert(0, "清")
+        app.search()  # a new search starts from the top
+        self.assertEqual(app.selected(), second)
+        self.assertIn("只有这一首", app.status_label.cget("text"))
+        app.search_entry.delete(0, "end")
+        app.search_entry.insert(0, "雪")
+        app.search()
+        self.assertEqual(app.selected(), second)
+        self.assertIn("没有名字里有「雪」的曲子", app.status_label.cget("text"))
+        app.worker = object()  # nothing moves while a song plays
+        app.search_entry.delete(0, "end")
+        app.search_entry.insert(0, "春")
+        app.search()
+        self.assertEqual(app.selected(), second)
+        app.worker = None
 
     def test_the_menu_opens_the_folder_clicked(self):
         from unittest import mock

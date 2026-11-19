@@ -240,6 +240,19 @@ def in_columns(paths: tuple[Path, ...], count: int) -> list[tuple[Path, ...]]:
     return columns
 
 
+def next_match(songs: list[Path], query: str, after: Path | None = None) -> Path | None:
+    """The first song, in the list's order, whose name holds ``query`` (case aside);
+    with ``after``, the first one below it, going round to the top."""
+    wanted = query.strip().casefold()
+    if not wanted:
+        return None
+    found = [index for index, path in enumerate(songs) if wanted in path.stem.casefold()]
+    if not found:
+        return None
+    start = songs.index(after) if after in songs else -1
+    return songs[next((index for index in found if index > start), found[0])]
+
+
 def arranged_from(scores_dir: Path) -> dict[str, Path]:
     """Scores arranged from a MIDI file, by that file's name (casefolded).
 
@@ -423,6 +436,21 @@ class IconButton(tk.Label):
         self.pressed = False
         if fire:
             self.command()
+
+
+class TextButton(tk.Label):
+    """Flat text that does something when clicked, and nothing while disabled."""
+
+    def __init__(self, parent: tk.Widget, text: str, command: Callable[[], None], font: tuple):
+        super().__init__(parent, text=text, bg=PAPER, fg=INK, font=font, cursor="hand2", padx=8, pady=2)
+        self.command, self.enabled = command, True
+        self.bind("<Enter>", lambda _: self.enabled and self.configure(bg=HOVER))
+        self.bind("<Leave>", lambda _: self.configure(bg=PAPER))
+        self.bind("<Button-1>", lambda _: self.enabled and self.command())
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.configure(bg=PAPER, fg=INK if enabled else FAINT, cursor="hand2" if enabled else "arrow")
 
 
 class Choice(tk.Label):
@@ -709,6 +737,7 @@ class App:
         self.library: Library | None = None
         self.bad: frozenset[Path] = frozenset()
         self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
+        self.last_search = ""  # searching for it again goes on to the next song that matches
         self.menu_folder = scores_dir
         self.told_empty = False
         # A note such as "just arranged" kept in front of a song's details while it stays selected:
@@ -746,6 +775,16 @@ class App:
         style.map("Thin.Vertical.TScrollbar", background=[("active", FAINT)])
         style.layout("Thin.Vertical.TScrollbar", [("Vertical.Scrollbar.trough", {"sticky": "ns", "children": [
             ("Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})]})])
+
+        # ---- search ----
+        finder = tk.Frame(root, bg=PAPER)
+        self.search_entry = tk.Entry(finder, font=(FAMILY, LIST_FONT), relief="flat", bg="#FFFFFF", fg=INK,
+                                     insertbackground=INK, highlightthickness=1, highlightbackground=LINE,
+                                     highlightcolor=ORANGE)
+        self.search_entry.bind("<Return>", lambda _: self.search())
+        self.search_button = TextButton(finder, "搜索", self.search, (FAMILY, LIST_FONT))
+        self.search_button.pack(side="right", padx=(px(4), 0))
+        self.search_entry.pack(side="left", fill="x", expand=True, ipady=px(2))
 
         # ---- song list ----
         top = tk.Frame(root, bg=PAPER)
@@ -809,6 +848,7 @@ class App:
         # The player goes in first, so that a short window takes its room from the list.
         panel.pack(side="bottom", fill="x", padx=px(14), pady=(px(7), px(8)))
         rule.pack(side="bottom", fill="x", padx=px(10), pady=(px(4), 0))
+        finder.pack(side="top", fill="x", padx=px(16), pady=(px(10), 0))
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(6), 0))
 
         self.refresh()
@@ -932,6 +972,25 @@ class App:
             return
         self.browser.choose(path, reveal)
         self.show_selected()
+
+    def search(self) -> None:
+        """Go to the first song whose name holds what was typed; searching again for it goes to the next."""
+        if self.worker:
+            return
+        query = self.search_entry.get().strip()
+        if not query:
+            self.search_entry.focus_set()
+            return
+        again = query.casefold() == self.last_search.casefold()
+        self.last_search = query
+        found = next_match(self.songs, query, self.selected() if again else None)
+        if found is None:
+            self.say(f"没有名字里有「{query}」的曲子")
+            return
+        self.select(found)
+        matches = [path for path in self.songs if query.casefold() in path.stem.casefold()]
+        self.say(f"「{query}」第 {matches.index(found) + 1} 首，共 {len(matches)} 首，再点搜索看下一首"
+                 if len(matches) > 1 else f"「{query}」只有这一首")
 
     def playlist(self, path: Path | None) -> list[Path]:
         return self.library.playlist(path) if self.library else []
@@ -1317,6 +1376,7 @@ class App:
         self.button.set(self.stop_images if playing else self.play_images, enabled=not busy)
         self.sync_mode(busy)
         self.speed_choice.set_enabled(not busy)
+        self.search_button.set_enabled(not busy)
         self.bar.configure(cursor="arrow" if busy else "hand2")
         # Unlike ■ while playing, ■ while recording is live: LyreBot keeps recording when clicked.
         self.record_button.set(self.recording_images if recording else self.record_images,
