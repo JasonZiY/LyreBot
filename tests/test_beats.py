@@ -1,11 +1,13 @@
 from collections import Counter
+from dataclasses import replace
+from fractions import Fraction
 import math
 import random
 import unittest
 
 from lyrebot import beats
 from lyrebot.beats import onset_times
-from lyrebot.arrange import arrange, beat_readings, played_in_time
+from lyrebot.arrange import _Clock, arrange, beat_readings, mixed_values, played_in_time, speed_lines
 from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
@@ -219,6 +221,44 @@ class OneTempo(unittest.TestCase):
         better followed than written in a tempo it does not keep."""
         midi, _ = groove(pause_at=20, pause=0.5)
         self.assertEqual(len(beat_readings(midi)), 1)
+
+
+class SlippedBeat(unittest.TestCase):
+    def test_the_beat_moves_onto_notes_that_slipped(self):
+        pulses = [0.5 + 0.2 * index for index in range(400)]
+        onsets = [pulse + (0.03 if index >= 200 else 0.0) for index, pulse in enumerate(pulses)]
+        moved, slides = beats._slid(pulses, onsets, [1.0] * len(onsets))
+        self.assertEqual(slides, 1)
+        self.assertLess(max(abs(pulse - onset) for pulse, onset in zip(moved, onsets)), 0.007)
+
+    def test_notes_on_the_beat_leave_it_where_it_is(self):
+        pulses = [0.5 + 0.2 * index for index in range(200)]
+        moved, slides = beats._slid(pulses, pulses, [1.0] * len(pulses))
+        self.assertEqual(slides, 0)
+        self.assertEqual(moved, pulses)
+
+    def test_a_few_stray_notes_do_not_move_it(self):
+        pulses = [0.5 + 0.2 * index for index in range(200)]
+        onsets = [pulse + (0.03 if 100 <= index < 104 else 0.0) for index, pulse in enumerate(pulses)]
+        self.assertEqual(beats._slid(pulses, onsets, [1.0] * len(onsets))[1], 0)
+
+    def test_only_a_steady_tempo_slides(self):
+        midi, _ = groove(drift=0.15, period=12.0)
+        self.assertIsNone(beats.find_beats(midi, playback=True, slide=True))
+
+    def test_mixed_values_are_neither_plain_nor_thirds(self):
+        self.assertEqual(mixed_values("a{7/12}s{1/3}d{2/3}|f{1/12}g.  # {5/12}\n"), 2)
+
+    def test_a_bar_alone_makes_up_for_what_happens_in_it(self):
+        bars = [(Fraction(4 * index), Fraction(4)) for index in range(12)]
+        late = bars[5][0] + 2
+        slipped = replace(parse_midi(smf([[]])), ticks_per_beat=480,
+                          tempos=((0, 400000), (int(late * 480), 460000), (int((late + 1) * 480), 400000)))
+        clock = _Clock(slipped)
+        speeds = speed_lines(bars, 0, clock, alone=frozenset({5}))
+        self.assertEqual(sorted(speeds), [0, 5, 6])
+        self.assertEqual((speeds[0], speeds[6]), (150.0, 150.0))
+        self.assertLess(speeds[5], 150.0)
 
 
 class BeatLengths(unittest.TestCase):

@@ -41,6 +41,11 @@ ONE_TEMPO = 0.04  # how far (relative) the one tempo of a wobbling pulse is look
 HARMONICS = (1, 2, 3, 4)  # quarters, eighths, triplets and sixteenths: how a steady piece divides its beat
 ON_GRID = 0.25  # of an eighth: how near the eighths of that tempo a pulse that keeps it lies ...
 KEPT = 0.8  # ... and the share of the pulses that must, for the notes to keep that tempo
+SLIDE_STEPS = 8  # places per sixteenth that the beat of a steady tempo may slide to ...
+SLIDE_REACH = 8  # ... as far as this many sixteenths either way
+SLIDE = 4.0  # what sliding it costs, in squared sixteenths of notes off the beat ...
+SLIDE_SIXTEENTH = 0.25  # ... and how much more for each sixteenth it slides
+OFF_EIGHTH = 0.06  # what a note costs for lying between two eighths rather than on one
 MEND = 6.0  # what adding or dropping a pulse costs, in standardized accents
 PPQ = 960
 
@@ -53,6 +58,7 @@ class Timing:
     numerator: int
     denominator: int
     stretches: int = 0  # when not steady as a whole: the steady stretches it was fitted as, 0 if followed
+    slides: int = 0  # places where the beat of that tempo was moved to stay on the notes
 
     @property
     def signature(self) -> str:
@@ -324,6 +330,59 @@ def _one_tempo(pulses: list[float], times: list[float], weights: list[float]) ->
     return [phase + index * eighth for index in range(first, last + 1)]
 
 
+def _slid(pulses: list[float], times: list[float], weights: list[float]) -> tuple[list[float], int]:
+    """The ``pulses`` of one tempo moved, a long run of them at a time, onto
+    the notes, and how many times the run changes.
+
+    A player can keep one tempo and still lose or gain a fraction of a beat
+    at a breath or a slight holding back.  The tempo then fits as before, but
+    every note after that lies a part of a sixteenth off the fitted beat, and
+    is written in odd values such as {7/12}.  Moving the beat costs ``SLIDE``,
+    so it stays put unless many notes are better for it.  It moves by at most
+    a sixteenth at a time, which keeps the pulses in order.
+    """
+    count = len(pulses)
+    gaps = sorted(later - earlier for earlier, later in zip(pulses, pulses[1:]))
+    unit = gaps[len(gaps) // 2] / 2 / SLIDE_STEPS
+    places = range(-SLIDE_REACH * SLIDE_STEPS, SLIDE_REACH * SLIDE_STEPS + 1)
+    size = len(places)
+    costs = [[0.0] * size for _ in range(count)]
+    for time, weight in zip(times, weights):
+        after = bisect_right(pulses, time)
+        index = min(count - 1, after)
+        if after == count or (after and time - pulses[after - 1] < pulses[after] - time):
+            index = after - 1
+        sixteenth = (pulses[index + 1] - pulses[index] if index + 1 < count else pulses[index] - pulses[index - 1]) / 2
+        row = costs[index]
+        for place, moved in enumerate(places):
+            position = (time - pulses[index] - moved * unit) / sixteenth
+            nearest = round(position)
+            row[place] += weight * ((position - nearest) ** 2 + (OFF_EIGHTH if nearest % 2 else 0.0))
+    per_step = SLIDE_SIXTEENTH / SLIDE_STEPS
+    best = [abs(moved) * per_step + cost for moved, cost in zip(places, costs[0])]
+    came_from: list[list[int]] = []
+    for row in costs[1:]:
+        following, origins = [0.0] * size, [0] * size
+        for place in range(size):
+            total, origin = best[place], place
+            for other in range(max(0, place - SLIDE_STEPS), min(size, place + SLIDE_STEPS + 1)):
+                if other != place:
+                    candidate = best[other] + SLIDE + abs(other - place) * per_step
+                    if candidate < total:
+                        total, origin = candidate, other
+            following[place], origins[place] = total + row[place], origin
+        best = following
+        came_from.append(origins)
+    place = min(range(size), key=best.__getitem__)
+    path = [place]
+    for origins in reversed(came_from):
+        place = origins[place]
+        path.append(place)
+    path.reverse()
+    moved = [pulse + places[place] * unit for pulse, place in zip(pulses, path)]
+    return moved, sum(1 for before, after in zip(path, path[1:]) if before != after)
+
+
 def _sums(times: list[float], weights: list[float], length: float,
           harmonics: tuple[int, ...]) -> list[tuple[float, float]]:
     """For each harmonic, the weighted sum of the onsets as points on a
@@ -487,13 +546,15 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
 
 def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
                playback: bool = False, period: float | None = None,
-               one_tempo: bool = False) -> tuple[MidiFile, Timing] | None:
+               one_tempo: bool = False, slide: bool = False) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
     per bar; ``steady`` is how much the pulse may wobble and still be taken
     for one tempo, and ``one_tempo`` takes it for one however it wobbles if
     the notes keep one (see ``_one_tempo``).  ``period`` (seconds) sets the
-    quarter note to track instead of the one the notes suggest.
+    quarter note to track instead of the one the notes suggest.  ``slide``
+    lets the beat of one steady tempo move onto the notes where they have
+    slipped off it (see ``_slid``); without such a tempo the answer is None.
 
     With ``playback`` the beat only has to play the notes back as they were
     played: a pulse that is not one tempo but a few steady stretches is
@@ -526,6 +587,11 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
     pieces = 0
     if not is_steady and playback:
         fitted, pieces = _steady_stretches(pulses, steady) or (None, 0)
+    slides = 0
+    if slide:
+        if not is_steady:
+            return None
+        fitted, slides = _slid(fitted, times, weights)
     pulses = fitted or pulses
     group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not (is_steady or playback))
 
@@ -559,6 +625,6 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
     rewritten.sort(key=lambda note: (note.start, note.pitch, note.track, note.channel))
     signature = (group * per_bar, 8) if group == 3 else (per_bar, 4)
     gaps = sorted(later - earlier for earlier, later in zip(pulses, pulses[1:]))
-    timing = Timing(30.0 / gaps[len(gaps) // 2], is_steady, *signature, stretches=pieces)
+    timing = Timing(30.0 / gaps[len(gaps) // 2], is_steady, *signature, stretches=pieces, slides=slides)
     return (MidiFile(PPQ, tuple(rewritten), tuple(tempos), ((0, *signature),), midi.track_names, midi.programs),
             timing)

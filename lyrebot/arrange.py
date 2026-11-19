@@ -66,6 +66,8 @@ FIRST_UNPITCHED_PROGRAM = 115  # woodblock, taiko, toms, synth drum, then sound 
 MELODY_WORDS = re.compile(r"melod|lead|vocal|voice|sing|solo|\brh\b|\bright\b|旋律|主音|人声|右手|主唱", re.I)
 OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝斯|低音|左手|伴奏|和弦|鼓", re.I)
 
+MIXED_VALUE = re.compile(r"\{\d+/(?!3\})\d+\}")
+
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
 SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
@@ -78,6 +80,11 @@ OTHER_LEVELS = (2, 0.5)  # other lengths of the beat found to read a recording a
 SHORT = 0.9  # ... when the score of the beat found plays less than this share of the notes in time
 IN_TIME = 0.05  # seconds within which a recording's note played back by its score counts as in time
 CLOSER = 0.005  # how much more of a recording another reading of its beat must play in time to be kept
+MIXED_VALUES = 0.1  # note values per bar mixing thirds and quarters of a beat, from which a steady
+#                     recording's beat is looked at again
+TIDIER = 0.6  # the beat moved onto the notes is kept if it leaves at most this share of those values ...
+GIVEN_UP = 0.03  # ... and plays at most this much less of the recording in time
+SLIPPED = 0.04  # seconds by which a bar must have moved to get a speed of its own
 BOTH_HANDS = 0.6  # a written melody part with fewer single-note onsets likely holds the left hand too
 DIP, DIP_NOTES, DIP_SPAN = 8, 3, Fraction(2)  # a left-hand dip in a two-handed top line: see drop_strays
 GRACE_GAP = (0.03, 0.1)  # seconds between neighbouring notes of an ornament: not struck together, yet quick ...
@@ -1040,7 +1047,7 @@ def _bar_text(segments: list[_Segment], cursor: int, begin: Fraction, end: Fract
 
 
 def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock,
-                drift: float = DRIFT) -> dict[int, float]:
+                drift: float = DRIFT, alone: frozenset[int] = frozenset()) -> dict[int, float]:
     """Where the score sets its speed: bar index -> BPM, rounded to 0.1.
 
     The fewest pieces of constant tempo that keep every beat within
@@ -1049,7 +1056,9 @@ def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock
     wobbles from bar to bar, so writing each bar's own tempo would jitter,
     and holding one tempo while it wobbles lets the score drift off the
     recording.  A piece keeps the tempo of its first bar when that fits, so
-    a file with exact tempo changes gets exactly those.
+    a file with exact tempo changes gets exactly those.  The bars in
+    ``alone`` are pieces by themselves, so that what happens in them is made
+    up for there and not somewhere later in the steady music.
     """
     speeds: dict[int, float] = {}
     written_at = clock.seconds(bars[first][0])  # where the score, by its own speeds, starts the piece
@@ -1057,6 +1066,8 @@ def speed_lines(bars: list[tuple[Fraction, Fraction]], first: int, clock: _Clock
     while index < len(bars):
         low, high, end = 0.0, math.inf, index
         while end < len(bars):
+            if end > index and (index in alone or end in alone):
+                break
             fit_low, fit_high = low, high
             bar_start, length = bars[end]
             for step in range(1, math.ceil(length) + 1):  # every beat, and the bar line
@@ -1089,7 +1100,9 @@ def _numbers(parts: list[Part]) -> str:
 
 
 def describe_timing(timing: Timing) -> str:
-    if timing.steady:
+    if timing.steady and timing.slides:
+        pace = f"速度平稳，有 {timing.slides} 处节拍错开，已分段对齐"
+    elif timing.steady:
         pace = "速度平稳"
     elif timing.stretches == 1:  # nine tenths or more of it in one tempo
         pace = "速度大体平稳，只在个别地方逐拍跟随"
@@ -1193,16 +1206,18 @@ def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop
             onsets = onset_times(midi)
             bpm = readings[-1][1].bpm
             best: tuple[float, Arrangement] | None = None
+            period = chosen = None
             for level in (None, *OTHER_LEVELS):
                 if level is not None:
                     if best[0] >= SHORT or not SLOWEST <= bpm / level <= FASTEST:
                         continue
-                    readings = beat_readings(midi, meter, 60.0 * level / bpm)
+                    period = 60.0 * level / bpm
+                    readings = beat_readings(midi, meter, period)
                 for reading in readings:
                     scored = _scored(_arrange(*reading, **choices), onsets)
                     if best is None or scored[0] > best[0] + CLOSER:
-                        best = scored
-            return best[1]
+                        best, chosen = scored, period
+            return _on_the_notes(midi, best, chosen, meter, onsets, choices)
     elif meter:
         midi = replace(midi, time_signatures=((0, meter, 4),))
     return _arrange(midi, None, **choices)
@@ -1228,6 +1243,33 @@ def beat_readings(midi: MidiFile, meter: int | None = None,
 
 def _scored(result: Arrangement, onsets: list[float]) -> tuple[float, Arrangement]:
     return played_in_time(result.text, onsets), result
+
+
+def mixed_values(text: str) -> int:
+    """How many note values in the score are neither plain nor thirds of a
+    beat, such as {7/12}: a note from a beat of triplets to one of sixteenths."""
+    return sum(len(MIXED_VALUE.findall(line.split("#", 1)[0])) for line in text.splitlines())
+
+
+def _on_the_notes(midi: MidiFile, best: tuple[float, Arrangement], period: float | None, meter: int | None,
+                  onsets: list[float], choices: dict) -> Arrangement:
+    """The arrangement ``best``, or a tidier one if its beat has slipped off the notes.
+
+    At a fast tempo every note lies within the time that counts as in time
+    of any beat of about the right length, so a beat a part of a sixteenth off
+    wins as easily as the right one, and shows only in mixed note values.
+    """
+    in_time, result = best
+    mixed = mixed_values(result.text)
+    if not result.timing.steady or mixed < MIXED_VALUES * result.bars:
+        return result
+    found = find_beats(midi, meter, playback=True, period=period, one_tempo=True, slide=True)
+    if not found or not found[1].slides:
+        return result
+    moved_in_time, moved = _scored(_arrange(*found, **choices), onsets)
+    if mixed_values(moved.text) <= TIDIER * mixed and moved_in_time >= in_time - GIVEN_UP:
+        return moved
+    return result
 
 
 def played_in_time(text: str, onsets: list[float]) -> float:
@@ -1390,7 +1432,12 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
                          len(lines), accompaniment, timing)
     cursors = [0] * len(segments)
     last_bpm: float | None = None
-    speeds = speed_lines(bars, first_bar, clock)
+    alone: frozenset[int] = frozenset()
+    if timing and timing.slides:  # the bars where the beat moves are the ones that differ from the tempo
+        alone = frozenset(index for index, (begin, length) in enumerate(bars)
+                          if abs(clock.seconds(begin + length) - clock.seconds(begin)
+                                 - float(length) * 60.0 / timing.bpm) >= SLIPPED)
+    speeds = speed_lines(bars, first_bar, clock, alone=alone)
     for index in range(first_bar, len(bars)):
         begin, length = bars[index]
         if index in speeds and speeds[index] != last_bpm:
