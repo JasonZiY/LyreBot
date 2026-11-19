@@ -180,6 +180,50 @@ class OnThePage(unittest.TestCase):
         self.assertLessEqual(len(drawn), 2)  # caught up with where it had got to, not each step
         self.assertEqual(page.size, (100, 340))
 
+    def test_marks_are_pressed_into_the_paper_and_go_where_the_window_puts_them(self):
+        page = self.page()  # for a window 80 x 60
+        clean, beside = page.image.get(70, 50), page.image.get(69, 50)
+        mark = tk.PhotoImage(master=self.root, width=6, height=4)
+        mark.put("#102030", to=(0, 0, 6, 4))
+        page.press(mark, lambda width, height: (width - 10, height - 10))
+        page.press(mark, lambda width, height: None)  # nowhere for it yet: nothing pressed
+        page.refresh()
+        self.assertEqual(page.image.get(70, 50), (16, 32, 48))  # pressed into the picture itself
+        self.assertEqual(page.image.get(69, 50), beside)  # and nowhere else
+        edition = page.edition
+        page.wanted = (60, 60)  # dragged narrower: the paper is not washed again,
+        page.refresh()
+        self.assertEqual(page.image.get(70, 50), clean)  # the paper is put back from under the mark
+        self.assertEqual(page.image.get(50, 50), (16, 32, 48))  # and it is pressed in where it now goes
+        self.assertGreater(page.edition, edition)  # (what was cut from the paper is cut again)
+        edition = page.edition
+        page.refresh()
+        self.assertEqual(page.edition, edition)  # where it is already, it is left alone
+        page.lay(60, 60)
+        self.assertEqual(page.image.get(50, 50), (16, 32, 48))  # a fresh wash has it pressed in too
+
+    def test_what_hangs_over_the_page_lies_over_every_piece_it_crosses(self):
+        page = self.page()
+        ribbon = tk.PhotoImage(master=self.root, width=4, height=20)
+        ribbon.put("#D97757", to=(0, 0, 4, 20))
+        page.hang(ribbon, lambda width, height: (width - 20, 5))  # for a window 80 wide: at (60, 5)
+        crossed, apart = Sheet(self.root, self.theme), Sheet(self.root, self.theme)
+        for piece, x, w in ((crossed, 50, 30), (apart, 0, 30)):  # where they stand, and how big they are
+            piece.winfo_x, piece.winfo_y = (lambda x=x: x), (lambda: 0)
+            piece.winfo_width, piece.winfo_height = (lambda w=w: w), (lambda: 10)
+        page.refresh()
+        [hung] = crossed.find_withtag("over")
+        self.assertEqual(crossed.coords(hung), [10, 5])  # at (60, 5) in the window, off the piece's corner
+        self.assertEqual(crossed.itemcget(hung, "image"), str(ribbon))
+        self.assertEqual(apart.find_withtag("over"), ())  # it does not reach this one
+        crossed.create_line(0, 0, 9, 9)
+        crossed.delete("!paper")  # clearing a drawing leaves the paper and what hangs over it
+        [laid] = crossed.find_withtag("paper&&!over")
+        self.assertEqual(crossed.find_withtag("over"), (hung,))
+        crossed.create_line(0, 0, 9, 9)  # drawn anew, and the paper laid again:
+        page.refresh()
+        self.assertEqual(crossed.find_all(), (laid, crossed.find_all()[1], hung))  # paper, drawing, ribbon
+
     def test_a_fade_is_the_paper_at_one_edge_clearing_to_nothing_at_the_other(self):
         page = self.page()
         strip = paper.fade(self.root, page.image, 4, 20, 30, 10, solid_at_top=False)  # at a list's foot

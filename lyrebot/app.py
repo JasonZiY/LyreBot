@@ -76,6 +76,8 @@ GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
 WINDOW_WIDTH = 350  # the window's width when it opens, and the narrowest it goes: the widest controls fit
+WATERMARK_SIZE = 136  # the lyre pressed into the page, at 100% scaling
+RIBBON_FROM_RIGHT = 59  # the ribbon's left edge, from the window's right, at 100% scaling
 
 
 def parse_speed(text: str) -> float | None:
@@ -501,8 +503,9 @@ class SongBrowser(OnPage, tk.Canvas):
             self.itemconfigure("fade", state="hidden")
             return
         tall = min(self.theme.px(18), height // 4)
-        if self.faded_for != (str(image), x, y, width, height):
-            self.faded_for = (str(image), x, y, width, height)
+        edition = self.page.edition if self.page is not None else 0  # (marks pressed in anew change the paper)
+        if self.faded_for != (str(image), edition, x, y, width, height):
+            self.faded_for = (str(image), edition, x, y, width, height)
             self.fades = (fade(self, image, x, y, width, tall, solid_at_top=True),
                           fade(self, image, x, y + height - tall, width, tall, solid_at_top=False))
         top = self.canvasy(0)
@@ -515,6 +518,7 @@ class SongBrowser(OnPage, tk.Canvas):
             self.coords(item, self.canvasx(0), at)
             self.itemconfigure(item, image=strip, state="normal" if show else "hidden")
         self.tag_raise("fade")
+        self.tag_raise("over")  # the ribbon lies over the songs sinking into the paper too
 
     def edges(self, top: float, height: int) -> tuple[bool, bool]:
         """Whether there are songs above the view (it has scrolled) and below it."""
@@ -977,9 +981,44 @@ class App:
         rule.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))
         finder.pack(side="bottom", fill="x", padx=px(16), pady=(px(6), 0))
         top.pack(fill="both", expand=True, padx=px(8), pady=(px(8), 0))
-        self.panel = panel
+        self.panel, self.shelves = panel, top
+        self.dress_page()
         if self.frame is not None:  # drawn again: the title bar with the rest
             chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
+
+    def dress_page(self) -> None:
+        """What the page carries besides the writing: gilt corner pieces pressed into its four corners,
+        rounding them as the window's corners are rounded; the lyre pressed faintly into the paper behind
+        the list; and the program icon's orange ribbon hanging from under the leather over the list, as a
+        bookmark hangs from a book's head."""
+        theme, page, px = self.theme, self.page, self.theme.px
+        for right in (False, True):
+            for foot in (False, True):
+                piece = theme.corner(right, foot)
+                side = piece.width()
+                page.press(piece, lambda width, height, right=right, foot=foot, side=side: (
+                    width - side if right else 0, height - side if foot else self.head()))
+        mark = theme.watermark(px(WATERMARK_SIZE))
+        page.press(mark, lambda width, height: self.behind_list(mark.width()))
+        ribbon = theme.ribbon()
+        page.hang(ribbon, lambda width, height: (width - px(RIBBON_FROM_RIGHT), self.head()))
+
+    def head(self) -> int:
+        """Where the page begins: under LyreBot's own title bar, where it draws one."""
+        bar = self.title_bar
+        if bar is None:
+            return 0
+        return bar.winfo_y() + bar.winfo_height() if bar.winfo_ismapped() else bar.winfo_reqheight()
+
+    def behind_list(self, size: int) -> tuple[int, int] | None:
+        """Where a picture ``size`` square sits in the middle of the list's part of the page (None until the
+        list has a place)."""
+        shelves = self.shelves
+        width, height = shelves.winfo_width(), shelves.winfo_height()
+        if width <= 1 or height <= 1:
+            return None
+        x, y = self.page.offset(shelves)
+        return x + (width - size) // 2, y + (height - size) // 2
 
     def make_title_bar(self, first: tk.Widget) -> TitleBar:
         """The leather title bar, over ``first``, laid out for ``self.frame``; the lyre moves up into it."""

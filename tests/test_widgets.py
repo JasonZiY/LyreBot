@@ -84,6 +84,53 @@ class Drawing(unittest.TestCase):
         self.assertEqual({color for color, _ in icons.paint(icons.folder(18), "#C9BFAE")}, {"#C9BFAE"})  # off: all faint
         self.assertEqual([color for color, _ in icons.paint(icons.chevron(10), gold)], [gold])  # a lone shape too
 
+    def test_a_long_curve_sorted_into_cells_covers_what_it_covered_before(self):
+        import math
+        import random
+        points, widths = icons.lyre_arm()
+        points = [(x / 8, y / 8) for x, y in points]
+        widths = [w / 8 for w in widths]
+        line = icons.stroke(points, widths)
+
+        def plainly(x, y):  # every piece of the line tried, as before
+            for (ax, ay), (bx, by), wa, wb in zip(points, points[1:], widths, widths[1:]):
+                dx, dy = bx - ax, by - ay
+                length = dx * dx + dy * dy
+                t = 0.0 if length == 0 else max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / length))
+                if math.hypot(ax + t * dx - x, ay + t * dy - y) <= (wa + (wb - wa) * t) / 2:
+                    return True
+            return False
+        rng = random.Random(3)
+        for _ in range(4000):
+            x, y = rng.uniform(-5, 133), rng.uniform(-5, 133)
+            self.assertEqual(line(x, y), plainly(x, y), (x, y))
+
+    def test_a_corner_piece_is_mirrored_for_each_corner_of_the_page(self):
+        size = 31
+        parts = icons.corner(size, 1.0)
+        top_left = icons.rgba(size, size, icons.paint(parts, "#000000"))
+        alpha = lambda pixels, x, y: pixels[(y * size + x) * 4 + 3]  # noqa: E731
+        self.assertGreater(alpha(top_left, 15, 4), 200)  # a line along the top edge
+        self.assertGreater(alpha(top_left, 4, 15), 200)  # and down the side
+        self.assertEqual(alpha(top_left, 4, 4), 0)  # rounding the corner on an arc, clear of the very corner
+        self.assertEqual(alpha(top_left, 25, 25), 0)  # and nothing out in the page
+        foot_right = icons.rgba(size, size, icons.paint(icons.turned(parts, size, True, True), "#000000"))
+        for x, y in ((15, 4), (4, 15), (4, 4), (13, 13), (27, 8)):
+            self.assertEqual(alpha(foot_right, size - 1 - x, size - 1 - y), alpha(top_left, x, y), (x, y))
+
+    def test_the_ribbon_hangs_with_a_swallowtail_and_a_shadow(self):
+        band, length, notch, drop = 10, 30, 5, 2
+        width, height = band + drop + 1, length + drop + 1
+        pixels = icons.rgba(width, height, icons.ribbon(band, length, notch, drop, "#D97757", "#C7684A", "#96513A",
+                                                         "#5A322038", "#5A32201A"))
+        at = lambda x, y: tuple(pixels[(y * width + x) * 4:(y * width + x) * 4 + 4])  # noqa: E731
+        self.assertEqual(at(2, 15), (0xD9, 0x77, 0x57, 255))  # the ribbon
+        self.assertEqual(at(8, 15), (0xC7, 0x68, 0x4A, 255))  # its folded half, in shade
+        self.assertEqual(at(5, 0)[:3], (0x96, 0x51, 0x3A))  # dark where it comes out from under the cover
+        self.assertLess(at(5, length - 2)[3], 80)  # the swallowtail's notch: hardly anything but shadow
+        shadow = at(band + 1, 15)[3]
+        self.assertTrue(0 < shadow < 80, shadow)  # a faint shadow down the right
+
 
 class Pieces(unittest.TestCase):
     def setUp(self):

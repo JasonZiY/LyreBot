@@ -356,6 +356,29 @@ class Folders(unittest.TestCase):
         self.assertIn(app.title_bar, adopt.call_args.kwargs["see_through"])
         self.corners.assert_called_once_with(app.root, border=None)  # rounded and shadowed, with no outline
 
+    def test_the_page_carries_gilt_corners_a_watermark_and_a_ribbon_over_the_list(self):
+        from lyrebot.app import RIBBON_FROM_RIGHT
+        app, _ = self.framed_app(True)
+        page, px = app.page, app.theme.px
+        width, height = page.window()
+        head = app.title_bar.winfo_reqheight()  # (the window is never shown: the bar's height as it asks)
+        self.assertEqual(app.head(), head)
+        side = app.theme.corner(False, False).width()
+        places = [place(width, height) for _, place in page.marks]
+        self.assertEqual(sorted(places[:4]), sorted([(0, head), (0, height - side), (width - side, head),
+                                                     (width - side, height - side)]))  # the four corners
+        self.assertIsNone(places[4])  # the watermark waits for the list to have a place
+        [(ribbon, place)] = page.over
+        self.assertEqual(place(width, height), (width - px(RIBBON_FROM_RIGHT), head))  # from under the leather
+        browser = app.browser
+        browser.winfo_width, browser.winfo_height = (lambda: width), (lambda: px(200))
+        browser.lay_out()
+        page.refresh()
+        hung = browser.find_withtag("over")
+        self.assertEqual(len(hung), 1)
+        self.assertEqual(browser.find_all()[-1], hung[0])  # over the songs, and over their fades too
+        self.assertIn(browser.fade_top, browser.find_all())
+
     def test_where_windows_will_not_lend_its_frame_the_window_stays_as_it_was(self):
         app, _ = self.framed_app(False)
         self.assertIsNone(app.title_bar)  # Windows keeps its bar, and the lyre its place

@@ -18,6 +18,12 @@ The picture is opaque, so the canvases only copy it to the screen when they repa
 see-through pixels would be blended afresh on every repaint, which made dragging the window slow.  The
 clouding and the grain belong to the window's coordinates, not its size, so they keep still while it is
 resized.  The head of the page, under the title bar, is one even lamplight.
+
+Two kinds of picture go with the paper.  Marks (``Page.press``: the gilt corners, the lyre's watermark) are
+pressed into the picture itself, so they lie under everything written on the page and show through its
+tints; when the window changes size they are taken out again, by putting back the paper kept from under
+them, and pressed in where they now go.  What hangs over the page (``Page.hang``: the bookmark's ribbon)
+is laid by each canvas it crosses over all that canvas draws.
 """
 
 from __future__ import annotations
@@ -28,9 +34,14 @@ import random
 import struct
 import time
 import tkinter as tk
+from typing import Callable, Optional
 import zlib
 
 from . import theme
+
+# Where a picture goes on the page, its top left corner, for a window of this width and height; None while
+# there is nowhere for it yet.
+Place = Callable[[int, int], Optional[tuple[int, int]]]
 
 HEAD = (250, 234, 200)  # lamplight over the head of the page
 CREAM = (250, 245, 236)  # the middle of the page, the paper itself
@@ -281,6 +292,11 @@ class Page:
         self.later: str | None = None  # the wash for the size the window settles at
         self.wanted = (0, 0)  # the window's size, as it last said
         self.washed_at = 0.0
+        self.marks: list[tuple[tk.PhotoImage, Place]] = []  # pressed into the paper (``press``)
+        self.pressed: list | None = None  # where they are pressed in now
+        self.patches: list[tuple[tk.PhotoImage, int, int]] = []  # the paper from under them, and where it goes
+        self.over: list[tuple[tk.PhotoImage, Place]] = []  # lying over the page (``hang``)
+        self.edition = 0  # changes whenever the picture does, for what is cut from it (``fade``)
         root.bind("<Configure>", self.moved, add="+")
 
     def lay(self, width: int, height: int) -> None:
@@ -292,8 +308,59 @@ class Page:
                       "-compositingrule", "overlay")  # the grain, tiled over the wash
         old, self.image = self.image, image
         self.size, self.washed_at = (width, height), time.monotonic()
+        self.pressed, self.patches = None, []  # a fresh picture, with no marks in it yet
+        self.edition += 1
         self.refresh()
         del old  # only now, with nothing showing it any more
+
+    def press(self, image: tk.PhotoImage, place: Place) -> None:
+        """Press ``image`` into the paper at ``place``: an ornament or a watermark, under everything written
+        on the page and showing through its tints."""
+        self.marks.append((image, place))
+        self.pressed = None
+        self.schedule()
+
+    def hang(self, image: tk.PhotoImage, place: Place) -> None:
+        """Hang ``image`` over the page at ``place``, as a ribbon lies over a book's page: each canvas it
+        crosses lays it over all it draws.  The song list lays it again after drawing; a piece that draws
+        anew without laying its paper again would draw over it, so it belongs where only the backdrop and
+        the list lie."""
+        self.over.append((image, place))
+        self.schedule()
+
+    def window(self) -> tuple[int, int]:
+        """The window's size, as it last said, or else the size the paper was made for."""
+        width, height = self.wanted
+        return (width, height) if width > 1 and height > 1 else self.size
+
+    def stamp(self) -> None:
+        """Press the marks in where they go for the window as it is now, first taking them out of where
+        they were by putting back the paper kept from under them.  Left alone while they are where they go."""
+        image = self.image
+        if image is None or not self.marks:
+            return
+        places = [place(*self.window()) for _, place in self.marks]
+        if places == self.pressed:
+            return
+        for patch, x, y in reversed(self.patches):
+            image.tk.call(image, "copy", patch, "-to", x, y, "-compositingrule", "set")
+        self.patches = []
+        right, foot = image.width(), image.height()
+        for (mark, _), at in zip(self.marks, places):
+            if at is None:
+                continue
+            x, y = at
+            left, top = max(x, 0), max(y, 0)
+            far, low = min(x + mark.width(), right), min(y + mark.height(), foot)
+            if far <= left or low <= top:
+                continue
+            patch = tk.PhotoImage(master=self.root, width=far - left, height=low - top)
+            patch.tk.call(patch, "copy", image, "-from", left, top, far, low)
+            image.tk.call(image, "copy", mark, "-from", left - x, top - y, far - x, low - y, "-to", left, top,
+                          "-compositingrule", "overlay")
+            self.patches.append((patch, left, top))
+        self.pressed = places
+        self.edition += 1
 
     def add(self, surface: "OnPage") -> None:
         self.surfaces.append(surface)
@@ -332,6 +399,7 @@ class Page:
     def settled(self) -> None:
         self.later = None
         self.catch_up()
+        self.pressed = None  # the marks go where the pieces have come to rest
         self.schedule()  # whatever stepped aside while the window was being resized comes back
 
     def catch_up(self) -> None:
@@ -348,6 +416,7 @@ class Page:
         self.job = None
         if self.image is None:
             return
+        self.stamp()
         alive = []
         for surface in self.surfaces:
             try:
@@ -370,12 +439,13 @@ class Page:
 
 
 class OnPage:
-    """For a canvas that shows its slice of the window's page under what it draws.  Its drawings clear with
-    ``delete("!paper")``, which leaves the paper where it lies."""
+    """For a canvas that shows its slice of the window's page under what it draws, and what hangs over the
+    page over it.  Its drawings clear with ``delete("!paper")``, which leaves both where they lie."""
 
     page: Page | None = None
     paper: tuple[tk.PhotoImage, int, int] | None = None
     laid: tuple[str, float, float] | None = None  # the image and place the paper item has
+    hung: list[tuple[str, float, float]] = []  # the images and places of what hangs over it
 
     def take_page(self, owner: "theme.Theme") -> None:
         """Lie on the page of the window this canvas is in, if that window has one."""
@@ -390,16 +460,36 @@ class OnPage:
         self.paper = (image, x, y)
         canvas: tk.Canvas = self  # type: ignore[assignment]
         left, top = canvas.canvasx(0) - x, canvas.canvasy(0) - y
-        found = canvas.find_withtag("paper")
-        if found and self.laid == (str(image), left, top):
-            return
-        if found:
-            canvas.coords(found[0], left, top)
-            canvas.itemconfigure(found[0], image=image)
-        else:
-            canvas.create_image(left, top, anchor="nw", image=image, tags="paper")
-            canvas.tag_lower("paper")
-        self.laid = (str(image), left, top)
+        found = canvas.find_withtag("paper&&!over")
+        if not found or self.laid != (str(image), left, top):
+            if found:
+                canvas.coords(found[0], left, top)
+                canvas.itemconfigure(found[0], image=image)
+            else:
+                canvas.tag_lower(canvas.create_image(left, top, anchor="nw", image=image, tags="paper"))
+            self.laid = (str(image), left, top)
+        self.lay_over(x, y, left, top)
+
+    def lay_over(self, x: int, y: int, left: float, top: float) -> None:
+        """Lay what hangs over the page where it crosses this canvas, which stands at (x, y) in the window,
+        over everything it has drawn.  (Its items are tagged ``paper`` too, so drawings clearing with
+        ``delete("!paper")`` leave them.)"""
+        canvas: tk.Canvas = self  # type: ignore[assignment]
+        page, hung = self.page, []
+        if page is not None and page.over:
+            width, height = canvas.winfo_width(), canvas.winfo_height()
+            for image, place in page.over:
+                at = place(*page.window())
+                if at is not None and at[0] < x + width and x < at[0] + image.width() \
+                        and at[1] < y + height and y < at[1] + image.height():
+                    hung.append((str(image), left + at[0], top + at[1]))
+        if hung != self.hung:
+            canvas.delete("over")
+            for image_name, ix, iy in hung:
+                canvas.create_image(ix, iy, anchor="nw", image=image_name, tags=("paper", "over"))
+            self.hung = hung
+        elif hung:
+            canvas.tag_raise("over")  # over whatever was drawn since
 
     def follow_page(self) -> None:
         """Keep the paper still under a canvas that has scrolled."""

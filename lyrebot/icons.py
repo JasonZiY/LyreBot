@@ -78,17 +78,27 @@ def triangle(a: tuple[float, float], b: tuple[float, float], c: tuple[float, flo
 
 def stroke(points: Iterable[tuple[float, float]], width: float | list[float]) -> Shape:
     """A line through ``points`` with round ends and joins; ``width`` may be one per point, for a line
-    that swells and thins like a pen's."""
+    that swells and thins like a pen's.
+
+    A long curve is many short pieces, so they are sorted into square cells first: a point need only be
+    tried against the few pieces that pass through its cell, not all of them."""
     path = list(points)
     widths = list(width) if isinstance(width, (list, tuple)) else [width] * len(path)
     segments = list(zip(path, path[1:], widths, widths[1:])) or [(path[0], path[0], widths[0], widths[0])]
-    xs, ys, most = [x for x, _ in path], [y for _, y in path], max(widths)
-    box = (min(xs) - most, min(ys) - most, max(xs) + most, max(ys) + most)
+    cell = max(4.0, max(widths))
+    cells: dict[tuple[int, int], list] = {}
+    for segment in segments:
+        (ax, ay), (bx, by), wa, wb = segment
+        half = max(wa, wb) / 2
+        for gx in range(int((min(ax, bx) - half) // cell), int((max(ax, bx) + half) // cell) + 1):
+            for gy in range(int((min(ay, by) - half) // cell), int((max(ay, by) + half) // cell) + 1):
+                cells.setdefault((gx, gy), []).append(segment)
 
     def inside(x: float, y: float) -> bool:
-        if not (box[0] <= x <= box[2] and box[1] <= y <= box[3]):
+        near = cells.get((int(x // cell), int(y // cell)))
+        if not near:
             return False
-        for (ax, ay), (bx, by), wa, wb in segments:
+        for (ax, ay), (bx, by), wa, wb in near:
             dx, dy = bx - ax, by - ay
             length = dx * dx + dy * dy
             t = 0.0 if length == 0 else max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / length))
@@ -520,6 +530,76 @@ def lyre(size: int) -> list[Shape]:
     line = max(1, round(thread * k))
     shapes += [rect(x - line / 2, round(top * k), x + line / 2, round(bottom * k)) for x in lyre_strings(size)]
     return shapes
+
+
+# ---- the page's ornaments ----------------------------------------------------------
+
+CORNER = 31  # the side of a corner piece's square, at 100%
+
+
+def curl(end: tuple[float, float], along: tuple[float, float], inward: tuple[float, float], radius: float,
+         turn: float = 320, steps: int = 40) -> list[tuple[float, float]]:
+    """A curl at the end of a line, as on the horns of the lyre: from ``end`` it carries on ``along`` the way
+    the line went, turns towards ``inward`` and winds in, its radius closing from ``radius`` to a third."""
+    cx, cy = end[0] + inward[0] * radius, end[1] + inward[1] * radius
+    points = []
+    for i in range(steps + 1):
+        t = i / steps
+        angle, r = math.radians(turn * t), radius * (1 - 0.62 * t)
+        points.append((cx + r * (-inward[0] * math.cos(angle) + along[0] * math.sin(angle)),
+                       cy + r * (-inward[1] * math.cos(angle) + along[1] * math.sin(angle))))
+    return points
+
+
+def _arc(cx: float, cy: float, r: float, start: float, end: float, steps: int = 24) -> list[tuple[float, float]]:
+    return [(cx + r * math.cos(math.radians(start + (end - start) * i / steps)),
+             cy + r * math.sin(math.radians(start + (end - start) * i / steps))) for i in range(steps + 1)]
+
+
+def corner(size: int, unit: float) -> list[Shape]:
+    """A gilt corner piece for the page's top left corner, on a square of ``size``, its measures at 100%
+    times ``unit``.  A line runs along each edge and rounds the corner on an arc, as the window's own corner
+    is rounded, its two ends winding into curls like the lyre's horns; a finer line follows it inside, on an
+    arc of the same centre, and a small lozenge points from the corner into the page.  The lines along the
+    edges are whole pixels wide, on whole rows and columns of pixels, as in the icons."""
+    pen, fine = max(1, round(1.5 * unit)), max(1, round(unit))
+    edge, radius, arm = snap(4 * unit, pen), 10.5 * unit, 25 * unit
+    inner_edge, inner_arm = snap(7.5 * unit, fine), 15.5 * unit
+    inner_radius = radius - (inner_edge - edge)
+    outer = [(arm, edge)] + _arc(edge + radius, edge + radius, radius, 270, 180) + [(edge, arm)]
+    inner = [(inner_arm, inner_edge)] + _arc(inner_edge + inner_radius, inner_edge + inner_radius, inner_radius,
+                                             270, 180) + [(inner_edge, inner_arm)]
+    winding = [pen * (1 - 0.4 * i / 40) for i in range(41)]  # thinning as it winds in, like a pen's stroke
+    c, reach, half = 13 * unit, 2.7 * unit, 1.5 * unit  # the lozenge, along the diagonal
+    d = 1 / math.sqrt(2)
+    lozenge = polygon((c - reach * d, c - reach * d), (c + half * d, c - half * d), (c + reach * d, c + reach * d),
+                      (c - half * d, c + half * d))
+    return [stroke(outer, pen), stroke(curl((arm, edge), (1, 0), (0, 1), 2.7 * unit), winding),
+            stroke(curl((edge, arm), (0, 1), (1, 0), 2.7 * unit), winding), stroke(inner, fine), lozenge]
+
+
+def turned(shapes: list[Shape], size: int, right: bool, foot: bool) -> list[Shape]:
+    """``shapes`` drawn for the top left corner of a square of ``size``, mirrored for another corner."""
+    def mirror(shape: Shape) -> Shape:
+        return lambda x, y: shape(size - x if right else x, size - y if foot else y)
+    return [mirror(shape) for shape in shapes]
+
+
+def ribbon(band: int, length: int, notch: int, drop: int, body: str, fold: str, tuck: str,
+           shade: str, shade_far: str) -> Layers:
+    """A bookmark's ribbon, ``band`` wide, hanging ``length`` down from the top of its picture: its end cut
+    in a swallowtail ``notch`` deep, its right half in the shade of a fold, darker where it comes out from
+    under the cover, and casting a soft shadow ``drop`` down and to the right.  The picture is ``band +
+    drop + 1`` wide and ``length + drop + 1`` tall."""
+    def halves(dx: float, dy: float) -> tuple[Shape, Shape]:  # the swallowtail is not convex: two halves are
+        middle = band / 2
+        return (polygon((dx, dy), (middle + dx, dy), (middle + dx, length - notch + dy), (dx, length + dy)),
+                polygon((middle + dx, dy), (band + dx, dy), (band + dx, length + dy), (middle + dx, length - notch + dy)))
+    near, far = halves(drop, drop), halves(drop + 0.8, drop + 0.8)
+    left, right = halves(0, 0)
+    tucked = max(1, round(drop))
+    return [(shade_far, union(*far)), (shade, union(*near)), (body, left), (fold, right),
+            (tuck, rect(0, 0, band, tucked))]
 
 
 def pill(width: int, height: int, fill: str, border: str, line: int = 1) -> Layers:

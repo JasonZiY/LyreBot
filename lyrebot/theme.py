@@ -56,6 +56,13 @@ VEIL_FAINT = "#FFFFFF33"
 CHOSEN_TINT = "#D9775729"  # the chosen song: a breath of orange
 HOVER_TINT = "#8A81741A"  # under the pointer: a shade
 
+# What the page itself carries (``App.dress_page``): gilt corners pressed into it, the lyre pressed so faintly
+# that it is more felt than seen, and the program icon's orange ribbon lying over it.
+CORNER_GILT = "#B08D57EB"
+WATERMARK = "#B08D5712"
+RIBBON, RIBBON_FOLD, RIBBON_TUCK = ORANGE, "#C7684A", "#96513A"
+RIBBON_SHADE, RIBBON_SHADE_FAR = "#5A322038", "#5A32201A"
+
 SANS = "Microsoft YaHei UI"
 SERIFS = ("Noto Serif SC SemiBold", "Source Han Serif SC SemiBold", "Source Han Serif CN SemiBold",
           "Noto Serif CJK SC SemiBold", "Noto Serif SC Medium", "Noto Serif SC", "Source Han Serif SC")
@@ -145,6 +152,25 @@ class Theme:
         """·◆· in ``color``, ``height`` tall: the ornament set into a rule."""
         width = icons.fleuron_width(height)
         return self.image(f"fleuron:{color}", width, height, lambda: icons.paint(icons.fleuron(width, height), color))
+
+    def corner(self, right: bool, foot: bool) -> tk.PhotoImage:
+        """The page's gilt corner piece for one of its corners."""
+        size = self.px(icons.CORNER)
+        return self.image(f"corner:{right}:{foot}:{CORNER_GILT}:{self.scale:.4f}", size, size,
+                          lambda: icons.paint(icons.turned(icons.corner(size, self.scale), size, right, foot),
+                                              CORNER_GILT))
+
+    def watermark(self, size: int) -> tk.PhotoImage:
+        """The lyre, pressed into the paper."""
+        return self.image(f"watermark:{WATERMARK}", size, size, lambda: icons.paint(icons.lyre(size), WATERMARK))
+
+    def ribbon(self) -> tk.PhotoImage:
+        """The bookmark's ribbon, with its shadow."""
+        px = self.px
+        band, length, notch, drop = px(10.5), px(37), px(5), px(1.5)
+        return self.image("ribbon", band + drop + 1, length + drop + 1,
+                          lambda: icons.ribbon(band, length, notch, drop, RIBBON, RIBBON_FOLD, RIBBON_TUCK,
+                                               RIBBON_SHADE, RIBBON_SHADE_FAR))
 
     def pill(self, width: int, height: int, fill: str, border: str) -> tk.PhotoImage:
         line = max(1, round(self.scale))  # whole pixels: an edge of 1.25 smears over two rows
