@@ -108,6 +108,7 @@ class Score:
     measures: int
     parts: int
     bars: tuple[Fraction, ...] = ()  # where each measure (line) starts
+    bar_lines: tuple[int, ...] = ()  # and the line of the text each is written on
 
     @property
     def bpm(self) -> float:
@@ -309,6 +310,7 @@ def parse_score(text: str) -> Score:
     parts = 0
     measures = 0
     bars: list[Fraction] = []
+    bar_lines: list[int] = []
     position = Fraction(0)
     roll_ms, grace_ms = DEFAULT_ROLL_MS, DEFAULT_GRACE_MS
 
@@ -365,13 +367,14 @@ def parse_score(text: str) -> Score:
             detail = "，".join(f"声部 {index + 1} 是 {_beats(length)} 拍" for index, length in enumerate(lengths))
             raise ScoreError(f"{_where(number, None)}：各声部长度不一致（{detail}）")
         bars.append(position)
+        bar_lines.append(number)
         position += lengths[0]
         measures += 1
 
     if not measures:
         raise ScoreError("曲谱里没有小节")
     events.sort(key=lambda event: (event.start, event.part))
-    score = Score(tuple(events), position, tuple(marks), measures, parts, tuple(bars))
+    score = Score(tuple(events), position, tuple(marks), measures, parts, tuple(bars), tuple(bar_lines))
     if score.duration_seconds > MAX_SECONDS:
         raise ScoreError("曲谱时长超过 24 小时")
     return score

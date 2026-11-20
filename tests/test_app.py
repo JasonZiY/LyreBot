@@ -787,7 +787,7 @@ class Folders(unittest.TestCase):
         on = SimpleNamespace(x_root=root.winfo_rootx() + root.winfo_width() - px(59) + px(4),
                              y_root=root.winfo_rooty() + app.head() + px(10), widget=app.browser)
         off = SimpleNamespace(x_root=on.x_root - px(30), y_root=on.y_root, widget=app.browser)
-        self.assertEqual((app.on_ribbon(on), app.on_ribbon(off)), (True, False))
+        self.assertEqual((app.on_ribbon(on), app.on_ribbon(off)), ("orange", None))
         self.assertIsNone(app.ribbon_press(off))
         self.assertFalse(app.leaf)
         from lyrebot.app import TUG, TUG_TURN
@@ -806,7 +806,7 @@ class Folders(unittest.TestCase):
         self.assertTrue(app.leaf)
         self.assertIsNone(app.tugging)
         self.assertIs(app.hung_ribbon, app.ribbon_image)  # at rest again
-        self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image])
+        self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image, app.green_image])
         app.ribbon_press(on)  # and now it may be tugged again
         app.finish_tug()
         self.assertFalse(app.leaf)
@@ -992,6 +992,190 @@ class Folders(unittest.TestCase):
             app.size_window(900, 800)  # moved back on to its screen
             app.size_window(5000, 5000)  # no larger than the screen
         self.assertEqual(placed, [f"{px(350)}x{px(360)}+-500+900", "900x800+-900+490", "2400x1290+-2400+0"])
+
+    def text_page(self, app, path, bar=None):
+        """Turn to ``path``'s text page, as the green ribbon does, after hearing bar ``bar`` (from 0)."""
+        if app.where != "leaf":
+            self.leaf(app, path)
+        if bar is not None:
+            app.hear_note(self.note_at(app, 4.0 * bar))
+        app.ribbon_turns("green")
+        self.assertEqual(app.where, "text")
+        return app.text_box
+
+    def write(self, text, content):
+        text.delete("1.0", "end")
+        text.insert("1.0", content)
+
+    def test_the_green_ribbon_hangs_behind_the_orange_on_the_score_and_text_pages_only(self):
+        from types import SimpleNamespace
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.assertIsNone(app.hung["green"])
+        root, px = app.root, app.theme.px
+        green = SimpleNamespace(x_root=root.winfo_rootx() + root.winfo_width() - px(74) + px(4),
+                                y_root=root.winfo_rooty() + app.head() + px(10), widget=app.browser)
+        self.assertIsNone(app.on_ribbon(green))  # not on the songs' page
+        self.leaf(app, path)
+        self.assertIs(app.hung["green"], app.green_image)
+        self.assertEqual(app.on_ribbon(green), "green")
+        self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image, app.green_image])
+        self.assertEqual(app.ribbon_press(green), "break")
+        app.finish_tug()
+        self.assertEqual(app.where, "text")  # green: the 简谱 to its text
+        self.assertIs(app.hung["green"], app.green_image)
+        app.ribbon_press(green)
+        app.finish_tug()
+        self.assertEqual(app.where, "leaf")  # and back
+        app.ribbon_turns("green")
+        app.ribbon_turns("orange")  # orange, from either: the songs
+        self.assertEqual(app.where, "songs")
+        self.assertIsNone(app.hung["green"])
+        self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image])
+
+    def test_the_text_opens_as_saved_at_the_line_of_the_bar_last_heard(self):
+        from lyrebot.app import TEXT_HINT, App
+        path, _ = self.three_bars()  # its bars on lines 2, 3 and 4
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.assertEqual(text.get("1.0", "end-1c"), path.read_text(encoding="utf-8"))
+        self.assertEqual(text.index("insert"), "2.0")  # nothing heard yet: the first bar
+        self.assertEqual(app.text_title.cget("text"), "三小节")
+        self.assertEqual(app.text_about.cget("text"), "原文 · txt/歌曲/三小节.txt")
+        self.assertEqual(app.text_status.cget("text"), TEXT_HINT)
+        self.assertFalse(app.undo_button.enabled)
+        self.assertEqual(app.root.title(), "三小节 · 原文 · LyreBot")
+        app.ribbon_turns("green")
+        text = self.text_page(app, path, bar=2)
+        self.assertEqual(text.index("insert"), "4.0")
+
+    def test_a_mistake_is_marked_and_neither_saved_nor_left(self):
+        from unittest import mock
+        from types import SimpleNamespace
+        from lyrebot.app import App
+        from lyrebot.theme import WARN
+        path, _ = self.three_bars()
+        before = path.read_text(encoding="utf-8")
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.write(text, "speed=60\na-s-d-f-\nk-\n")
+        app.check_text()
+        self.assertIn("第 3 行", app.text_error)
+        self.assertEqual(app.manuscript.wrong, 3)
+        self.assertEqual(text.tag_ranges("wrong")[0].string, "3.0")
+        self.assertEqual((app.text_status.cget("text"), app.text_status.cget("fg")), (app.text_error, WARN))
+        with mock.patch.object(app.callout, "say") as said:
+            self.assertFalse(app.save_text())
+        self.assertIn("第 3 行", said.call_args.args[0])
+        self.assertEqual(path.read_text(encoding="utf-8"), before)  # not written
+        root, px = app.root, app.theme.px
+        for from_right in (59, 74):  # either ribbon: tugged, the page staying, the mistake said
+            on = SimpleNamespace(x_root=root.winfo_rootx() + root.winfo_width() - px(from_right) + px(4),
+                                 y_root=root.winfo_rooty() + app.head() + px(10), widget=app.manuscript)
+            with mock.patch.object(app.callout, "say") as said:
+                self.assertEqual(app.ribbon_press(on), "break")
+                app.finish_tug()
+            self.assertEqual(app.where, "text")
+            self.assertIn("第 3 行", said.call_args.args[0])
+        self.write(text, "speed=60\na-s-d-f-\ng---\n")
+        app.check_text()
+        self.assertIsNone(app.text_error)
+        self.assertIsNone(app.manuscript.wrong)
+        self.assertEqual(text.tag_ranges("wrong"), ())
+
+    def test_undo_goes_back_no_further_than_the_text_was_when_the_page_opened(self):
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        opened = text.get("1.0", "end-1c")
+        for words in ("# 一", "# 二"):
+            text.insert("end", words)
+            text.edit_separator()
+        app.text_changed()
+        self.assertTrue(app.undo_button.enabled)
+        for _ in range(5):
+            app.undo_text()
+        self.assertEqual(text.get("1.0", "end-1c"), opened)
+        self.assertFalse(app.undo_button.enabled)
+
+    def test_save_writes_the_file_and_leaving_saves_too(self):
+        from unittest import mock
+        from lyrebot.app import SAVED, App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.write(text, "speed=60\na-s-d-f-\ng-h-j-q-\nw-e-r-t-\nq---\n")
+        app.text_changed()
+        self.assertTrue(app.text_status.cget("text").startswith("有改动"))
+        self.assertTrue(app.save_text())
+        self.assertEqual(path.read_text(encoding="utf-8").count("\n"), 5)
+        self.assertEqual(app.text_status.cget("text"), SAVED)
+        text.insert("end", "# 改完\n")
+        sizes = []
+        app.grown = True  # (made larger on the 简谱 page)
+        with mock.patch.object(app, "size_window", side_effect=lambda w, h: sizes.append((w, h))):
+            app.ribbon_turns("orange")  # back to the songs: saved, and the window narrow again
+        self.assertTrue(path.read_text(encoding="utf-8").endswith("# 改完\n"))
+        self.assertEqual(app.where, "songs")
+        self.assertEqual(len(sizes), 1)
+        self.assertFalse(app.grown)
+
+    def test_back_on_the_score_page_the_bar_of_the_cursor_shows(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        for line, bar in (("4.3", 2), ("1.0", 0), ("3.0", 1)):
+            text = self.text_page(app, path)
+            text.mark_set("insert", line)
+            with mock.patch.object(app.score_view, "reveal") as reveal:
+                app.ribbon_turns("green")
+            self.assertEqual(app.where, "leaf")
+            reveal.assert_called_once_with(bar)
+        text = self.text_page(app, path)
+        self.write(text, "speed=60\na-s-d-f-\n# 中间\ng-h-j-q-\nw-e-r-t-\nq---\n# 完\n")
+        text.mark_set("insert", "3.0")  # between two bars: the one under it
+        with mock.patch.object(app.score_view, "reveal") as reveal:
+            app.ribbon_turns("green")
+        reveal.assert_called_once_with(1)
+        self.assertEqual(len(app.score_view.notes), 13)  # drawn again from the text saved
+        text = self.text_page(app, path)
+        text.mark_set("insert", "7.0")  # after the last bar: the top
+        with mock.patch.object(app.score_view, "reveal") as reveal:
+            app.ribbon_turns("green")
+        reveal.assert_called_once_with(None)
+
+    def test_while_writing_f7_plays_nothing_and_the_mark_at_the_start_is_kept(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        path.write_text("\ufeffspeed=60\na-s-d-f-\n", encoding="utf-8")
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.assertEqual(text.get("1.0", "end-1c"), "speed=60\na-s-d-f-\n")
+        app.quiet_until = 0
+        with mock.patch.object(app, "run") as run:
+            app.start(countdown=0)
+        run.assert_not_called()
+        self.assertEqual(app.where, "text")
+        text.insert("end", "g---\n")
+        self.assertTrue(app.save_text())
+        self.assertEqual(path.read_bytes()[:3], b"\xef\xbb\xbf")
+
+    def test_closing_with_a_mistake_asks_first(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.write(text, "speed=60\nk-\n")
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=False) as asked, \
+                mock.patch.object(app.callout, "say"):
+            app.close()
+        self.assertIn("第 2 行", asked.call_args.args[1])
+        self.assertFalse(app.closing)
 
     def test_turning_back_stops_hearing_and_the_game_turns_back_to_the_songs(self):
         from unittest import mock

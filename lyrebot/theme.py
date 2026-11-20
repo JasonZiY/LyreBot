@@ -62,11 +62,15 @@ FRAME_OUTER, FRAME_INNER = "#B08D57D7", "#D2BC93E6"
 WATERMARK = "#B08D5712"
 RIBBON, RIBBON_FOLD, RIBBON_TUCK = ORANGE, "#C7684A", "#96513A"
 RIBBON_SHADE, RIBBON_SHADE_FAR = "#5A322038", "#5A32201A"
+# The second ribbon, on the 简谱 and text pages, in a deep green that keeps company with the old gold.
+GREEN, GREEN_FOLD, GREEN_TUCK = "#5E8573", "#4C6E60", "#3A5548"
+WRONG = "#F4DCD3"  # under a line of the score that cannot be read
 
 SANS = "Microsoft YaHei UI"
 SERIFS = ("Noto Serif SC SemiBold", "Source Han Serif SC SemiBold", "Source Han Serif CN SemiBold",
           "Noto Serif CJK SC SemiBold", "Noto Serif SC Medium", "Noto Serif SC", "Source Han Serif SC")
 FIGURES = ("Georgia", "Constantia", "Palatino Linotype", "Cambria")
+MONOS = ("Cascadia Mono", "Consolas", "Courier New")  # for writing a score: its keys and marks line up
 
 # Drawn images are kept on disk under the hash of the code that draws them: changed code, a fresh folder.
 _DRAWING = hashlib.sha1(b"".join(path.read_bytes() for path in sorted(Path(__file__).parent.glob("*.py")))).hexdigest()[:12]
@@ -91,6 +95,7 @@ class Fonts:
         self.title = heading(12)  # the song in the player, and a dialog's question
         self.figures = (figures, 9)  # times, bars and counts
         self.figures_small = (figures, 8)
+        self.mono = (next((name for name in MONOS if name in families), "Courier New"), 10)
 
 
 class Theme:
@@ -172,13 +177,16 @@ class Theme:
         """The lyre, pressed into the paper."""
         return self.image(f"watermark:{WATERMARK}", size, size, lambda: icons.paint(icons.lyre(size), WATERMARK))
 
-    def ribbon(self, extra: int = 0) -> tk.PhotoImage:
-        """The bookmark's ribbon, with its shadow; ``extra`` pixels longer (or shorter) while it is tugged."""
+    def ribbon(self, extra: int = 0, green: bool = False) -> tk.PhotoImage:
+        """A bookmark's ribbon, with its shadow, orange or ``green``; ``extra`` pixels longer (or shorter) while
+        it is tugged."""
         px = self.px
         band, length, notch, drop = px(10.5), px(37) + extra, px(5), px(1.5)
-        return self.image(f"ribbon:{extra}" if extra else "ribbon", band + drop + 1, length + drop + 1,
-                          lambda: icons.ribbon(band, length, notch, drop, RIBBON, RIBBON_FOLD, RIBBON_TUCK,
-                                               RIBBON_SHADE, RIBBON_SHADE_FAR))
+        body, fold, tuck = (GREEN, GREEN_FOLD, GREEN_TUCK) if green else (RIBBON, RIBBON_FOLD, RIBBON_TUCK)
+        key = ("green-ribbon" if green else "ribbon") + (f":{extra}" if extra else "")
+        return self.image(key, band + drop + 1, length + drop + 1,
+                          lambda: icons.ribbon(band, length, notch, drop, body, fold, tuck, RIBBON_SHADE,
+                                               RIBBON_SHADE_FAR))
 
     def pill(self, width: int, height: int, fill: str, border: str) -> tk.PhotoImage:
         line = max(1, round(self.scale))  # whole pixels: an edge of 1.25 smears over two rows

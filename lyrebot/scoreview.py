@@ -375,6 +375,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
         systems = jianpu.layout_rows(sheet, LEFT, max(width / s - RIGHT, LEFT + 60), self.most)
         measure = Drawing(self, s)
         y = float(TOP)
+        self.bar_rows = {bar.number: row for row, system in enumerate(systems) for bar in system}
         for row, system in enumerate(systems):
             top, first = y, len(self.notes)
             y = jianpu.draw_system(measure, sheet, system, row, y, {}, rule=GOLD)
@@ -405,6 +406,19 @@ class ScoreView(ScrollingPage, tk.Canvas):
             return width, math.ceil((TOP + sum(steps) - 20 + FOOT) * s)
         tallest = max(sum(steps[at:at + 4]) for at in range(len(steps) - 3)) - 14
         return width, math.ceil(tallest * s) + 2 * self.theme.px(18)
+
+    bar_rows: dict[int, int] = {}  # the system each bar is drawn in, by its number
+
+    def reveal(self, bar: int | None) -> None:
+        """Bring bar ``bar`` (from 0) into view a third of the way down, as hearing it would; None: the top."""
+        height = max(self.winfo_height(), 1)
+        row = self.bar_rows.get(self.sheet.bars[bar].number) if self.sheet and bar is not None \
+            and 0 <= bar < len(self.sheet.bars) else None
+        if row is None or self.extent <= height:
+            self.yview_moveto(0)
+            return
+        target = max(0.0, min(self.rows[row][0] - height / 3, self.extent - height))
+        self.yview_moveto(target / self.extent)
 
     def stop_drawing(self) -> None:
         if self.drawing is not None:

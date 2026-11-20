@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import queue
 import random
+import re
 import sys
 import threading
 import time
@@ -33,14 +34,15 @@ from .notate import notate
 from .paper import OnPage, Page, ScrollingPage
 from .player import play
 from .record import SILENCE, WAIT, record
-from .score import Score, ScoreError, load_score, score_files
+from .score import Score, ScoreError, load_score, parse_score, score_files
 from .scoreview import ScoreView
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
                     ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
                     screen_holding)
 from .timeline import compile_ringing, compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import Callout, Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, TitleBar, Words
+from .widgets import (Callout, Choice, IconButton, Manuscript, Ornament, PageLine, Picture, PopupMenu, Sheet,
+                      TitleBar, Words)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -72,6 +74,13 @@ TO_HEAR = "点简谱上的任何一个音，从那里开始听"
 HEAR_TIP, HALT_TIP = "试听", "停止试听（F8）"
 TO_SCORE, TO_SONGS = "翻到简谱，试听", "翻回曲目"
 GROW_TIP, SHRINK_TIP = "放大：一行四小节，放得下相邻四行", "缩回窄窗"
+# The second ribbon, green, on the 简谱 page and the page behind it, where the score's text is written.
+GREEN_FROM_RIGHT = 74  # its left edge, from the window's right, at 100% scaling: beside the orange one
+TO_TEXT, TO_LEAF = "翻到原文，修改", "翻回简谱"
+UNDO_TIP, SAVE_TIP = "撤销（Ctrl+Z）", "保存（Ctrl+S）"
+SAVED, CHANGED = "已保存", "有改动，还没保存"
+TEXT_HINT = "停手半秒就查一遍错；翻页时没存的改动会自动存"
+CHECK_AFTER = 500  # milliseconds after the last change before the text is read for mistakes
 LEAVES = 6  # songs kept read for the 简谱 page, the latest last
 # A click on the ribbon tugs it: how much longer than at rest it hangs, frame by frame (pixels at 100%), pulled
 # down, let go, springing up a little past its rest and settling.  The page turns where it is pulled furthest;
@@ -807,6 +816,15 @@ class App:
         self.leap_to = 0.0  # seconds into the song
         self.hearing = 0  # counts the stretches heard, so that progress from one cut short is not shown
         self.leaf = False  # the 简谱 page is shown, not the songs
+        self.where = "songs"  # the page shown: "songs", "leaf" (the 简谱) or "text" (the score's text)
+        self.leaf_mark: int | None = None  # the bar (from 0) last heard or clicked on the 简谱 page
+        self.text_path: Path | None = None  # on the text page: the file, as it was saved, whether it began with
+        self.text_saved = ""  # a byte order mark, the mistake found in it (None: none), the score it reads as
+        self.text_bom = False
+        self.text_error: str | None = None
+        self.text_score: Score | None = None
+        self.text_job: str | None = None
+        self.text_kept = False  # saved since it was last changed
         self.leaf_song: tuple[Path, float, Score, object, float] | None = None  # on it: file, its time, score,
         self.leaf_from: float | None = None  # timeline, speed; and where ▶ goes on from (seconds), if stopped
         self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
@@ -963,16 +981,20 @@ class App:
             piece.pack(**how)
         self.panel = panel
         self.build_leaf()
-        # The ribbon is a bookmark: a click on it turns the page (the pieces it lies over hear of it first).
+        self.build_text()
+        self.pages = {"songs": self.songs_page, "leaf": self.leaf_page, "text": self.text_page}
+        # The ribbons are bookmarks: a click on one turns the page (the pieces they lie over hear of it first).
         self.ribbon_image = theme.ribbon()
+        self.green_image = theme.ribbon(green=True)
         self.ribbon_tag = f"Ribbon{id(self)}"
         for event, handler in (("<ButtonPress-1>", self.ribbon_press), ("<Double-Button-1>", self.ribbon_press),
                                ("<Motion>", self.ribbon_motion), ("<Leave>", self.ribbon_leave)):
             root.bind_class(self.ribbon_tag, event, handler)
-        for piece in (self.backdrop, top, self.browser, *self.leaf_pieces()):
+        for piece in (self.backdrop, top, self.browser, *self.leaf_pieces(), self.text_head, self.text_title,
+                      self.text_about, self.manuscript):
             piece.bindtags((self.ribbon_tag, *piece.bindtags()))
         self.callout = Callout(root, theme)
-        self.set_away([piece for piece, _ in self.leaf_page], True)  # (the songs come first)
+        self.set_away([piece for piece, _ in self.leaf_page + self.text_page], True)  # (the songs come first)
         self.dress_page()
         if self.frame is not None:  # drawn again: the title bar with the rest
             chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
@@ -998,8 +1020,11 @@ class App:
             page.press(piece, frame_at(name))
         mark = theme.watermark(px(WATERMARK_SIZE))
         page.press(mark, lambda width, height: ((width - mark.width()) // 2, (height - mark.height()) // 2))
-        ribbon = self.hung_ribbon = theme.ribbon()
-        page.hang(ribbon, lambda width, height: (width - px(RIBBON_FROM_RIGHT), self.head()))
+        ribbon = theme.ribbon()
+        self.ribbon_place = {"orange": lambda width, height: (width - px(RIBBON_FROM_RIGHT), self.head()),
+                             "green": lambda width, height: (width - px(GREEN_FROM_RIGHT), self.head())}
+        self.hung: dict[str, tk.PhotoImage | None] = {"orange": ribbon, "green": None}  # (green on pages 2, 3)
+        page.hang(ribbon, self.ribbon_place["orange"])
 
     def head(self) -> int:
         """Where the page begins: under LyreBot's own title bar, where it draws one."""
@@ -1094,6 +1119,8 @@ class App:
                     "disabled": picture(f"{name}-disabled", small, lambda: icons.paint(draw(small), FAINT))}
         self.next_images = plain("next", icons.next_track)
         self.grow_images = plain("grow", icons.corners_out)  # the 简谱 page's window, larger
+        self.undo_images = plain("undo", icons.undo)  # the text page's
+        self.save_images = plain("save", icons.seal)
         self.shrink_images = plain("shrink", icons.corners_in)  # and back to the narrow one
         self.restart_images = plain("restart", icons.restart)
         self.keys_images = plain("keys", icons.keyboard)
@@ -1654,6 +1681,8 @@ class App:
         path = path or self.selected()
         if path is None:
             return
+        if self.where == "text":  # (F7 pressed while writing): nothing plays
+            return
         if self.leaf:  # (F7 pressed in the game): the songs' page shows what plays
             self.show_songs()
         self.cache.pop(path, None)  # always play the file as it is now
@@ -1696,6 +1725,8 @@ class App:
     def hear_note(self, index: int) -> None:
         """A note clicked on the 简谱 page: hear the song from it, or, while it is heard, go on from it."""
         note = self.score_view.notes[index]
+        if self.leaf_song is not None:
+            self.leaf_mark = max(bisect_right(self.leaf_song[2].bars, note.beat) - 1, 0)
         if self.auditioning:
             self.leap_to = note.start
             self.hearing += 1  # what is still to come from before is not shown
@@ -1852,8 +1883,12 @@ class App:
                                enabled=recording or (not busy and self.transcriber is None))
         self.keys_button.set(self.recording_images if listening else self.keys_images, enabled=listening or not busy)
         if not busy:  # (while busy, the title says what plays)
-            leaf = self.leaf and self.leaf_song is not None
-            self.root.title(f"{self.leaf_song[0].stem} · 简谱 · LyreBot" if leaf else self.base_title)
+            if self.where == "leaf" and self.leaf_song is not None:
+                self.root.title(f"{self.leaf_song[0].stem} · 简谱 · LyreBot")
+            elif self.where == "text" and self.text_path is not None:
+                self.root.title(f"{self.text_path.stem} · 原文 · LyreBot")
+            else:
+                self.root.title(self.base_title)
 
     def run(self, path: Path, timeline, begin: float, speed: float, mode: str, songs: list[Path],
             countdown: float | None = None) -> None:
@@ -1955,7 +1990,7 @@ class App:
         # From the foot up, as on the songs' page; the head keeps clear of the ribbon on either side.
         self.leaf_page = [(self.leaf_panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
                           (self.leaf_rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
-                          (self.leaf_head, dict(side="top", fill="x", padx=px(RIBBON_FROM_RIGHT + 6),
+                          (self.leaf_head, dict(side="top", fill="x", padx=px(GREEN_FROM_RIGHT + 6),
                                                 pady=(px(12), px(4)))),
                           (self.leaf_body, dict(fill="both", expand=True, padx=(px(10), px(8)), pady=0))]
 
@@ -1964,7 +1999,8 @@ class App:
         return [self.leaf_head, self.leaf_title, self.leaf_about, self.leaf_body, self.score_view]
 
     def wheel(self, event: tk.Event) -> None:
-        (self.score_view if self.leaf else self.browser).wheel(event)
+        if self.where != "text":  # (the text scrolls itself)
+            (self.score_view if self.leaf else self.browser).wheel(event)
 
     def toggle_size(self) -> None:
         """The 简谱 page's button: the window between two sizes.  The larger has the song four bars a line, the
@@ -2081,6 +2117,7 @@ class App:
             self.leaf_from = None  # a new song, or at another speed: where it stopped is elsewhere in time
             if sheet is not None:
                 self.score_view.show(sheet)
+                self.leaf_mark = None
                 # 1=C, the meter and the tempo; under them, briefly, where it came from and how it reads.
                 notes = [note.removeprefix("LyreBot ").split("，")[0] for note in sheet.notes
                          if note != "速度随演奏起伏"]  # (the ≈ says as much)
@@ -2097,18 +2134,32 @@ class App:
         if not self.worker:
             self.set_playing(False)
 
-    def show_leaf(self) -> None:
-        """Turn to the 简谱 page."""
-        for piece, _ in self.songs_page:
-            piece.pack_forget()
-        self.set_away([piece for piece, _ in self.songs_page], True)
-        self.set_away([piece for piece, _ in self.leaf_page], False)
-        for piece, how in self.leaf_page:
+    def turn_to(self, where: str) -> None:
+        """Show page ``where`` ("songs", "leaf" or "text") in place of the others, which are put away; the green
+        ribbon hangs on the 简谱 page and the text page only."""
+        for name, pieces in self.pages.items():
+            if name != where:
+                for piece, _ in pieces:
+                    piece.pack_forget()
+                self.set_away([piece for piece, _ in pieces], True)
+        self.set_away([piece for piece, _ in self.pages[where]], False)
+        for piece, how in self.pages[where]:
             piece.pack(**how)
         self.page.schedule()  # (laid where they stand now, whether or not they moved)
-        self.score_view.later()  # a width not laid out for yet: laid out once it holds still
-        self.leaf = True
+        self.where, self.leaf = where, where == "leaf"
+        green = self.hung["green"]
+        if where == "songs" and green is not None:
+            self.page.swap(green, None)
+            self.hung["green"] = None
+        elif where != "songs" and green is None:
+            self.hung["green"] = self.green_image
+            self.page.hang(self.green_image, self.ribbon_place["green"])
         self.ribbon_leave()
+
+    def show_leaf(self) -> None:
+        """Turn to the 简谱 page."""
+        self.turn_to("leaf")
+        self.score_view.later()  # a width not laid out for yet: laid out once it holds still
         self.set_playing(False)
 
     def show_songs(self) -> None:
@@ -2118,15 +2169,7 @@ class App:
             self.stop()
         if self.grown:
             self.toggle_size()
-        for piece, _ in self.leaf_page:
-            piece.pack_forget()
-        self.set_away([piece for piece, _ in self.leaf_page], True)
-        self.set_away([piece for piece, _ in self.songs_page], False)
-        for piece, how in self.songs_page:
-            piece.pack(**how)
-        self.page.schedule()
-        self.leaf = False
-        self.ribbon_leave()
+        self.turn_to("songs")
         if not self.worker:
             self.root.title(self.base_title)
         self.show_selected()
@@ -2155,37 +2198,53 @@ class App:
         view.heard(reached, follow=False)
         self.leaf_status.configure(text="已停止 · 点 ▶ 从亮着的音接着听", fg=MUTED)
 
-    # ---- the ribbon ----
-    def on_ribbon(self, event: tk.Event) -> bool:
-        """Whether the pointer of ``event`` is on the ribbon (its band, a little wider to be easy to hit)."""
+    # ---- the ribbons ----
+    def on_ribbon(self, event: tk.Event) -> str | None:
+        """Which ribbon the pointer of ``event`` is on ("orange" or "green"), if any: its band, a little wider
+        to be easy to hit."""
         root, px = self.root, self.theme.px
         x, y = event.x_root - root.winfo_rootx(), event.y_root - root.winfo_rooty()
-        left, top = root.winfo_width() - px(RIBBON_FROM_RIGHT), self.head()
-        band = px(10.5)
-        return left - px(3) <= x < left + band + px(3) and top <= y < top + self.ribbon_image.height()
+        band, top = px(10.5), self.head()
+        for which, from_right in (("orange", RIBBON_FROM_RIGHT), ("green", GREEN_FROM_RIGHT)):
+            left = root.winfo_width() - px(from_right)
+            if self.hung[which] is not None and left - px(2) <= x < left + band + px(2) \
+                    and top <= y < top + self.ribbon_image.height():
+                return which
+        return None
 
     def ribbon_press(self, event: tk.Event) -> str | None:
-        """A click on the ribbon tugs it, and the page turns as it is pulled furthest; a click while it is still
-        moving counts for nothing (nor does it reach what lies under the ribbon)."""
-        if not self.on_ribbon(event):
+        """A click on a ribbon tugs it, and the page turns as it is pulled furthest; a click while one is still
+        moving counts for nothing (nor does it reach what lies under the ribbon).  From the text page, while
+        the text has a mistake, the ribbon is tugged but the page stays, and the mistake is said."""
+        which = self.on_ribbon(event)
+        if which is None:
             return None
         self.callout.hide()
         if self.tugging is None:
-            self.tug(0)
+            problem = self.text_problem()
+            self.tug(0, which, turn=problem is None)
+            if problem is not None:
+                self.ribbon_says(problem, which, last=4000)
         return "break"
 
-    def tug(self, frame: int) -> None:
-        """Show frame ``frame`` of the ribbon's tug (see ``TUG``), turning the page at ``TUG_TURN``."""
+    def tug(self, frame: int, which: str | None = None, turn: bool = True) -> None:
+        """Show frame ``frame`` of a ribbon's tug (see ``TUG``), turning the page at ``TUG_TURN``; frame 0
+        names the ribbon, and whether the page is to turn."""
+        if which is not None:
+            self.tug_which, self.tug_turns = which, turn
+        which = self.tug_which
         self.tug_job = None
         if frame >= len(TUG):
             self.tugging = None
-            self.hang_ribbon(self.ribbon_image)
+            self.hang_ribbon(which, self.green_image if which == "green" else self.ribbon_image)
             return
         self.tugging = frame
-        self.hang_ribbon(self.theme.ribbon(round(TUG[frame] * self.theme.scale)))
-        if frame == TUG_TURN:
-            self.turn_page()
+        self.hang_ribbon(which, self.theme.ribbon(round(TUG[frame] * self.theme.scale), green=which == "green"))
+        if frame == TUG_TURN and self.tug_turns:
+            self.ribbon_turns(which)
         self.tug_job = self.root.after(TUG_STEP, self.tug, frame + 1)
+
+    tug_which, tug_turns = "orange", True
 
     def finish_tug(self) -> None:
         """Play what is left of the ribbon's tug at once."""
@@ -2194,22 +2253,46 @@ class App:
                 self.root.after_cancel(self.tug_job)
             self.tug(self.tugging + 1)
 
-    def hang_ribbon(self, image: tk.PhotoImage) -> None:
-        if image is not self.hung_ribbon:
-            self.page.swap(self.hung_ribbon, image)
-            self.hung_ribbon = image
+    def hang_ribbon(self, which: str, image: tk.PhotoImage) -> None:
+        hung = self.hung[which]
+        if hung is not None and image is not hung:
+            self.page.swap(hung, image)
+            self.hung[which] = image
+
+    @property
+    def hung_ribbon(self) -> tk.PhotoImage | None:  # (the orange one)
+        return self.hung["orange"]
+
+    def ribbon_turns(self, which: str) -> None:
+        """The page a ribbon turns to.  Orange: from the songs to the 简谱, from the others back to the songs.
+        Green: between the 简谱 and the text.  Leaving the text saves it first, if it reads."""
+        if which == "orange":
+            if self.where == "text":
+                if self.leave_text(which):
+                    self.show_songs()
+            else:
+                self.turn_page()
+        elif self.where == "leaf":
+            self.show_text()
+        elif self.where == "text" and self.leave_text(which):
+            self.back_to_leaf()
 
     def ribbon_motion(self, event: tk.Event) -> str | None:
-        inside = self.on_ribbon(event)
+        which = self.on_ribbon(event)
         widget = event.widget
-        if inside:
+        if which is not None:
             name = str(widget)
             if name not in self.cursors:
                 self.cursors[name] = str(widget.cget("cursor"))
             widget.configure(cursor="hand2")
-            if not self.ribbon_inside:
-                self.ribbon_inside = True
-                self.ribbon_says(TO_SONGS if self.leaf else TO_SCORE, wait=550)
+            if self.ribbon_inside != which:
+                self.callout.hide()
+                self.ribbon_inside = which
+                if which == "green":
+                    words = TO_TEXT if self.where == "leaf" else TO_LEAF
+                else:
+                    words = TO_SCORE if self.where == "songs" else TO_SONGS
+                self.ribbon_says(words, which, wait=550)
             return "break"  # (nor does the list light the song under it)
         self.ribbon_leave(event)
         return None
@@ -2226,12 +2309,196 @@ class App:
                 pass
         self.cursors.clear()
 
-    def ribbon_says(self, text: str, wait: int = 0) -> None:
-        """A few words under the ribbon's tail."""
+    def ribbon_says(self, text: str, which: str = "orange", wait: int = 0, last: int = 2200) -> None:
+        """A few words under a ribbon's tail."""
         root, px = self.root, self.theme.px
-        x = root.winfo_rootx() + root.winfo_width() - px(RIBBON_FROM_RIGHT) + px(5)
+        from_right = GREEN_FROM_RIGHT if which == "green" else RIBBON_FROM_RIGHT
+        x = root.winfo_rootx() + root.winfo_width() - px(from_right) + px(5)
         y = root.winfo_rooty() + self.head() + self.ribbon_image.height()
-        self.callout.say(text, x, y, wait=wait)
+        self.callout.say(text, x, y, wait=wait, last=last)
+
+    # ---- the text page ----
+    def build_text(self) -> None:
+        """The page behind the green ribbon: the song's title and its file, the slip of paper its text is
+        written on, and at its foot, under the ·◆· rule, undo and save, and a line saying how the text stands."""
+        root, theme = self.root, self.theme
+        px, fonts = theme.px, theme.fonts
+        self.text_head = Sheet(root, theme)
+        self.text_title = Words(self.text_head, theme, fg=INK, font=fonts.title, anchor="center", justify="center")
+        self.text_title.pack(fill="x")
+        self.text_about = Words(self.text_head, theme, fg=MUTED, font=fonts.small, anchor="center", justify="center")
+        self.text_about.pack(fill="x")
+        self.text_head.bind("<Configure>", lambda event: [words.configure(wraplength=event.width)
+                                                          for words in (self.text_title, self.text_about)], add="+")
+        self.manuscript = Manuscript(root, theme, fonts.mono, fonts.figures)
+        self.text_box = text = self.manuscript.text
+        text.bind("<<Modified>>", self.text_changed)
+        text.bind("<Control-s>", lambda _: self.save_text() and "break" or "break")
+        text.bind("<Control-S>", lambda _: self.save_text() and "break" or "break")
+        text.bind("<<Undo>>", lambda _: self.undo_text() or "break")
+        self.text_rule = Ornament(root, theme)
+        self.text_panel = Sheet(root, theme)
+        row = Sheet(self.text_panel, theme)
+        row.pack(fill="x")
+        self.undo_button = IconButton(row, self.undo_images, self.undo_text, UNDO_TIP, theme)
+        self.undo_button.pack(side="left")
+        self.save_button = IconButton(row, self.save_images, self.save_text, SAVE_TIP, theme)
+        self.save_button.pack(side="left", padx=(px(6), 0))
+        self.text_status = Words(self.text_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.text_status.pack(fill="x", pady=(px(4), 0))
+        self.text_panel.bind("<Configure>", lambda event: self.text_status.configure(wraplength=event.width),
+                             add="+")
+        self.text_page = [(self.text_panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
+                          (self.text_rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
+                          (self.text_head, dict(side="top", fill="x", padx=px(GREEN_FROM_RIGHT + 6),
+                                                pady=(px(12), px(4)))),
+                          (self.manuscript, dict(fill="both", expand=True, padx=(px(14), px(14)), pady=(px(2), 0)))]
+
+    def show_text(self) -> None:
+        """Turn from the 简谱 page to its song's text, read from its file as it is now: the version undo goes
+        back to.  The cursor goes to the line of the bar last heard or clicked, else of the first bar."""
+        if self.auditioning:
+            self.stop()
+        path = self.leaf_song[0] if self.leaf_song else None
+        try:
+            raw = path.read_text(encoding="utf-8") if path else None
+        except (OSError, UnicodeDecodeError):
+            raw = None
+        if raw is None:
+            self.ribbon_says("读不了这份曲谱", "green")
+            return
+        self.text_bom = raw.startswith("\ufeff")
+        content = raw.removeprefix("\ufeff")
+        text = self.text_box
+        text.delete("1.0", "end")
+        text.insert("1.0", content)
+        text.edit_reset()  # undo goes back no further than this
+        text.edit_modified(False)
+        self.text_path, self.text_saved, self.text_kept = path, content, False
+        self.text_title.configure(text=path.stem)
+        try:
+            where = path.parent.relative_to(self.scores_dir.parent)
+        except ValueError:
+            where = path.parent
+        self.text_about.configure(text=f"原文 · {where.as_posix()}/{path.name}")
+        self.turn_to("text")
+        self.check_text()
+        score = self.text_score
+        bar = self.leaf_mark if self.leaf_mark is not None else 0
+        line = score.bar_lines[min(bar, len(score.bar_lines) - 1)] if score and score.bar_lines else 1
+        text.mark_set("insert", f"{line}.0")
+        self.root.update_idletasks()
+        shown = max(1, text.winfo_height() // max(1, int(text.tk.call("font", "metrics", self.theme.fonts.mono,
+                                                                        "-linespace"))))
+        lines = int(text.index("end-1c").split(".")[0])
+        text.yview_moveto(max(0.0, (line - 1 - shown / 3) / max(lines, 1)))
+        text.see("insert")
+        text.focus_set()
+        self.set_playing(False)
+
+    def back_to_leaf(self) -> None:
+        """Turn from the text back to the 简谱, drawn again if the text was changed, showing the bar of the line
+        the cursor is on (a line between bars belongs to the bar under it); beyond the bars, the top."""
+        score = self.text_score
+        line = int(self.text_box.index("insert").split(".")[0])
+        bar = None
+        if score is not None and score.bar_lines:
+            at = bisect_left(score.bar_lines, line)
+            bar = at if at < len(score.bar_lines) else None
+        self.turn_to("leaf")
+        self.root.update_idletasks()
+        self.read_leaf()
+        self.set_playing(False)
+        self.score_view.reveal(bar)
+        if bar is not None:
+            self.leaf_mark = bar
+
+    def text_problem(self) -> str | None:
+        """On the text page, the mistake in the text that keeps it from being left; else None."""
+        if self.where != "text":
+            return None
+        self.check_text()
+        return self.text_error
+
+    def leave_text(self, which: str) -> bool:
+        """Before the text page is left: read it once more and save it.  False, with the mistake said under
+        the ribbon, if it does not read."""
+        problem = self.text_problem()
+        if problem is not None:
+            self.ribbon_says(problem, which, last=4000)
+            return False
+        return self.save_text()
+
+    def text_changed(self, _: tk.Event | None = None) -> None:
+        """The text was changed: look for mistakes once it is left alone a moment."""
+        text = self.text_box
+        if not text.edit_modified():
+            return
+        text.edit_modified(False)  # (so that the next change is told too)
+        self.text_kept = False
+        top = self.root
+        if self.text_job is not None:
+            top.after_cancel(self.text_job)
+        self.text_job = top.after(CHECK_AFTER, self.check_text)
+        self.show_text_state()
+
+    def check_text(self) -> None:
+        """Read the text as a score: its mistake, if any, said and its line marked; the score kept if it reads."""
+        if self.text_job is not None:
+            self.root.after_cancel(self.text_job)
+            self.text_job = None
+        try:
+            self.text_score, self.text_error = parse_score(self.text_box.get("1.0", "end-1c")), None
+        except ScoreError as error:
+            self.text_score, self.text_error = None, str(error)
+        found = re.search(r"第 (\d+) 行", self.text_error or "")
+        self.manuscript.mark(int(found.group(1)) if found else None)
+        self.show_text_state()
+
+    def show_text_state(self) -> None:
+        """Undo and the words under the slip, as the text stands."""
+        text = self.text_box
+        self.undo_button.set(enabled=bool(int(text.edit("canundo"))))
+        changed = text.get("1.0", "end-1c") != self.text_saved
+        if self.text_error is not None:
+            self.text_status.configure(text=self.text_error, fg=WARN)
+        elif changed:
+            self.text_status.configure(text=f"{CHANGED} · Ctrl+S 保存", fg=MUTED)
+        else:
+            self.text_status.configure(text=SAVED if self.text_kept else TEXT_HINT, fg=MUTED)
+
+    def undo_text(self) -> None:
+        """Undo the last change, no further back than the text as it was when the page was turned to."""
+        try:
+            self.text_box.edit_undo()
+        except tk.TclError:
+            pass  # (nothing left to undo)
+        self.text_changed()
+        self.show_text_state()
+
+    def save_text(self) -> bool:
+        """Read the text once more and write it to its file; with a mistake in it, say so over the save button
+        and keep it unwritten.  True once it is saved."""
+        if self.text_path is None:
+            return False
+        self.check_text()
+        if self.text_error is not None:
+            button = self.save_button
+            self.callout.say(self.text_error, button.winfo_rootx() + button.winfo_width() // 2, button.winfo_rooty(),
+                             last=4000, above=True)
+            return False
+        content = self.text_box.get("1.0", "end-1c")
+        if content != self.text_saved:
+            try:
+                self.text_path.write_text(("\ufeff" if self.text_bom else "") + content, encoding="utf-8", newline="\n")
+            except OSError as error:
+                self.text_status.configure(text=f"保存失败：{error}", fg=WARN)
+                return False
+            self.text_saved = content
+            self.cache.pop(self.text_path, None)
+        self.text_kept = True
+        self.show_text_state()
+        return True
 
     def show_progress(self, at: float) -> None:
         """The knob, the time and the bar counter at ``at`` seconds into the song playing."""
@@ -2294,6 +2561,8 @@ class App:
                 hearing, at = value
                 if hearing == self.hearing:
                     self.score_view.heard(at)
+                    if self.score_view.lit_bar is not None:
+                        self.leaf_mark = self.score_view.lit_bar - 1
                     self.show_heard(at)
                     self.leaf_status.configure(text=HEARING, fg=MUTED)
             elif kind == "heard end":
@@ -2348,6 +2617,10 @@ class App:
         self.root.after(30, self.poll)
 
     def close(self) -> None:
+        if self.where == "text" and self.text_box.get("1.0", "end-1c") != self.text_saved and not self.save_text():
+            question = f"原文有误，改动没有保存：\n{self.text_error}\n\n仍然关闭吗？"
+            if not dialogs.confirm("关闭 LyreBot", question, parent=self.root, yes="关闭"):
+                return
         self.keep_place()
         self.closing = True
         self.stop()

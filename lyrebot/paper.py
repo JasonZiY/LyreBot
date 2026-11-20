@@ -329,10 +329,16 @@ class Page:
         self.over.append((image, place))
         self.schedule()
 
-    def swap(self, old: tk.PhotoImage, new: tk.PhotoImage) -> None:
+    def swap(self, old: tk.PhotoImage, new: tk.PhotoImage | None) -> None:
         """Hang ``new`` where ``old`` hangs (the ribbon, a frame of its tug): the canvases it crosses lay it again
         now, and nothing else is touched."""
-        self.over = [(new if image is old else image, place) for image, place in self.over]
+        over = []
+        for image, place in self.over:
+            if image is not old:
+                over.append((image, place))
+            elif new is not None:  # (None takes it down)
+                over.append((new, place))
+        self.over = over
         for surface in self.surfaces:
             try:
                 if surface.away or not surface.winfo_exists():

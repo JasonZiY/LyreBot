@@ -18,7 +18,8 @@ from . import icons, ime
 from .paper import OnPage
 from .theme import (EMBER, FAINT, GILT, GILT_BRIGHT, GILT_DEEP, GOLD, GOLD_SOFT, HAIR, HOVER, INK, LEATHER_EDGE,
                     LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, VEIL,
-                    VEIL_FAINT, VEIL_HOVER, WARN, WARN_DEEP, WHITE, Theme, fit, geometry, round_corners, screen_area)
+                    VEIL_FAINT, VEIL_HOVER, WARN, WARN_DEEP, WHITE, WRONG, Theme, fit, geometry, round_corners,
+                    screen_area)
 
 
 def rounded(canvas: tk.Canvas, x0: float, y0: float, x1: float, y1: float, radius: float, **options) -> int:
@@ -155,10 +156,10 @@ class Callout(Tooltip):
         self.ending: str | None = None
         self.at = (0, 0)
 
-    def say(self, text: str, x: int, y: int, wait: int = 0, last: int = 2200) -> None:
-        """Show ``text`` centred under (x, y), after ``wait`` milliseconds, for ``last`` milliseconds."""
+    def say(self, text: str, x: int, y: int, wait: int = 0, last: int = 2200, above: bool = False) -> None:
+        """Show ``text`` centred under (x, y), or over it, after ``wait`` milliseconds, for ``last``."""
         self.hide()
-        self.text, self.at = text, (x, y)
+        self.text, self.at, self.above = text, (x, y), above
         top = self.widget.winfo_toplevel()
         if wait:
             self.job = top.after(wait, self.show)
@@ -170,7 +171,8 @@ class Callout(Tooltip):
         x, y = self.at
         gap = self.theme.px(6)
         area = screen_area(self.widget, x, y)
-        return min(max(x - width // 2, area[0]), area[2] - width), min(y + gap, area[3] - height)
+        top = y - gap - height if getattr(self, "above", False) else y + gap
+        return min(max(x - width // 2, area[0]), area[2] - width), min(max(top, area[1]), area[3] - height)
 
     def hide(self, _: tk.Event | None = None) -> None:
         if self.ending:
@@ -721,6 +723,73 @@ class Sheet(OnPage, tk.Canvas):
                    **options}
         super().__init__(parent, **options)
         self.take_page(theme)
+
+
+class Manuscript(Sheet):
+    """A slip of paper laid on the page to write a score on: plain paper (a Text cannot let the page show
+    through) edged with a fine line of gold, gold line numbers down its left, and the Text (``text``) to
+    write in, with no scrollbar: the wheel and the keys move it.  The line ``wrong`` is shown on a pale red,
+    its number in red."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, font: tuple, numbers: tuple):
+        super().__init__(parent, theme)
+        px = theme.px
+        self.theme, self.numbers = theme, numbers
+        self.descent = int(self.tk.call("font", "metrics", numbers, "-descent"))
+        self.wrong: int | None = None
+        self.job: str | None = None
+        self.gutter = tk.Canvas(self, bg=PAPER, highlightthickness=0, borderwidth=0,
+                                width=theme.measure(numbers, "8888") + px(12))
+        self.text = tk.Text(self, bg=PAPER, fg=INK, font=font, relief="flat", borderwidth=0, highlightthickness=0,
+                            wrap="char", undo=True, maxundo=-1, autoseparators=True, insertbackground=ORANGE,
+                            insertwidth=max(2, round(theme.scale * 1.5)), selectbackground=PEACH,
+                            selectforeground=INK, inactiveselectbackground=HOVER, padx=px(6), pady=px(6),
+                            spacing1=px(1), spacing3=px(1), width=1, height=1,
+                            yscrollcommand=lambda *_: self.later())
+        self.text.tag_configure("wrong", background=WRONG)
+        self.gutter.pack(side="left", fill="y", padx=(1, 0), pady=1)
+        self.text.pack(side="left", fill="both", expand=True, padx=(0, 1), pady=1)
+        self.bind("<Configure>", lambda _: self.redraw(), add="+")
+        self.text.bind("<Configure>", lambda _: self.later(), add="+")
+
+    def redraw(self) -> None:
+        """The slip's gold edge, just round the gutter and the Text."""
+        self.delete("!paper")
+        width, height = self.winfo_width(), self.winfo_height()
+        self.create_rectangle(0, 0, width - 1, height - 1, fill=PAPER, outline=GOLD_SOFT)
+        self.later()
+
+    def later(self) -> None:
+        if self.job is None:
+            self.job = self.winfo_toplevel().after_idle(self.number)
+
+    def mark(self, line: int | None) -> None:
+        """Show line ``line`` (from 1) as the one that cannot be read, or none."""
+        self.text.tag_remove("wrong", "1.0", "end")
+        if line is not None:
+            self.text.tag_add("wrong", f"{line}.0", f"{line}.0 lineend +1c")
+        self.wrong = line
+        self.later()
+
+    def number(self) -> None:
+        """The numbers of the lines in view, each level with its line's first row, and a hairline beside."""
+        self.job = None
+        gutter, text = self.gutter, self.text
+        try:
+            gutter.delete("all")
+            width, height = gutter.winfo_width(), gutter.winfo_height()
+            gutter.create_line(width - 1, 0, width - 1, height, fill=HAIR)
+            first = int(text.index("@0,0").split(".")[0])
+            last = int(text.index(f"@0,{max(text.winfo_height(), 1)}").split(".")[0])
+        except tk.TclError:
+            return
+        for line in range(first, last + 1):
+            found = text.dlineinfo(f"{line}.0")
+            if found is None:
+                continue
+            _, y, _, _, baseline = found
+            gutter.create_text(width - self.theme.px(6), y + baseline + self.descent, text=str(line), anchor="se",
+                               font=self.numbers, fill=WARN if line == self.wrong else GOLD)
 
 
 class Words(OnPage, tk.Canvas):

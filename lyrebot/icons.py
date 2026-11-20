@@ -486,6 +486,31 @@ def corners_in(size: int) -> list[Part]:
                              _corner(inner, far, -reach, reach, pen), _corner(far, far, reach, reach, pen)))]
 
 
+def undo(size: int) -> list[Part]:
+    """↶ in line: an arrow pointing back along the top, its shaft turning round and coming back underneath, the
+    stroke underneath in gilt (an arrowhead in gold comes loose from its line)."""
+    s, pen = size, pen_width(size, 0.052)
+    top, low = snap(s * 0.38, pen), snap(s * 0.70, pen)
+    tip, turn = snap(s * 0.24, pen), snap(s * 0.58, pen)
+    radius = (low - top) / 2
+    steps = 16
+    bend = [(turn + radius * math.sin(math.pi * i / steps), top + radius - radius * math.cos(math.pi * i / steps))
+            for i in range(steps + 1)]
+    head = round(s * 0.11)
+    return [crisp([(turn, top), (tip, top)], pen), stroke([(tip + head, top - head), (tip, top), (tip + head, top + head)], pen),
+            stroke(bend, pen), gilt(crisp([(turn, low), (snap(s * 0.36, pen), low)], pen))]
+
+
+def seal(size: int) -> list[Part]:
+    """A page of writing in line, sealed at its foot in gilt: kept."""
+    s, pen = size, pen_width(size, 0.052)
+    left, right, top, foot = snap(s * 0.24, pen), snap(s * 0.70, pen), snap(s * 0.14, pen), snap(s * 0.80, pen)
+    lines = [crisp([(left + round(s * 0.10), y), (right - round(s * 0.10), y)], pen)
+             for y in (snap(s * 0.32, pen), snap(s * 0.46, pen))]
+    return [crisp(closed([(left, top), (right, top), (right, foot), (left, foot)]), pen), *lines,
+            gilt(circle(s * 0.68, s * 0.76, s * 0.15))]
+
+
 def fleuron(width: int, height: int) -> list[Shape]:
     """·◆·: a small lozenge between two dots, the ornament set into a rule."""
     c, m = math.floor(width / 2) + 0.5, height / 2
