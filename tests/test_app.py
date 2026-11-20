@@ -1081,7 +1081,9 @@ class Folders(unittest.TestCase):
         self.assertIn("第 3 行", app.text_error)
         self.assertEqual(app.manuscript.wrong, 3)
         self.assertEqual(text.tag_ranges("wrong")[0].string, "3.0")
-        self.assertEqual((app.text_status.cget("text"), app.text_status.cget("fg")), (app.text_error, WARN))
+        self.assertEqual(app.text_status.cget("fg"), WARN)  # where in the line is left to the line marked:
+        self.assertEqual(app.text_status.cget("text"), "第 3 行第 1 声部：无法识别的字符 'k'")
+        self.assertIn("（位置：", app.text_error)  # (all of it on save, or on a ribbon)
         with mock.patch.object(app.callout, "say") as said:
             self.assertFalse(app.save_text())
         self.assertIn("第 3 行", said.call_args.args[0])
@@ -1181,6 +1183,75 @@ class Folders(unittest.TestCase):
         text.insert("end", "g---\n")
         self.assertTrue(app.save_text())
         self.assertEqual(path.read_bytes()[:3], b"\xef\xbb\xbf")
+
+    def test_the_text_pages_foot_is_the_score_pages_so_the_rule_stays_put(self):
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.text_page(app, path)
+        app.root.update_idletasks()
+        self.assertEqual(app.undo_button.master.winfo_reqheight(), app.hear_button.master.winfo_reqheight())
+        self.assertEqual(app.text_panel.winfo_reqheight(), app.leaf_panel.winfo_reqheight())
+        px = app.theme.px
+        how = dict(app.text_page)[app.manuscript]
+        self.assertEqual((how["padx"], how["pady"]), (px(22), (px(2), px(8))))  # wider each side, its foot lifted
+
+    def test_the_status_lines_keep_to_one_line(self):
+        from unittest import mock
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.text_page(app, path)
+        status = app.text_status
+        long = "第 3 行：" + "各声部长度不一致，" * 12
+        with mock.patch.object(status, "winfo_width", return_value=app.theme.px(200)):
+            status.configure(text=long)
+            shown = status.words["text"]
+            self.assertTrue(shown.endswith("…"))
+            self.assertLessEqual(app.theme.measure(status.words["font"], shown), app.theme.px(200))
+            self.assertEqual(status.cget("text"), long)  # all of it, for whoever asks
+        with mock.patch.object(status, "winfo_width", return_value=app.theme.px(2000)):
+            status.refit()  # wider: all of it shows
+        self.assertEqual(status.words["text"], long)
+        self.assertIsInstance(app.leaf_status, type(status))
+
+    def test_the_format_card_opens_beside_the_text_and_goes_with_its_page(self):
+        import tkinter as tk
+        from lyrebot.app import App
+        from lyrebot.guide import SECTIONS
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.text_page(app, path)
+        self.assertEqual(app.guide_button.pack_info()["side"], "right")  # at the far right of undo and save's row
+        app.toggle_guide()
+        card = app.guide
+        self.assertTrue(card.winfo_exists())
+        shown = []
+
+        def words(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, tk.Label):
+                    shown.append(child.cget("text"))
+                words(child)
+        words(card)
+        for _, rows in SECTIONS:
+            for code, meaning in rows:
+                self.assertIn(code, shown)
+                self.assertIn(meaning, shown)
+        self.assertIn("qwertyu"[0], shown)
+        app.toggle_guide()  # pressed again: closed
+        self.assertIsNone(app.guide)
+        self.assertFalse(card.winfo_exists())
+        app.toggle_guide()
+        card = app.guide
+        card.event_generate("<Escape>")
+        card.update()
+        self.assertIsNone(app.guide)
+        app.toggle_guide()
+        card = app.guide
+        app.ribbon_turns("green")  # the page turned: it goes too
+        self.assertIsNone(app.guide)
+        self.assertFalse(card.winfo_exists())
 
     def test_closing_with_a_mistake_asks_first(self):
         from unittest import mock

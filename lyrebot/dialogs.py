@@ -9,6 +9,7 @@ Each waits for an answer, as ``tkinter.simpledialog`` and ``tkinter.messagebox``
 from __future__ import annotations
 
 import tkinter as tk
+from typing import Callable
 
 from . import chrome, icons
 from .theme import GOLD_SOFT, INK, MUTED, PAPER, WARN, Theme, dress, geometry, round_corners, screen_area
@@ -38,6 +39,66 @@ def error(title: str, message: str, parent: tk.Misc | None = None) -> None:
 
 def info(title: str, message: str, parent: tk.Misc | None = None) -> None:
     _show(parent, title, title, message, [("知道了", "primary", True)], default=True)
+
+
+def card(parent: tk.Misc, title: str, fill: Callable[[tk.Frame, Theme], None],
+         on_close: Callable[[], None] | None = None) -> tk.Toplevel:
+    """A card to keep open while working, in the dialogs' dress, beside LyreBot's window rather than over it;
+    ``fill`` writes what it holds into the frame it is given.  Unlike the dialogs it does not wait and takes
+    no grab; it closes with ×, Escape or its button, and ``on_close`` is told."""
+    owner = parent.winfo_toplevel()
+    theme = Theme.of(parent)
+    px = theme.px
+    window = tk.Toplevel(owner)
+    window.withdraw()
+    window.title(title)
+    window.configure(bg=PAPER)
+    window.resizable(False, False)
+    leather = chrome.available() and getattr(owner, "lyrebot_frame", None) is not None
+    if owner.winfo_viewable() and not leather:
+        window.transient(owner)
+
+    def close() -> None:
+        if window.winfo_exists():
+            window.destroy()
+        if on_close is not None:
+            on_close()
+    if leather:
+        edges = chrome.Frame(edge=0, caption=0)
+        bar = TitleBar(window, theme, edges, title, "", None, close)
+        bar.pack(fill="x")
+    frame = tk.Frame(window, bg=PAPER)
+    frame.pack(fill="both", padx=px(22), pady=(px(16), px(16)))
+    fill(frame, theme)
+    row = tk.Frame(frame, bg=PAPER)
+    row.pack(fill="x", pady=(px(14), 0))
+    PillButton(row, theme, "收起", close, kind="ghost", least=px(72)).pack(side="right")
+    window.protocol("WM_DELETE_WINDOW", close)
+    window.bind("<Escape>", lambda _: close())
+    window.update_idletasks()
+    window.geometry(geometry(*_beside(owner, window.winfo_reqwidth(), window.winfo_reqheight())))
+    if leather and chrome.adopt(window, edges, see_through=(window, bar), owner=owner):
+        round_corners(window, border=None)
+    else:
+        if leather:
+            bar.destroy()
+        window.deiconify()
+        dress(window)
+    return window
+
+
+def _beside(owner: tk.Misc, width: int, height: int) -> tuple[int, int]:
+    """Beside LyreBot's window, level with its top: to its left where there is room on its screen, else to
+    its right, else over its right-hand side.  Whole on that screen."""
+    gap = Theme.of(owner).px(8)
+    left, top, right, bottom = screen_area(owner, owner.winfo_rootx() + owner.winfo_width() / 2,
+                                           owner.winfo_rooty() + owner.winfo_height() / 2)
+    x = owner.winfo_rootx() - width - gap
+    if x < left:
+        x = owner.winfo_rootx() + owner.winfo_width() + gap
+        if x + width > right:
+            x = right - width
+    return min(max(x, left), right - width), min(max(owner.winfo_rooty(), top), bottom - height)
 
 
 def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: list[tuple[str, str, object]],

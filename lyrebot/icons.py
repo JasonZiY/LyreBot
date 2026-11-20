@@ -511,6 +511,16 @@ def seal(size: int) -> list[Part]:
             gilt(circle(s * 0.68, s * 0.76, s * 0.15))]
 
 
+def question(size: int) -> list[Part]:
+    """? in line, its dot in gilt: what may be written in a score."""
+    s, pen = size, pen_width(size, 0.052)
+    c, top, radius = snap(s / 2, pen), s * 0.38, s * 0.15
+    steps = 30
+    hook = [(c + radius * math.cos(math.pi * (1 + 1.5 * i / steps)), top + radius * math.sin(math.pi * (1 + 1.5 * i / steps)))
+            for i in range(steps + 1)]
+    return [stroke(hook + [(c, top + radius), (c, s * 0.64)], pen), gilt(circle(c, s * 0.79, max(1.2, s * 0.055)))]
+
+
 def fleuron(width: int, height: int) -> list[Shape]:
     """·◆·: a small lozenge between two dots, the ornament set into a rule."""
     c, m = math.floor(width / 2) + 0.5, height / 2

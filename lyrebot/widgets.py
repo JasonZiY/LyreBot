@@ -842,6 +842,48 @@ class Words(OnPage, tk.Canvas):
         self.coords(item, x, (height - tall) / 2)
 
 
+class OneLine(Words):
+    """Words kept to one line, as a page's status line under its buttons must be so that nothing above it
+    moves: words too long for the width end in "…".  ``cget("text")`` answers with all of them."""
+
+    def __init__(self, parent: tk.Misc, theme: Theme, text: str = "", **options):
+        self.whole = text
+        super().__init__(parent, theme, text=text, **options)
+        self.bind("<Configure>", lambda _: self.refit(), add="+")
+
+    def configure(self, cnf=None, **options):  # type: ignore[override]
+        if "text" in options:
+            self.whole = options["text"]
+            options["text"] = self.fitted(self.whole)
+        return super().configure(cnf, **options)
+
+    config = configure  # type: ignore[assignment]
+
+    def cget(self, key: str):  # type: ignore[override]
+        return self.whole if key == "text" else super().cget(key)
+
+    def fitted(self, text: str) -> str:
+        width = self.winfo_width()
+        if width <= 1 or "\n" in text:  # not laid out yet
+            return text
+        room, font = width - 2 * self.PAD, self.words["font"]
+        if self.theme.measure(font, text) <= room:
+            return text
+        low, high = 0, len(text)  # the most of it that fits with "…" after it
+        while low < high:
+            middle = (low + high + 1) // 2
+            if self.theme.measure(font, text[:middle] + "…") <= room:
+                low = middle
+            else:
+                high = middle - 1
+        return text[:low].rstrip() + "…"
+
+    def refit(self) -> None:
+        shown = self.fitted(self.whole)
+        if shown != self.words["text"]:
+            Words.configure(self, text=shown)
+
+
 class Picture(OnPage, tk.Canvas):
     """An image on the page, standing in for a tk.Label showing it (with a Label's padding)."""
 

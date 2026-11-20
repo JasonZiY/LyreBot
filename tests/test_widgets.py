@@ -59,7 +59,7 @@ class Drawing(unittest.TestCase):
         for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
                      icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
                      icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross,
-                     icons.corners_out, icons.corners_in, icons.undo, icons.seal):
+                     icons.corners_out, icons.corners_in, icons.undo, icons.seal, icons.question):
             pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
         width = icons.fleuron_width(7)
@@ -79,7 +79,8 @@ class Drawing(unittest.TestCase):
     def test_the_gilt_is_laid_in_gold_and_the_lines_in_ink(self):
         ink, gold = "#2B2722", "#B08D57"
         for draw in (icons.next_track, icons.keyboard, icons.magnifier, icons.folder, icons.move_to, icons.quill,
-                     icons.score_page, icons.pen_nib, icons.corners_out, icons.corners_in, icons.undo, icons.seal):
+                     icons.score_page, icons.pen_nib, icons.corners_out, icons.corners_in, icons.undo, icons.seal,
+                     icons.question):
             colors = {color for color, _ in icons.paint(draw(18), ink, gold)}
             self.assertEqual(colors, {ink, gold}, draw.__name__)  # every one has lines and a touch of gold
         self.assertEqual({color for color, _ in icons.paint(icons.folder(18), "#C9BFAE")}, {"#C9BFAE"})  # off: all faint

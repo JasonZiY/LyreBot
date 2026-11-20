@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import messagebox as system_dialogs
 from typing import Callable
 
-from . import chrome, dialogs, icons
+from . import chrome, dialogs, guide, icons
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .collate import pinyin_key
@@ -41,8 +41,8 @@ from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER
                     screen_holding)
 from .timeline import compile_ringing, compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Callout, Choice, IconButton, Manuscript, Ornament, PageLine, Picture, PopupMenu, Sheet,
-                      TitleBar, Words)
+from .widgets import (Callout, Choice, IconButton, Manuscript, OneLine, Ornament, PageLine, Picture, PopupMenu,
+                      Sheet, TitleBar, Words)
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -77,7 +77,7 @@ GROW_TIP, SHRINK_TIP = "放大：一行四小节，放得下相邻四行", "缩�
 # The second ribbon, green, on the 简谱 page and the page behind it, where the score's text is written.
 GREEN_FROM_RIGHT = 74  # its left edge, from the window's right, at 100% scaling: beside the orange one
 TO_TEXT, TO_LEAF = "翻到原文，修改", "翻回简谱"
-UNDO_TIP, SAVE_TIP = "撤销（Ctrl+Z）", "保存（Ctrl+S）"
+UNDO_TIP, SAVE_TIP, GUIDE_TIP = "撤销（Ctrl+Z）", "保存（Ctrl+S）", "曲谱格式速查"
 SAVED, CHANGED = "已保存", "有改动，还没保存"
 TEXT_HINT = "停手半秒就查一遍错；翻页时没存的改动会自动存"
 CHECK_AFTER = 500  # milliseconds after the last change before the text is read for mistakes
@@ -824,6 +824,7 @@ class App:
         self.text_score: Score | None = None
         self.text_job: str | None = None
         self.text_kept = False  # saved since it was last changed
+        self.guide: tk.Toplevel | None = None  # the format's card, while it is open (``toggle_guide``)
         self.leaf_song: tuple[Path, float, Score, object, float] | None = None  # on it: file, its time, score,
         self.leaf_from: float | None = None  # timeline, speed; and where ▶ goes on from (seconds), if stopped
         self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
@@ -1120,6 +1121,7 @@ class App:
         self.grow_images = plain("grow", icons.corners_out)  # the 简谱 page's window, larger
         self.undo_images = plain("undo", icons.undo)  # the text page's
         self.save_images = plain("save", icons.seal)
+        self.guide_images = plain("guide", icons.question)
         self.shrink_images = plain("shrink", icons.corners_in)  # and back to the narrow one
         self.restart_images = plain("restart", icons.restart)
         self.keys_images = plain("keys", icons.keyboard)
@@ -1980,10 +1982,8 @@ class App:
         self.leaf_time.pack(side="right", padx=(0, px(10)))
         self.leaf_bar = Words(row, theme, fg=MUTED, font=fonts.figures)
         self.leaf_bar.pack(side="right", padx=(0, px(10)))
-        self.leaf_status = Words(self.leaf_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.leaf_status = OneLine(self.leaf_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
         self.leaf_status.pack(fill="x", pady=(px(4), 0))
-        self.leaf_panel.bind("<Configure>", lambda event: self.leaf_status.configure(wraplength=event.width),
-                             add="+")
         # From the foot up, as on the songs' page; the head keeps clear of the ribbon on either side.
         self.leaf_page = [(self.leaf_panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
                           (self.leaf_rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
@@ -2133,7 +2133,11 @@ class App:
 
     def turn_to(self, where: str) -> None:
         """Show page ``where`` ("songs", "leaf" or "text") in place of the others, which are put away; the green
-        ribbon hangs on the 简谱 page and the text page only."""
+        ribbon hangs on the 简谱 page and the text page only, and the format's card goes with the text page."""
+        if where != "text" and self.guide is not None:
+            if self.guide.winfo_exists():
+                self.guide.destroy()
+            self.guide = None
         for name, pieces in self.pages.items():
             if name != where:
                 for piece, _ in pieces:
@@ -2337,19 +2341,23 @@ class App:
         self.text_panel = Sheet(root, theme)
         row = Sheet(self.text_panel, theme)
         row.pack(fill="x")
+        # The row is as tall as the 简谱 page's, which holds ▶, so that the ·◆· rule over it stays put when the
+        # page is turned: the smaller buttons sit in its middle.
+        spare = (self.play_images["normal"].height() + 2) - (self.undo_images["normal"].height() + 2)
+        middle = (max(spare, 0) // 2, max(spare, 0) - max(spare, 0) // 2)
         self.undo_button = IconButton(row, self.undo_images, self.undo_text, UNDO_TIP, theme)
-        self.undo_button.pack(side="left")
+        self.undo_button.pack(side="left", pady=middle)
         self.save_button = IconButton(row, self.save_images, self.save_text, SAVE_TIP, theme)
-        self.save_button.pack(side="left", padx=(px(6), 0))
-        self.text_status = Words(self.text_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
+        self.save_button.pack(side="left", padx=(px(6), 0), pady=middle)
+        self.guide_button = IconButton(row, self.guide_images, self.toggle_guide, GUIDE_TIP, theme)
+        self.guide_button.pack(side="right", pady=middle)
+        self.text_status = OneLine(self.text_panel, theme, fg=MUTED, font=fonts.small, anchor="w", justify="left")
         self.text_status.pack(fill="x", pady=(px(4), 0))
-        self.text_panel.bind("<Configure>", lambda event: self.text_status.configure(wraplength=event.width),
-                             add="+")
         self.text_page = [(self.text_panel, dict(side="bottom", fill="x", padx=px(12), pady=(px(6), px(12)))),
                           (self.text_rule, dict(side="bottom", fill="x", padx=px(14), pady=(px(6), 0))),
                           (self.text_head, dict(side="top", fill="x", padx=px(GREEN_FROM_RIGHT + 6),
                                                 pady=(px(12), px(4)))),
-                          (self.manuscript, dict(fill="both", expand=True, padx=(px(14), px(14)), pady=(px(2), 0)))]
+                          (self.manuscript, dict(fill="both", expand=True, padx=px(22), pady=(px(2), px(8))))]
 
     def show_text(self) -> None:
         """Turn from the 简谱 page to its song's text, read from its file as it is now: the version undo goes
@@ -2441,12 +2449,27 @@ class App:
         text = self.text_box
         self.undo_button.set(enabled=bool(int(text.edit("canundo"))))
         changed = text.get("1.0", "end-1c") != self.text_saved
-        if self.text_error is not None:
-            self.text_status.configure(text=self.text_error, fg=WARN)
+        if self.text_error is not None:  # (where in the line: the line is marked; all of it on save or a ribbon)
+            self.text_status.configure(text=re.sub(r"（位置：[^）]*）$", "", self.text_error), fg=WARN)
         elif changed:
             self.text_status.configure(text=f"{CHANGED} · Ctrl+S 保存", fg=MUTED)
         else:
             self.text_status.configure(text=SAVED if self.text_kept else TEXT_HINT, fg=MUTED)
+
+    def toggle_guide(self) -> None:
+        """The text page's ? button: the format's card beside the window, or, while it is open, closed.  The
+        keyboard stays with the text."""
+        if self.guide is not None and self.guide.winfo_exists():
+            self.guide.destroy()
+            self.guide = None
+        else:
+            self.guide = dialogs.card(self.root, guide.TITLE, guide.fill, on_close=self.guide_closed)
+            self.root.after(60, self.text_box.focus_force)
+
+    def guide_closed(self) -> None:
+        self.guide = None
+        if self.where == "text":
+            self.text_box.focus_force()
 
     def undo_text(self) -> None:
         """Undo the last change, no further back than the text as it was when the page was turned to."""
