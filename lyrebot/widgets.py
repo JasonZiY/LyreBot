@@ -727,14 +727,16 @@ class Sheet(OnPage, tk.Canvas):
 
 class Manuscript(Sheet):
     """A slip of paper laid on the page to write a score on: plain paper (a Text cannot let the page show
-    through) edged with a fine line of gold, gold line numbers down its left, and the Text (``text``) to
-    write in, with no scrollbar: the wheel and the keys move it.  The line ``wrong`` is shown on a pale red,
-    its number in red."""
+    through) edged with a fine line of gold, gold numbers down its left, and the Text (``text``) to write in,
+    with no scrollbar: the wheel and the keys move it.  Only the lines ``numbered`` picks from the text are
+    numbered, 1, 2, 3 in order (a score's bars: ``score.measure_lines``), counted afresh as it is written.
+    The line ``wrong`` is shown on a pale red, its number in red."""
 
-    def __init__(self, parent: tk.Misc, theme: Theme, font: tuple, numbers: tuple):
+    def __init__(self, parent: tk.Misc, theme: Theme, font: tuple, numbers: tuple,
+                 numbered: Callable[[str], list[int]]):
         super().__init__(parent, theme)
         px = theme.px
-        self.theme, self.numbers = theme, numbers
+        self.theme, self.numbers, self.numbered = theme, numbers, numbered
         self.descent = int(self.tk.call("font", "metrics", numbers, "-descent"))
         self.wrong: int | None = None
         self.job: str | None = None
@@ -751,6 +753,9 @@ class Manuscript(Sheet):
         self.text.pack(side="left", fill="both", expand=True, padx=(0, 1), pady=1)
         self.bind("<Configure>", lambda _: self.redraw(), add="+")
         self.text.bind("<Configure>", lambda _: self.later(), add="+")
+        # A change can move the numbers without moving the view (a blank line written on becomes a bar).
+        # Whoever else binds <<Modified>> must add to this, and clear the flag so that the next change is told.
+        self.text.bind("<<Modified>>", lambda _: self.later(), add="+")
 
     def redraw(self) -> None:
         """The slip's gold edge, just round the gutter and the Text."""
@@ -772,7 +777,8 @@ class Manuscript(Sheet):
         self.later()
 
     def number(self) -> None:
-        """The numbers of the lines in view, each level with its line's first row, and a hairline beside."""
+        """The numbers of the numbered lines in view, each level with its line's first row, and a hairline
+        beside."""
         self.job = None
         gutter, text = self.gutter, self.text
         try:
@@ -781,15 +787,17 @@ class Manuscript(Sheet):
             gutter.create_line(width - 1, 0, width - 1, height, fill=HAIR)
             first = int(text.index("@0,0").split(".")[0])
             last = int(text.index(f"@0,{max(text.winfo_height(), 1)}").split(".")[0])
+            numbers = {line: number for number, line in enumerate(self.numbered(text.get("1.0", "end-1c")), 1)}
         except tk.TclError:
             return
         for line in range(first, last + 1):
-            found = text.dlineinfo(f"{line}.0")
+            number = numbers.get(line)
+            found = text.dlineinfo(f"{line}.0") if number is not None else None
             if found is None:
                 continue
             _, y, _, _, baseline = found
-            gutter.create_text(width - self.theme.px(6), y + baseline + self.descent, text=str(line), anchor="se",
-                               font=self.numbers, fill=WARN if line == self.wrong else GOLD)
+            gutter.create_text(width - self.theme.px(6), y + baseline + self.descent, text=str(number),
+                               anchor="se", font=self.numbers, fill=WARN if line == self.wrong else GOLD)
 
 
 class Words(OnPage, tk.Canvas):

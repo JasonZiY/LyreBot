@@ -300,6 +300,20 @@ def _parse_ms(name: str, value: str, line: int) -> float:
     return number
 
 
+def _content(raw: str) -> str:
+    """A line as a score is read: its comment and all its spaces taken out."""
+    return "".join(raw.split("#", 1)[0].split())
+
+
+def measure_lines(text: str) -> list[int]:
+    """The lines (from 1) that are measures, in order: bar n is written on the n-th.  A line is told as
+    ``parse_score`` tells it (not empty once its comment is gone, and not a directive such as speed=), but
+    the text need not read as a score: a measure with a mistake in it is still a measure, so the numbers
+    stay put while one is being written."""
+    return [number for number, raw in enumerate(text.removeprefix("﻿").splitlines(), start=1)
+            if (content := _content(raw)) and not _DIRECTIVE.fullmatch(content)]
+
+
 def parse_score(text: str) -> Score:
     """Parse a score, or raise ScoreError naming the line and part at fault."""
     text = text.removeprefix("﻿")
@@ -313,7 +327,7 @@ def parse_score(text: str) -> Score:
     roll_ms, grace_ms = DEFAULT_ROLL_MS, DEFAULT_GRACE_MS
 
     for number, raw in enumerate(text.splitlines(), start=1):
-        content = "".join(raw.split("#", 1)[0].split())
+        content = _content(raw)
         if not content:
             continue
         directive = _DIRECTIVE.fullmatch(content)

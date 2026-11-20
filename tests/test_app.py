@@ -1087,15 +1087,15 @@ class Folders(unittest.TestCase):
         text = self.text_page(app, path)
         self.write(text, "speed=60\na-s-d-f-\nk-\n")
         app.check_text()
-        self.assertIn("第 3 行", app.text_error)
+        self.assertIn("第 2 小节", app.text_error)  # (line 3: the slip numbers bars, so it is said by bar)
         self.assertEqual(app.manuscript.wrong, 3)
         self.assertEqual(text.tag_ranges("wrong")[0].string, "3.0")
         self.assertEqual(app.text_status.cget("fg"), WARN)  # where in the line is left to the line marked:
-        self.assertEqual(app.text_status.cget("text"), "第 3 行第 1 声部：无法识别的字符 'k'")
+        self.assertEqual(app.text_status.cget("text"), "第 2 小节第 1 声部：无法识别的字符 'k'")
         self.assertIn("（位置：", app.text_error)  # (all of it on save, or on a ribbon)
         with mock.patch.object(app.callout, "say") as said:
             self.assertFalse(app.save_text())
-        self.assertIn("第 3 行", said.call_args.args[0])
+        self.assertIn("第 2 小节", said.call_args.args[0])
         self.assertEqual(path.read_text(encoding="utf-8"), before)  # not written
         root, px = app.root, app.theme.px
         for from_right in (59, 74):  # either ribbon: tugged, the page staying, the mistake said
@@ -1105,12 +1105,59 @@ class Folders(unittest.TestCase):
                 self.assertEqual(app.ribbon_press(on), "break")
                 app.finish_tug()
             self.assertEqual(app.where, "text")
-            self.assertIn("第 3 行", said.call_args.args[0])
+            self.assertIn("第 2 小节", said.call_args.args[0])
         self.write(text, "speed=60\na-s-d-f-\ng---\n")
         app.check_text()
         self.assertIsNone(app.text_error)
         self.assertIsNone(app.manuscript.wrong)
         self.assertEqual(text.tag_ranges("wrong"), ())
+
+    def test_a_mistake_off_the_bars_is_still_said_by_line(self):
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.write(text, "speed=60\na-s-d-f-\nspeed=fast\ng-\n")
+        app.check_text()
+        self.assertIn("第 3 行", app.text_error)  # a directive: no number on the slip to say it by
+        self.assertEqual(app.manuscript.wrong, 3)
+
+    def numbers(self, app, draw=True):
+        """The numbers down the slip's left, each with the line it stands beside: drawn afresh, or (``draw``
+        false) as the slip has drawn them by itself."""
+        app.root.update()
+        if draw:
+            app.manuscript.number()
+        gutter, text = app.manuscript.gutter, app.text_box
+        found = []
+        for item in gutter.find_withtag("all"):
+            if gutter.type(item) != "text":
+                continue
+            y = gutter.coords(item)[1]
+            line = next(line for line in range(1, int(text.index("end").split(".")[0]))
+                        if (row := text.dlineinfo(f"{line}.0")) and row[1] <= y <= row[1] + row[3] + 2)
+            found.append((gutter.itemcget(item, "text"), line))
+        return sorted(found, key=lambda pair: pair[1])
+
+    def test_the_slip_numbers_the_bars_not_the_lines(self):
+        from lyrebot.app import App
+        from lyrebot.theme import GOLD, WARN
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        text = self.text_page(app, path)
+        self.assertEqual(self.numbers(app), [("1", 2), ("2", 3), ("3", 4)])  # speed=60 has none
+        self.write(text, "speed=60\n# 前奏\na-s-d-f-\n\ng-h-j-q-  # 二\nspeed=90\nw-e-r-t-\n")
+        self.assertEqual(self.numbers(app), [("1", 3), ("2", 5), ("3", 7)])
+        text.insert("4.0", "z---")  # the blank line written on: a bar, and the ones after it renumbered,
+        self.assertEqual(self.numbers(app, draw=False), [("1", 3), ("2", 4), ("3", 5), ("4", 7)])  # unasked
+        text.insert("5.0", "k")  # a mistake: its bar keeps its number, in red
+        app.check_text()
+        app.manuscript.number()
+        gutter = app.manuscript.gutter
+        colours = {gutter.itemcget(item, "text"): gutter.itemcget(item, "fill")
+                   for item in gutter.find_withtag("all") if gutter.type(item) == "text"}
+        self.assertEqual(colours, {"1": GOLD, "2": GOLD, "3": WARN, "4": GOLD})
+        self.assertIn("第 3 小节", app.text_error)
 
     def test_undo_goes_back_no_further_than_the_text_was_when_the_page_opened(self):
         from lyrebot.app import App
@@ -1308,7 +1355,7 @@ class Folders(unittest.TestCase):
         with mock.patch("lyrebot.app.dialogs.confirm", return_value=False) as asked, \
                 mock.patch.object(app.callout, "say"):
             app.close()
-        self.assertIn("第 2 行", asked.call_args.args[1])
+        self.assertIn("第 1 小节", asked.call_args.args[1])
         self.assertFalse(app.closing)
 
     def test_turning_back_stops_hearing_and_the_game_turns_back_to_the_songs(self):

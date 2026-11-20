@@ -34,7 +34,7 @@ from .notate import notate
 from .paper import OnPage, Page, ScrollingPage
 from .player import play
 from .record import SILENCE, WAIT, record
-from .score import Score, ScoreError, load_score, parse_score, score_files
+from .score import Score, ScoreError, load_score, measure_lines, parse_score, score_files
 from .scoreview import ScoreView
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
                     ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
@@ -2333,9 +2333,9 @@ class App:
         self.text_about.pack(fill="x")
         self.text_head.bind("<Configure>", lambda event: [words.configure(wraplength=event.width)
                                                           for words in (self.text_title, self.text_about)], add="+")
-        self.manuscript = Manuscript(root, theme, fonts.mono, fonts.figures)
+        self.manuscript = Manuscript(root, theme, fonts.mono, fonts.figures, measure_lines)
         self.text_box = text = self.manuscript.text
-        text.bind("<<Modified>>", self.text_changed)
+        text.bind("<<Modified>>", self.text_changed, add="+")
         text.bind("<Control-s>", lambda _: self.save_text() and "break" or "break")
         text.bind("<Control-S>", lambda _: self.save_text() and "break" or "break")
         text.bind("<<Undo>>", lambda _: self.undo_text() or "break")
@@ -2434,16 +2434,22 @@ class App:
         self.show_text_state()
 
     def check_text(self) -> None:
-        """Read the text as a score: its mistake, if any, said and its line marked; the score kept if it reads."""
+        """Read the text as a score: its mistake, if any, said and its line marked; the score kept if it reads.
+        The slip numbers bars, not lines, so a mistake in a bar is said by the bar's number."""
         if self.text_job is not None:
             self.root.after_cancel(self.text_job)
             self.text_job = None
+        written = self.text_box.get("1.0", "end-1c")
         try:
-            self.text_score, self.text_error = parse_score(self.text_box.get("1.0", "end-1c")), None
+            self.text_score, self.text_error = parse_score(written), None
         except ScoreError as error:
             self.text_score, self.text_error = None, str(error)
         found = re.search(r"第 (\d+) 行", self.text_error or "")
-        self.manuscript.mark(int(found.group(1)) if found else None)
+        line = int(found.group(1)) if found else None
+        self.manuscript.mark(line)
+        bars = measure_lines(written)
+        if found and line in bars:  # (a directive's line has no number on the slip: it is still said by line)
+            self.text_error = self.text_error.replace(found.group(0), f"第 {bars.index(line) + 1} 小节", 1)
         self.show_text_state()
 
     def show_text_state(self) -> None:

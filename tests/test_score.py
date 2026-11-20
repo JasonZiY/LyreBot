@@ -3,7 +3,7 @@ from pathlib import Path
 import math
 import unittest
 
-from lyrebot.score import ScoreError, Strike, load_score, parse_score, score_files
+from lyrebot.score import ScoreError, Strike, load_score, measure_lines, parse_score, score_files
 
 MUSIC = Path(__file__).resolve().parent.parent / "txt"
 
@@ -125,6 +125,18 @@ class Errors(unittest.TestCase):
 
     def test_errors_show_line_and_part(self):
         self.check("speed=60\n\n# note\na-|z-x\n", "第 4 行第 2 声部")
+
+
+class MeasureLines(unittest.TestCase):
+    def test_the_lines_bars_are_written_on_as_the_score_reads_them(self):
+        text = "\ufeffspeed=60\n# a comment\na-|z-\n\n  roll=30  # a directive\nk-  # wrong, still a bar\n--|x-\n"
+        self.assertEqual(measure_lines(text), [3, 6, 7])
+        good = "speed=60\n# note\na-s-\n\nspeed=90\nd-f-  # two\n"
+        self.assertEqual(len(measure_lines(good)), len(parse_score(good).bars))
+
+    def test_no_bars(self):
+        self.assertEqual(measure_lines(""), [])
+        self.assertEqual(measure_lines("speed=60\n# only words\n\n"), [])
 
 
 class Ties(unittest.TestCase):
