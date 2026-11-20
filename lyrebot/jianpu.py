@@ -566,14 +566,20 @@ def _natural(points, length: Fraction) -> tuple[list[float], list[Fraction]]:
     return gaps, spans
 
 
-def layout_rows(sheet: Sheet, left: float = LEFT, right: float = RIGHT) -> list[list[Bar]]:
-    """Bars packed into systems (at most four, or six short ones) and spread from ``left`` to ``right``."""
+def bar_width(bar: Bar) -> float:
+    """How wide ``bar`` is laid out before being spread to a line."""
+    return sum(_natural(_bar_points(bar), bar.length)[0])
+
+
+def layout_rows(sheet: Sheet, left: float = LEFT, right: float = RIGHT, most: int | None = None) -> list[list[Bar]]:
+    """Bars packed into systems (at most ``most``: four, or six short ones) and spread from ``left`` to
+    ``right``."""
     natural = []
     for bar in sheet.bars:
         gaps, spans = _natural(_bar_points(bar), bar.length)
         natural.append((gaps, spans))
     width = right - left
-    most = 6 if sheet.meter[0] * 4 / sheet.meter[1] <= 2 else 4
+    most = most or (6 if sheet.meter[0] * 4 / sheet.meter[1] <= 2 else 4)
     rows: list[list[int]] = []
     row: list[int] = []
     used = 0.0
@@ -820,7 +826,9 @@ def draw_system(canvas, sheet: Sheet, system: list[Bar], row: int, y: float,
     ``previous`` carries each staff's last symbol on to the next system, for the ties."""
     marks, sizes = _sizes(sheet, system)
     left = system[0].x
-    canvas.text(left - 26, y + 12, f"({system[0].number})", 12, anchor="start", weight="normal")
+    number = getattr(canvas, "bar_number", None)  # a canvas may number every bar itself, at its bar line
+    if number is None:  # (printed: the first bar's number before the line)
+        canvas.text(left - 26, y + 12, f"({system[0].number})", 12, anchor="start", weight="normal")
     top = y + 18
     boxes = []
     for above, below, lines in sizes:
@@ -833,6 +841,8 @@ def draw_system(canvas, sheet: Sheet, system: list[Bar], row: int, y: float,
         _brace(canvas, left - 10, line_top[0], line_bottom[-1], rule)
     canvas.line(left, line_top[0], left, line_bottom[-1], 1.4, rule)
     for bar in system:
+        if number:
+            number(bar, bar.x, y + 12)
         for staff, box in enumerate(boxes):
             _draw_bar_staff(canvas, bar, staff, box, row, previous)
         end = bar.x + bar.width

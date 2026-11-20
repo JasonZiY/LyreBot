@@ -459,6 +459,33 @@ def pen_nib(size: int) -> list[Part]:
             gilt(circle(c, hole, max(s * 0.08, 1.0)))]
 
 
+def _corner(x: float, y: float, dx: float, dy: float, pen: int) -> Shape:
+    """A corner in line: from (x, y) along ``dx`` and along ``dy``."""
+    return crisp([(x + dx, y), (x, y), (x, y + dy)], pen)
+
+
+def corners_out(size: int) -> list[Part]:
+    """A small page in line, and four gilt corners out at the icon's corners: the window made larger."""
+    s, pen = size, pen_width(size, 0.052)
+    near, far = snap(s * 0.40, pen), snap(s * 0.60, pen)
+    edge, reach = snap(s * 0.20, pen), round(s * 0.16)
+    page = crisp(closed([(near, near), (far, near), (far, far), (near, far)]), pen)
+    out = s - edge
+    return [page, gilt(union(_corner(edge, edge, reach, reach, pen), _corner(out, edge, -reach, reach, pen),
+                             _corner(edge, out, reach, -reach, pen), _corner(out, out, -reach, -reach, pen)))]
+
+
+def corners_in(size: int) -> list[Part]:
+    """A large page in line, and four gilt corners drawn in towards its middle: back to the narrow window."""
+    s, pen = size, pen_width(size, 0.052)
+    edge = snap(s * 0.20, pen)
+    page = crisp(closed([(edge, edge), (s - edge, edge), (s - edge, s - edge), (edge, s - edge)]), pen)
+    inner, reach = snap(s * 0.43, pen), round(s * 0.11)
+    far = s - inner
+    return [page, gilt(union(_corner(inner, inner, -reach, -reach, pen), _corner(far, inner, reach, -reach, pen),
+                             _corner(inner, far, -reach, reach, pen), _corner(far, far, reach, reach, pen)))]
+
+
 def fleuron(width: int, height: int) -> list[Shape]:
     """·◆·: a small lozenge between two dots, the ornament set into a rule."""
     c, m = math.floor(width / 2) + 0.5, height / 2

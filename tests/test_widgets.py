@@ -11,7 +11,7 @@ import zlib
 
 from lyrebot import chrome, dialogs, icons
 from lyrebot.theme import Theme, fit, geometry, screen_area
-from lyrebot.widgets import Choice, PageLine, PillButton, PopupMenu, ThinScrollbar, TitleBar, Tooltip, WritingLine
+from lyrebot.widgets import Choice, PageLine, PillButton, PopupMenu, TitleBar, Tooltip, WritingLine
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_app import hidden_window
@@ -58,7 +58,8 @@ class Drawing(unittest.TestCase):
     def test_every_icon_draws(self):
         for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
                      icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
-                     icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross):
+                     icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross,
+                     icons.corners_out, icons.corners_in):
             pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
         width = icons.fleuron_width(7)
@@ -78,7 +79,7 @@ class Drawing(unittest.TestCase):
     def test_the_gilt_is_laid_in_gold_and_the_lines_in_ink(self):
         ink, gold = "#2B2722", "#B08D57"
         for draw in (icons.next_track, icons.keyboard, icons.magnifier, icons.folder, icons.move_to, icons.quill,
-                     icons.score_page, icons.pen_nib):
+                     icons.score_page, icons.pen_nib, icons.corners_out, icons.corners_in):
             colors = {color for color, _ in icons.paint(draw(18), ink, gold)}
             self.assertEqual(colors, {ink, gold}, draw.__name__)  # every one has lines and a touch of gold
         self.assertEqual({color for color, _ in icons.paint(icons.folder(18), "#C9BFAE")}, {"#C9BFAE"})  # off: all faint
@@ -340,18 +341,6 @@ class Pieces(unittest.TestCase):
             bar.release(at(box))
         self.assertEqual(pressed, ["minimise", "close"])
         self.assertIsNone(bar.inside)
-
-    def test_the_scrollbar_pages_and_drags(self):
-        moves = []
-        bar = ThinScrollbar(self.root, self.theme, lambda *args: moves.append(args))
-        bar.winfo_height = lambda: 200
-        bar.set(0.25, 0.5)
-        self.assertEqual(bar.thumb(), (50.0, 100.0))
-        bar.press(SimpleNamespace(y=150))
-        self.assertEqual(moves[-1], ("scroll", 1, "pages"))
-        bar.press(SimpleNamespace(y=60))
-        bar.motion(SimpleNamespace(y=80))
-        self.assertEqual(moves[-1], ("moveto", 0.35))
 
 
 class Menus(unittest.TestCase):

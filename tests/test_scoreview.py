@@ -115,6 +115,48 @@ class View(unittest.TestCase):
             view.finish()
         self.assertEqual(len(view.curves), kept)  # (each picture holds Windows' drawing objects)
 
+    def test_four_bars_a_line_fits_the_widest_line_and_the_tallest_four_lines(self):
+        from lyrebot.scoreview import ScoreView
+        from lyrebot.theme import Theme
+        root = hidden_window(self)
+        view = ScoreView(root, Theme(root), lambda index: None)
+        text = "speed=60\n" + "a.s.d.f.g.h.j.q.\n" * 5 + "a-s-d-f-\n" * 6 + "^adg-^sfh-q-w-\n" * 7
+        view.show(jianpu.sheet_of(text, "十八小节"))  # 18 bars: lines of 4, 4, 4, 4 and 2
+        width, height = view.four_bars()
+        view.most = 4
+        view.configure(width=width)
+        view.lay_out()
+        self.assertEqual([len(row) for row in jianpu.layout_rows(view.sheet, 20, width / view.scale - 10, 4)],
+                         [4, 4, 4, 4, 2])
+        self.assertEqual(len(view.rows), 5)
+        tallest = max(view.rows[at + 3][1] - view.rows[at][0] for at in range(2))
+        fades = 2 * view.theme.px(18)
+        self.assertGreaterEqual(height, tallest + fades)
+        self.assertLess(height, tallest + fades + 3)  # just fitting
+        view.configure(width=width - 30)  # any narrower and a line of four does not fit
+        view.lay_out()
+        self.assertGreater(len(view.rows), 5)
+        short, _ = self.view(300)
+        _, all_of_it = short.four_bars()  # four lines or fewer: as tall as all of it
+        short.most = 4
+        short.configure(width=short.four_bars()[0])
+        short.lay_out()
+        self.assertEqual(all_of_it, short.extent)
+
+    def test_every_bar_is_numbered_in_gold_and_the_one_heard_in_orange(self):
+        from lyrebot.theme import GOLD, ORANGE
+        view, _ = self.view(400)
+        view.finish()
+        numbers = {view.itemcget(item, "text"): item for item in view.find_withtag("number")}
+        self.assertEqual(sorted(numbers, key=int), ["1", "2", "3", "4"])
+        self.assertTrue(all(view.itemcget(item, "fill") == GOLD for item in numbers.values()))
+        view.heard(5.5, follow=False)  # in the second bar
+        self.assertEqual(view.itemcget(numbers["2"], "fill"), ORANGE)
+        view.heard(12.5, follow=False)
+        self.assertEqual((view.itemcget(numbers["2"], "fill"), view.itemcget(numbers["4"], "fill")), (GOLD, ORANGE))
+        view.heard(None)
+        self.assertTrue(all(view.itemcget(item, "fill") == GOLD for item in numbers.values()))
+
     def test_a_click_names_the_note_under_it(self):
         from types import SimpleNamespace
         view, clicked = self.view(400)

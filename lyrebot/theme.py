@@ -172,11 +172,11 @@ class Theme:
         """The lyre, pressed into the paper."""
         return self.image(f"watermark:{WATERMARK}", size, size, lambda: icons.paint(icons.lyre(size), WATERMARK))
 
-    def ribbon(self) -> tk.PhotoImage:
-        """The bookmark's ribbon, with its shadow."""
+    def ribbon(self, extra: int = 0) -> tk.PhotoImage:
+        """The bookmark's ribbon, with its shadow; ``extra`` pixels longer (or shorter) while it is tugged."""
         px = self.px
-        band, length, notch, drop = px(10.5), px(37), px(5), px(1.5)
-        return self.image("ribbon", band + drop + 1, length + drop + 1,
+        band, length, notch, drop = px(10.5), px(37) + extra, px(5), px(1.5)
+        return self.image(f"ribbon:{extra}" if extra else "ribbon", band + drop + 1, length + drop + 1,
                           lambda: icons.ribbon(band, length, notch, drop, RIBBON, RIBBON_FOLD, RIBBON_TUCK,
                                                RIBBON_SHADE, RIBBON_SHADE_FAR))
 

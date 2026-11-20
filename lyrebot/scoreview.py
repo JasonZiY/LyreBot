@@ -30,7 +30,8 @@ from .score import Score
 from .theme import CHOSEN_TINT, GOLD, HOVER_TINT, INK, MUTED, ORANGE, Theme
 
 SCALE = 0.72  # pixels per unit of the printed page, at 100% scaling: two bars of quavers to a line
-LEFT, RIGHT = 32, 10  # units kept clear left of the systems (the bar number, the brace) and right of them
+LEFT, RIGHT = 20, 10  # units kept clear left of the systems (for the brace) and right of them
+NUMBER = 15  # how tall a bar's number is written, in units (12 in print, where only a line's first has one)
 TOP, FOOT = 8, 24  # and above the first system, and under the last
 HELD = "#B3A793"  # a note going on from the one before, not struck again: paler ink
 COLOURS = {"#111": INK, jianpu.GREY: HELD, "#444": MUTED, "#777": MUTED}
@@ -203,6 +204,17 @@ class Drawing:
         if self.current is not None:
             self.view.dotted[item] = (radius, colour)
 
+    def bar_number(self, bar, x: float, y: float) -> None:
+        """Every bar's number over its opening bar line, in the bar lines' gold (``x``, ``y``: the bar's left
+        and the number's baseline, in units)."""
+        if self.measuring:
+            return
+        s = self.scale
+        font = self.view.font("figures", NUMBER * s)
+        _, descent = self.view.metrics(font)
+        self.view.create_text(x * s + self.view.theme.px(2), y * s + descent, text=str(bar.number), anchor="sw",
+                              font=font, fill=GOLD, tags=("score", "number", f"bar{bar.number}"))
+
     def path(self, d: str, width: float = 1.1, stroke: str = "#111") -> None:
         if self.measuring:
             return
@@ -235,6 +247,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
         self.pending: list[tuple] = []  # the systems measured but not drawn yet: (row, system, top, first note, end)
         self.drawing: str | None = None  # the next few systems' turn to be drawn
         self.laid_width = 0
+        self.most: int | None = None  # bars a line at most: jianpu's own choice, or four in the wide window
         self.job: str | None = None
         self.lit: list[int] = []  # the notes shown as being heard
         self.hovered: int | None = None
@@ -312,6 +325,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
         """Draw ``sheet`` (or nothing) for the view's width now."""
         self.sheet = sheet
         self.lit, self.hovered, self.lit_at, self.timing, self.staves = [], None, None, None, []
+        self.lit_bar, self.bar_starts = None, []
         self.yview_moveto(0)
         self.lay_out()
 
@@ -358,7 +372,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
             self.configure(scrollregion=(0, 0, width, 0))
             return
         s = self.scale
-        systems = jianpu.layout_rows(sheet, LEFT, max(width / s - RIGHT, LEFT + 60))
+        systems = jianpu.layout_rows(sheet, LEFT, max(width / s - RIGHT, LEFT + 60), self.most)
         measure = Drawing(self, s)
         y = float(TOP)
         for row, system in enumerate(systems):
@@ -375,6 +389,23 @@ class ScoreView(ScrollingPage, tk.Canvas):
         if self.paper is not None:
             self.lay_paper(*self.paper)
 
+    def four_bars(self) -> tuple[int, int] | None:
+        """How big the view must be for its score laid out four bars a line: as wide as the widest of those
+        lines, as tall as the tallest four lines next to one another (with room for the fades over the
+        lines beyond them), or as tall as all of it if it has four lines or fewer.  None with no score."""
+        sheet = self.sheet
+        if sheet is None or not sheet.bars:
+            return None
+        s = self.scale
+        groups = [sheet.bars[at:at + 4] for at in range(0, len(sheet.bars), 4)]
+        line = max(sum(jianpu.bar_width(bar) for bar in group) for group in groups)
+        width = math.ceil((LEFT + line + RIGHT + 1) * s)
+        steps = [jianpu.system_height(sheet, group) + 30 for group in groups]  # one system's top to the next's
+        if len(steps) <= 4:
+            return width, math.ceil((TOP + sum(steps) - 20 + FOOT) * s)
+        tallest = max(sum(steps[at:at + 4]) for at in range(len(steps) - 3)) - 14
+        return width, math.ceil(tallest * s) + 2 * self.theme.px(18)
+
     def stop_drawing(self) -> None:
         if self.drawing is not None:
             self.winfo_toplevel().after_cancel(self.drawing)
@@ -386,6 +417,8 @@ class ScoreView(ScrollingPage, tk.Canvas):
         for index in self.lit:
             if first <= index < end:
                 self.colour(index, ORANGE)
+        if self.lit_bar is not None:
+            self.itemconfigure(f"bar{self.lit_bar}", fill=ORANGE)
 
     def draw_some(self) -> None:
         """Draw systems for ``SLICE``, those in view first, from the top, then the others nearest the view;
@@ -430,6 +463,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
         are pressed at) within ``SNAP``: a recording's notes are moved a little on the page to read well."""
         self.timing = (score, speed, presses)
         tempo = score.tempo_map(speed)
+        self.bar_starts = [tempo.seconds(bar.start) for bar in self.sheet.bars] if self.sheet else []
         self.staves = []
         for index, note in enumerate(self.notes):
             note.at = tempo.seconds(note.beat)
@@ -465,7 +499,20 @@ class ScoreView(ScrollingPage, tk.Canvas):
                     found.append(index)
         return found
 
+    lit_bar: int | None = None  # the number of the bar being heard, lit too
+    bar_starts: list[float] = []  # when each bar begins, in seconds
+
     def light(self, seconds: float | None) -> None:
+        bar = None
+        if seconds is not None and self.sheet is not None and self.bar_starts:
+            at = bisect_right(self.bar_starts, seconds + 1e-6) - 1
+            bar = self.sheet.bars[max(at, 0)].number
+        if bar != self.lit_bar:
+            if self.lit_bar is not None:
+                self.itemconfigure(f"bar{self.lit_bar}", fill=GOLD)
+            if bar is not None:
+                self.itemconfigure(f"bar{bar}", fill=ORANGE)
+            self.lit_bar = bar
         lit = self.sounding(seconds) if seconds is not None else []
         if lit == self.lit and (self.lit_items or not lit):
             return
@@ -495,10 +542,15 @@ class ScoreView(ScrollingPage, tk.Canvas):
         width, height = round(right - left) + 2 * pad, round(bottom - top) + 2 * pad
         item = self.create_image(round(left) - pad, round(top) - pad, anchor="nw",
                                  image=self.tint(colour, max(width, 2), max(height, 2)))
-        self.tag_lower(item, "score")
+        self.under_score(item)
+        return item
+
+    def under_score(self, item: int) -> None:
+        """Lay a tint ``item`` over the paper and under the score (some of which may not be drawn yet)."""
+        if self.find_withtag("score"):
+            self.tag_lower(item, "score")
         if self.find_withtag("paper&&!over"):
             self.tag_raise(item, "paper&&!over")
-        return item
 
     def keep_in_sight(self, notes: list[int]) -> None:
         """Scroll, gliding, to bring the system of ``notes`` into view a third of the way down, if it is not
@@ -562,9 +614,7 @@ class ScoreView(ScrollingPage, tk.Canvas):
         width, height = round(right - left) + 2 * pad, round(bottom - top) + 2 * pad
         self.coords(self.hover_item, round(left) - pad, round(top) - pad)
         self.itemconfigure(self.hover_item, image=self.tint(HOVER_TINT, max(width, 2), max(height, 2)), state="normal")
-        self.tag_lower(self.hover_item, "score")
-        if self.find_withtag("paper&&!over"):
-            self.tag_raise(self.hover_item, "paper&&!over")
+        self.under_score(self.hover_item)
         self.configure(cursor="hand2")
 
     def wheel(self, event: tk.Event) -> None:

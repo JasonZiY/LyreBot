@@ -329,6 +329,20 @@ class Page:
         self.over.append((image, place))
         self.schedule()
 
+    def swap(self, old: tk.PhotoImage, new: tk.PhotoImage) -> None:
+        """Hang ``new`` where ``old`` hangs (the ribbon, a frame of its tug): the canvases it crosses lay it again
+        now, and nothing else is touched."""
+        self.over = [(new if image is old else image, place) for image, place in self.over]
+        for surface in self.surfaces:
+            try:
+                if surface.away or not surface.winfo_exists():
+                    continue
+                canvas: tk.Canvas = surface  # type: ignore[assignment]
+                x, y = self.offset(surface)
+                surface.lay_over(x, y, canvas.canvasx(0) - x, canvas.canvasy(0) - y)
+            except tk.TclError:
+                pass
+
     def window(self) -> tuple[int, int]:
         """The window's size, as it last said, or else the size the paper was made for."""
         width, height = self.wanted

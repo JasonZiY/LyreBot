@@ -40,8 +40,7 @@ from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER
                     screen_holding)
 from .timeline import compile_ringing, compile_timeline
 from .transcribe import AUDIO_SUFFIXES, Tools, TranscribeError, find_tools, tool_folders, transcribe
-from .widgets import (Callout, Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, ThinScrollbar,
-                      TitleBar, Words)
+from .widgets import Callout, Choice, IconButton, Ornament, PageLine, Picture, PopupMenu, Sheet, TitleBar, Words
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCORES_DIR = PROJECT / "txt"
@@ -72,7 +71,14 @@ HEARING = "正在试听 · 点 ■ 或按 F8 停止，点别的音从那里接�
 TO_HEAR = "点简谱上的任何一个音，从那里开始听"
 HEAR_TIP, HALT_TIP = "试听", "停止试听（F8）"
 TO_SCORE, TO_SONGS = "翻到简谱，试听", "翻回曲目"
-LEAVES = 6  # songs kept read for the 简谱 page, the latest last  # what the ribbon does, said when the pointer rests on it
+GROW_TIP, SHRINK_TIP = "放大：一行四小节，放得下相邻四行", "缩回窄窗"
+LEAVES = 6  # songs kept read for the 简谱 page, the latest last
+# A click on the ribbon tugs it: how much longer than at rest it hangs, frame by frame (pixels at 100%), pulled
+# down, let go, springing up a little past its rest and settling.  The page turns where it is pulled furthest;
+# till the last frame, clicks on it count for nothing.
+TUG = (3, 6, 8.5, 10, 8, 4, 0, -2.5, -3, -2, -0.5, 0.5, 0.5, 0)
+TUG_TURN = 3
+TUG_STEP = 24  # milliseconds a frame  # what the ribbon does, said when the pointer rests on it
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
@@ -806,6 +812,9 @@ class App:
         self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
         self.leaves: dict[tuple[Path, float | None], tuple] = {}  # songs read for it lately: (score, 简谱 sheet)
         self.ribbon_inside = False
+        self.grown = False  # the window made larger from the 简谱 page (``toggle_size``)
+        self.tugging: int | None = None  # the frame of the ribbon's tug being shown, while it is tugged
+        self.tug_job: str | None = None
         self.cursors: dict[str, str] = {}  # what a piece's pointer was before the ribbon made it a hand
         self.written: tuple[Path, str] | None = None  # a score just written from the keys played
         self.transcriber: threading.Thread | None = None
@@ -882,9 +891,7 @@ class App:
         # ---- song list ----
         top = Sheet(root, theme)
         self.browser = SongBrowser(top, theme, self.locked, self.show_selected, self.start, self.delete)
-        self.browser.pack(side="left", fill="both", expand=True)
-        self.scrollbar = ThinScrollbar(top, theme, self.browser.yview)
-        self.browser.configure(yscrollcommand=self.scrolled)
+        self.browser.pack(side="left", fill="both", expand=True)  # (scrolled by the wheel and the keys: no bar)
         self.browser.bind("<Button-3>", self.context_menu)
         root.bind("<MouseWheel>", self.wheel)
         self.song_menu = PopupMenu(root, theme)  # for a song
@@ -962,7 +969,7 @@ class App:
         for event, handler in (("<ButtonPress-1>", self.ribbon_press), ("<Double-Button-1>", self.ribbon_press),
                                ("<Motion>", self.ribbon_motion), ("<Leave>", self.ribbon_leave)):
             root.bind_class(self.ribbon_tag, event, handler)
-        for piece in (self.backdrop, top, self.browser, self.scrollbar, *self.leaf_pieces()):
+        for piece in (self.backdrop, top, self.browser, *self.leaf_pieces()):
             piece.bindtags((self.ribbon_tag, *piece.bindtags()))
         self.callout = Callout(root, theme)
         self.set_away([piece for piece, _ in self.leaf_page], True)  # (the songs come first)
@@ -991,7 +998,7 @@ class App:
             page.press(piece, frame_at(name))
         mark = theme.watermark(px(WATERMARK_SIZE))
         page.press(mark, lambda width, height: ((width - mark.width()) // 2, (height - mark.height()) // 2))
-        ribbon = theme.ribbon()
+        ribbon = self.hung_ribbon = theme.ribbon()
         page.hang(ribbon, lambda width, height: (width - px(RIBBON_FROM_RIGHT), self.head()))
 
     def head(self) -> int:
@@ -1086,6 +1093,8 @@ class App:
                     "hover": picture(f"{name}-hover", small, lambda: [halo(), *icons.paint(draw(small), INK, GOLD)]),
                     "disabled": picture(f"{name}-disabled", small, lambda: icons.paint(draw(small), FAINT))}
         self.next_images = plain("next", icons.next_track)
+        self.grow_images = plain("grow", icons.corners_out)  # the 简谱 page's window, larger
+        self.shrink_images = plain("shrink", icons.corners_in)  # and back to the narrow one
         self.restart_images = plain("restart", icons.restart)
         self.keys_images = plain("keys", icons.keyboard)
 
@@ -1135,13 +1144,6 @@ class App:
         self.root.after(2000, self.watch)
 
     # ---- small view helpers ----
-    def scrolled(self, first: str, last: str) -> None:
-        if float(first) <= 0 and float(last) >= 1:
-            self.scrollbar.pack_forget()
-        else:
-            self.scrollbar.pack(side="right", fill="y", before=self.browser)
-        self.scrollbar.set(first, last)
-
     def locked(self, _: tk.Event | None = None) -> str | None:
         return "break" if self.worker else None
 
@@ -1930,12 +1932,7 @@ class App:
                                                           for words in (self.leaf_title, self.leaf_about)], add="+")
         self.leaf_body = Sheet(root, theme)
         self.score_view = ScoreView(self.leaf_body, theme, self.hear_note)
-        self.score_view.pack(side="left", fill="both", expand=True)
-        # Its room is kept even while all the score is in view: the score's width never changes with it,
-        # which would lay it out a second time.
-        self.score_bar = ThinScrollbar(self.leaf_body, theme, self.scroll_score)
-        self.score_bar.pack(side="right", fill="y", before=self.score_view)
-        self.score_view.configure(yscrollcommand=self.score_bar.set)
+        self.score_view.pack(fill="both", expand=True)  # (scrolled by the wheel, and following the song)
         self.leaf_rule = Ornament(root, theme)
         self.leaf_panel = Sheet(root, theme)
         row = Sheet(self.leaf_panel, theme)
@@ -1943,6 +1940,8 @@ class App:
         self.timbre_choice = Choice(row, theme, self.timbre_name, tuple(name for _, name in INSTRUMENTS),
                                     self.pick_timbre)
         self.timbre_choice.pack(side="left")
+        self.size_button = IconButton(row, self.grow_images, self.toggle_size, GROW_TIP, theme)
+        self.size_button.pack(side="left", padx=(px(6), 0))
         self.hear_button = IconButton(row, self.play_images, self.press_hear, HEAR_TIP, theme)
         self.hear_button.pack(side="right")
         self.leaf_time = Words(row, theme, fg=MUTED, font=fonts.figures)
@@ -1962,14 +1961,47 @@ class App:
 
     def leaf_pieces(self) -> list[tk.Misc]:
         """The pieces of the 简谱 page the ribbon may lie over."""
-        return [self.leaf_head, self.leaf_title, self.leaf_about, self.leaf_body, self.score_view, self.score_bar]
-
-    def scroll_score(self, *args) -> None:
-        self.score_view.read_on()  # the reader took the scrollbar: leave the score where they put it
-        self.score_view.yview(*args)
+        return [self.leaf_head, self.leaf_title, self.leaf_about, self.leaf_body, self.score_view]
 
     def wheel(self, event: tk.Event) -> None:
         (self.score_view if self.leaf else self.browser).wheel(event)
+
+    def toggle_size(self) -> None:
+        """The 简谱 page's button: the window between two sizes.  The larger has the song four bars a line, the
+        widest line just fitting, and the tallest four lines next to one another; the smaller is the narrowest
+        window, as tall as the songs' page opens.  Whatever the window was dragged to meanwhile, the button
+        goes from the one it last gave to the other; the window keeps its top left corner, and the screen."""
+        view = self.score_view
+        if self.grown:
+            self.size_window(self.theme.px(WINDOW_WIDTH), self.theme.px(640))
+            view.most = None
+            self.grown = False
+        else:
+            wanted = view.four_bars()
+            if wanted is None:
+                return
+            root = self.root
+            spare_width = root.winfo_width() - view.winfo_width()  # what is round the score: frame, margins
+            spare_height = root.winfo_height() - view.winfo_height()
+            view.most = 4
+            self.size_window(wanted[0] + spare_width, wanted[1] + spare_height)
+            self.grown = True
+        self.size_button.set(self.shrink_images if self.grown else self.grow_images)
+        if self.size_button.tooltip is not None:
+            self.size_button.tooltip.text = SHRINK_TIP if self.grown else GROW_TIP
+        self.root.update_idletasks()
+        view.lay_out()  # for the size it has come to, now
+
+    def size_window(self, width: int, height: int) -> None:
+        """Make the window ``width`` by ``height``, keeping its top left corner, and the whole of it on its
+        screen (no larger than the screen)."""
+        root = self.root
+        x, y = root.winfo_x(), root.winfo_y()
+        left, top, right, bottom = screen_area(root, x + 1, y + 1)
+        width = max(min(width, right - left), self.theme.px(WINDOW_WIDTH))
+        height = max(min(height, bottom - top), self.theme.px(360))
+        x, y = min(max(x, left), right - width), min(max(y, top), bottom - height)
+        root.geometry(geometry(x, y, width, height))
 
     def set_away(self, pieces: list[tk.Misc], away: bool) -> None:
         """Mark ``pieces`` and all in them as on the page not shown (the paper passes them by), or shown."""
@@ -2080,9 +2112,12 @@ class App:
         self.set_playing(False)
 
     def show_songs(self) -> None:
-        """Turn back to the songs; a song being heard stops."""
+        """Turn back to the songs; a song being heard stops, and a window made larger for the 简谱 page goes
+        back to the narrow one first."""
         if self.auditioning:
             self.stop()
+        if self.grown:
+            self.toggle_size()
         for piece, _ in self.leaf_page:
             piece.pack_forget()
         self.set_away([piece for piece, _ in self.leaf_page], True)
@@ -2130,11 +2165,39 @@ class App:
         return left - px(3) <= x < left + band + px(3) and top <= y < top + self.ribbon_image.height()
 
     def ribbon_press(self, event: tk.Event) -> str | None:
+        """A click on the ribbon tugs it, and the page turns as it is pulled furthest; a click while it is still
+        moving counts for nothing (nor does it reach what lies under the ribbon)."""
         if not self.on_ribbon(event):
             return None
         self.callout.hide()
-        self.turn_page()
+        if self.tugging is None:
+            self.tug(0)
         return "break"
+
+    def tug(self, frame: int) -> None:
+        """Show frame ``frame`` of the ribbon's tug (see ``TUG``), turning the page at ``TUG_TURN``."""
+        self.tug_job = None
+        if frame >= len(TUG):
+            self.tugging = None
+            self.hang_ribbon(self.ribbon_image)
+            return
+        self.tugging = frame
+        self.hang_ribbon(self.theme.ribbon(round(TUG[frame] * self.theme.scale)))
+        if frame == TUG_TURN:
+            self.turn_page()
+        self.tug_job = self.root.after(TUG_STEP, self.tug, frame + 1)
+
+    def finish_tug(self) -> None:
+        """Play what is left of the ribbon's tug at once."""
+        while self.tugging is not None:
+            if self.tug_job is not None:
+                self.root.after_cancel(self.tug_job)
+            self.tug(self.tugging + 1)
+
+    def hang_ribbon(self, image: tk.PhotoImage) -> None:
+        if image is not self.hung_ribbon:
+            self.page.swap(self.hung_ribbon, image)
+            self.hung_ribbon = image
 
     def ribbon_motion(self, event: tk.Event) -> str | None:
         inside = self.on_ribbon(event)

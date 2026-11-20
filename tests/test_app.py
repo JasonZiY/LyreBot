@@ -790,8 +790,26 @@ class Folders(unittest.TestCase):
         self.assertEqual((app.on_ribbon(on), app.on_ribbon(off)), (True, False))
         self.assertIsNone(app.ribbon_press(off))
         self.assertFalse(app.leaf)
-        self.assertEqual(app.ribbon_press(on), "break")
+        from lyrebot.app import TUG, TUG_TURN
+        rest = app.ribbon_image.height()
+        self.assertEqual(app.ribbon_press(on), "break")  # a tug: pulled down a little, the page not turned yet
+        self.assertFalse(app.leaf)
+        self.assertEqual(app.tugging, 0)
+        self.assertGreater(app.hung_ribbon.height(), rest)
+        for frame in range(1, TUG_TURN + 1):
+            app.tug(frame)
+        self.assertTrue(app.leaf)  # turned as it is pulled furthest
+        self.assertEqual(app.hung_ribbon.height(), max(app.theme.ribbon(round(n * app.theme.scale)).height()
+                                                       for n in TUG))
+        self.assertEqual(app.ribbon_press(on), "break")  # while it springs back, a click counts for nothing
+        app.finish_tug()
         self.assertTrue(app.leaf)
+        self.assertIsNone(app.tugging)
+        self.assertIs(app.hung_ribbon, app.ribbon_image)  # at rest again
+        self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image])
+        app.ribbon_press(on)  # and now it may be tugged again
+        app.finish_tug()
+        self.assertFalse(app.leaf)
         self.assertEqual(app.browser.bindtags()[0], app.ribbon_tag)  # the pieces it lies over ask it first
         self.assertEqual(app.score_view.bindtags()[0], app.ribbon_tag)
 
@@ -925,7 +943,55 @@ class Folders(unittest.TestCase):
             self.leaf(app, path)  # read lately, unchanged: not read again
             self.assertEqual(read.call_count, 2)
         self.assertEqual(len(app.score_view.notes), 12)
-        self.assertEqual(app.score_bar.winfo_manager(), "pack")  # its room kept, whether or not it is needed
+        self.assertFalse(hasattr(app, "score_bar") or hasattr(app, "scrollbar"))  # no bars: the wheel scrolls
+
+    def test_the_size_button_goes_between_four_bars_a_line_and_the_narrow_window(self):
+        from unittest import mock
+        from lyrebot.app import GROW_TIP, SHRINK_TIP, WINDOW_WIDTH, App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        view = self.leaf(app, path)
+        px = app.theme.px
+        self.assertEqual((app.size_button.images, app.size_button.tooltip.text), (app.grow_images, GROW_TIP))
+        sizes = []
+        with mock.patch.object(app, "size_window", side_effect=lambda w, h: sizes.append((w, h))), \
+                mock.patch.object(app.root, "winfo_width", return_value=px(400)), \
+                mock.patch.object(app.root, "winfo_height", return_value=px(700)), \
+                mock.patch.object(view, "winfo_width", return_value=px(370)), \
+                mock.patch.object(view, "winfo_height", return_value=px(500)):
+            app.toggle_size()
+            wanted = view.four_bars()
+            self.assertEqual(sizes[-1], (wanted[0] + px(400) - px(370), wanted[1] + px(700) - px(500)))  # and round it
+            self.assertTrue(app.grown)
+            self.assertEqual(view.most, 4)
+            self.assertEqual((app.size_button.images, app.size_button.tooltip.text), (app.shrink_images, SHRINK_TIP))
+            app.toggle_size()
+            self.assertEqual(sizes[-1], (px(WINDOW_WIDTH), px(640)))  # the narrowest, as tall as the songs open
+            self.assertFalse(app.grown)
+            self.assertIsNone(view.most)
+            app.toggle_size()
+            app.turn_page()  # back to the songs: as if the button were pressed first
+            self.assertEqual(sizes[-1], (px(WINDOW_WIDTH), px(640)))
+            self.assertFalse(app.grown or app.leaf)
+            self.assertEqual(len(sizes), 4)
+            self.leaf(app, path)
+            app.turn_page()  # not made larger: nothing to undo
+            self.assertEqual(len(sizes), 4)
+
+    def test_the_window_keeps_its_corner_and_stays_on_its_screen(self):
+        from unittest import mock
+        from lyrebot.app import App
+        app = App(self.window(), self.scores, self.midi)
+        px = app.theme.px
+        placed = []
+        with mock.patch("lyrebot.app.screen_area", return_value=(-2400, 0, 0, 1290)), \
+                mock.patch.object(app.root, "winfo_x", return_value=-500), \
+                mock.patch.object(app.root, "winfo_y", return_value=900), \
+                mock.patch.object(app.root, "geometry", side_effect=placed.append):
+            app.size_window(300, 300)  # where it is, if it fits
+            app.size_window(900, 800)  # moved back on to its screen
+            app.size_window(5000, 5000)  # no larger than the screen
+        self.assertEqual(placed, [f"{px(350)}x{px(360)}+-500+900", "900x800+-900+490", "2400x1290+-2400+0"])
 
     def test_turning_back_stops_hearing_and_the_game_turns_back_to_the_songs(self):
         from unittest import mock
