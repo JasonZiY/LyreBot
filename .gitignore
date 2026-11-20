@@ -11,3 +11,4 @@ midi/*
 tools/
 jianpu_output/*
 !jianpu_output/README.md
+/python/

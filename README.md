@@ -1,6 +1,16 @@
 # <img src="assets/lyrebot.png" alt="" height="40" align="absmiddle"> LyreBot
 
-把文本曲谱变成定时的键盘按键，用来在原神等游戏里自动弹琴。也可以从 MIDI 文件、录音或自己的演奏生成曲谱，或者把曲谱导出成简谱。只支持 Windows，需要 Python 3.11 或更新版本，不需要安装其他包。从录音生成曲谱还要另外下载免费的 audio.cpp 和 MuScriptor 模型，见 [从录音生成曲谱](#从录音生成曲谱)。
+把文本曲谱变成定时的键盘按键，用来在原神等游戏里自动弹琴。也可以从 MIDI 文件、录音或自己的演奏生成曲谱，或者把曲谱导出成简谱。只支持 Windows。便携版自带 Python，下载解压就能用，见 [下载](#下载)；从源码运行需要 Python 3.11 或更新版本，不需要安装其他包。从录音生成曲谱还要另外下载免费的 audio.cpp 和 MuScriptor 模型，见 [从录音生成曲谱](#从录音生成曲谱)。
+
+## 下载
+
+到 [Releases](https://github.com/JasonZiY/LyreBot/releases/latest) 下载 `LyreBot-portable.zip`。它自带 Python，不用另外安装任何东西。
+
+1. 解压之前，先右键这个 zip，选「属性」，勾选「常规」页最下面的「解除锁定」，再点「确定」。不然 Windows 会把解压出来的每个文件都当成网上下载的，启动时弹出安全警告。
+2. 解压到一个自己找得到的普通文件夹，例如 `D:\LyreBot`。曲谱、MIDI 和录音都放在这个文件夹里。
+3. 打开解压出来的 `LyreBot` 文件夹，照下面的 [使用](#使用) 启动。
+
+电脑上已经装了 Python 3.11 或更新版本的话，也可以直接下载源码（本页上方的 Code → Download ZIP），用法完全一样。
 
 ## 使用
 
