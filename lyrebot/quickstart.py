@@ -20,6 +20,7 @@ STEPS = (
 )
 TIPS = ("游戏里没反应：以管理员身份运行 LyreBot。\n"
         "不会写曲谱：原文页右下角的 ? 里有写法。右键曲子可以移动、导出简谱、删除。")
+README = "想了解更多，建议读一读 LyreBot 文件夹里的 README.md。"  # at the card's foot, left of 收起
 CHOSEN = "#F6E3D8"  # the chosen song's breath of orange, on the card's plain paper
 
 

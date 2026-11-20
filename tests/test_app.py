@@ -1265,17 +1265,19 @@ class Folders(unittest.TestCase):
     def test_quick_start_opens_beside_the_window_and_closes_again(self):
         import tkinter as tk
         from lyrebot.app import App
-        from lyrebot.quickstart import STEPS, TIPS
+        from lyrebot.quickstart import README, STEPS, TIPS
+        from lyrebot.widgets import PillButton
         app = App(self.window(), self.scores, self.midi)
         app.toggle_quickstart()
         card = app.quickstart
         self.assertTrue(card.winfo_exists())
-        shown = []
+        shown, labels = [], {}
 
         def words(widget):
             for child in widget.winfo_children():
                 if isinstance(child, tk.Label):
                     shown.append(child.cget("text"))
+                    labels[child.cget("text")] = child
                 words(child)
         words(card)
         for title, text in STEPS:
@@ -1283,6 +1285,10 @@ class Folders(unittest.TestCase):
             self.assertIn(text, shown)
         self.assertIn(TIPS, shown)
         self.assertNotIn("输入法", TIPS)  # (it makes no difference)
+        self.assertIn("README.md", README)  # at the foot, in small words beside 收起
+        foot = labels[README].master
+        self.assertTrue(any(isinstance(child, PillButton) for child in foot.winfo_children()))
+        self.assertEqual(labels[README].cget("font"), labels[TIPS].cget("font"))
         app.toggle_quickstart()  # pressed again: closed
         self.assertIsNone(app.quickstart)
         self.assertFalse(card.winfo_exists())

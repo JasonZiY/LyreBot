@@ -42,10 +42,11 @@ def info(title: str, message: str, parent: tk.Misc | None = None) -> None:
 
 
 def card(parent: tk.Misc, title: str, fill: Callable[[tk.Frame, Theme], None],
-         on_close: Callable[[], None] | None = None) -> tk.Toplevel:
+         on_close: Callable[[], None] | None = None, note: str | None = None) -> tk.Toplevel:
     """A card to keep open while working, in the dialogs' dress, beside LyreBot's window rather than over it;
-    ``fill`` writes what it holds into the frame it is given.  Unlike the dialogs it does not wait and takes
-    no grab; it closes with ×, Escape or its button, and ``on_close`` is told."""
+    ``fill`` writes what it holds into the frame it is given, and ``note``, if any, is a line of small words
+    at its foot, left of the button.  Unlike the dialogs it does not wait and takes no grab; it closes with
+    ×, Escape or its button, and ``on_close`` is told."""
     owner = parent.winfo_toplevel()
     theme = Theme.of(parent)
     px = theme.px
@@ -73,6 +74,8 @@ def card(parent: tk.Misc, title: str, fill: Callable[[tk.Frame, Theme], None],
     row = tk.Frame(frame, bg=PAPER)
     row.pack(fill="x", pady=(px(14), 0))
     PillButton(row, theme, "收起", close, kind="ghost", least=px(72)).pack(side="right")
+    if note:
+        tk.Label(row, text=note, font=theme.fonts.small, fg=MUTED, bg=PAPER, anchor="w").pack(side="left")
     window.protocol("WM_DELETE_WINDOW", close)
     window.bind("<Escape>", lambda _: close())
     window.update_idletasks()

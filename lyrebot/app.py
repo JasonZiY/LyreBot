@@ -2479,7 +2479,7 @@ class App:
                     "record": self.record_images["normal"], "keys": self.keys_images["normal"]}
         self.quickstart = dialogs.card(self.root, quickstart.TITLE,
                                        lambda frame, theme: quickstart.fill(frame, theme, pictures),
-                                       on_close=self.quickstart_closed)
+                                       on_close=self.quickstart_closed, note=quickstart.README)
         self.root.after(60, self.take_keyboard)
 
     def quickstart_closed(self) -> None:
