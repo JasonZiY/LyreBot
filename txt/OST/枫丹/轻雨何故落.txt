@@ -1,10 +1,10 @@
-# 轻雨何故落 / Pluie sur la ville，按原简谱重新记谱
+# 轻雨何故落（Pluie sur la ville），自简谱重新记谱，4/4 拍
+# 第 5 小节第二个和弦的 3̇ 不在琶音线内，和琶音的第一个音同时弹；第 28 小节 2̇· 后是四个六十四分音符 3̇2̇1̇2̇（回音装饰）
 speed=52
 0-e-0.w.t.e.|^nhqr--^bfje--
 0-q-q.j.e.j.|^cgjw--nfh-bdg-
 0-h-h.g.w.j.|^vfhj--c.m.d-
 q-w-e-0.t.|nh-mg-ah-^zdh-
-# 第 5 小节第二个和弦：3̇ 不在琶音线内，和琶音的第一个音同时弹
 0-e.~e*r*.w.t.~e~|^xhqr--e^bfj--
 0-q.~q*w*q.j.e.u.|^agjw--vm-mdj-
 0-t-0-e.~w~|^cdjy--^mgr-bsg-
@@ -28,7 +28,6 @@ w-q.~q*w*q.j.e.u.|zgj--vm-mdj-
 0-wry-y.t.t.~r~|^xsqry-h-bdh-gj-
 t--h.j.q.e.|zgj.m.dgj-vaf-fh-
 r-r-r.t.e.~w~|xah.n.sfh.n.cgj.s.bgj.s.
-# 第 28 小节 2̇· 后是四个六十四分音符 3̇2̇1̇2̇（回音装饰）
 q-w.~e{1/16}w{1/16}q{1/16}w{1/16}e-0.g.|nad-msg-zdh-^zcn-
 0-nsh-0.fw.j.~g~|^xafh-v-^bsfh-xf-
 d-d-d.q.h.a.|zbm-bm-v.a.f-

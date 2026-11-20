@@ -1,4 +1,4 @@
-# 《空の箱》GIRLS BAND CRY（空之箱），按原简谱重新记谱
+# 空之箱（《空の箱》，GIRLS BAND CRY），自简谱重新记谱，4/4 拍
 speed=148
 0-0.g~g~w.~q~.w.|0-0-0-0-
 .w..g~g~w.~q~.w.|va.a.a.a.a.a.a.a.

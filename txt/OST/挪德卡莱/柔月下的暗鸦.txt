@@ -1,4 +1,5 @@
-# 挪德卡莱OST 皮拉米达城夜晚BGM（柔月下的暗鸦），按原简谱重新核对，与旧谱一致
+# 柔月下的暗鸦（挪德卡莱OST，皮拉米达城夜晚BGM），自简谱重新记谱，4/4 拍
+# 第 53 小节起从每分钟 135 拍一路慢到 55 拍，直到最后一个音
 speed=135
 0-0-0-h.j.|0-0-0-0-
 q-h-w~e.~w.q.|n-c-a--
@@ -52,7 +53,7 @@ ahq-dh-w'aqe-sjw.hq.|n~c~a~c~n.a.n~c~a~c~d.a.
 sjw-.e~w~gj-hq.jw.|c~b~m~b~d.m.c~b~m~b~d.m.
 ahq-gj.hq~gj~^msh-mg.d~g~|v~n~a~n~v.a.b~m~s~m~b.s.
 ^adgq--e~t~u~t~e~w~j~w~|zb-a.d.z~b~a~d~g~d~a~b~
-speed=135>55  # 高潮过后，一路慢下来直到最后一个音
+speed=135>55
 ^adhq-dh-^aqe-sjw.hq.|cn-a.c.cn-d.c.
 gj--e.w.h.j.|cb-m-d-m-
 hq-h-jw-q.j.|xn--bm--

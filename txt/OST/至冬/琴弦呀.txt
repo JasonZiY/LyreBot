@@ -1,4 +1,4 @@
-# 至冬堡夜晚人声主题曲（琴弦呀），按原简谱重新记谱
+# 琴弦呀（至冬堡夜晚人声主题曲），自简谱重新记谱，4/4 拍
 speed=65
 h~j~q~w~e.h.e.~e~r~e~w~q~|n.nad.nad-n.nad.nad-
 w.g.w.g.w.~w~e~w~q~j~|n.bms.bms-n.bms.bms-
