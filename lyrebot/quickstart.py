@@ -47,7 +47,7 @@ def fill(frame: tk.Frame, theme: Theme, pictures: dict[str, tk.PhotoImage]) -> N
     def picture(step: int, canvas: tk.Canvas) -> None:
         y, x = int(canvas.cget("height")) / 2, px(4)
         if step == 0:  # the list, one song chosen
-            for row, (name, chosen) in enumerate((("晴天-演奏", False), ("春日影-演奏", True), ("空之箱", False))):
+            for row, (name, chosen) in enumerate((("晴天", False), ("春日影", True), ("空之箱", False))):
                 top = px(2) + row * px(16)
                 if chosen:
                     canvas.create_rectangle(x, top, x + px(150), top + px(15), fill=CHOSEN, outline="")

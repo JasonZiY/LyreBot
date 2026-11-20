@@ -1,0 +1,23 @@
+# 由键盘演奏记录：童话-演奏
+# 节拍是从按键推断的：约每分钟 65 拍（四分音符），速度平稳，4/4 拍
+# 拍号 4/4；共 164 次按键
+speed=64.7
+0--.g.t.r.
+ze-ae.r~e~m-je.r.
+ne.r.he.w~q~b.q.ge.t.
+vy-fy.y~t~b.w.gw.r.
+ze.b.a.s.d.q.e.t.
+vy-fy.y~t~b.w.gw.r.
+speed=64.8
+ce.r.be.w~q~n-hw.e.
+vh-fh.q.bq-gj-
+zq.b.a.s.d.g.t.r.
+ze-ae.r~e~m-je.r.
+ne.r.de.w~q~b.q.ge.t.
+vy-fy.y~t~b.w.gw.r.
+ze.b.a.s.d.q.e.t.
+vy-fy.y~u~b.y.gt.r.
+ce.r.be.w~q~n-hw.e.
+vh-fh.q.bq-gj-
+speed=64.5
+zq.b.a.s.d--

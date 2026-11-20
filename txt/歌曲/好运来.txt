@@ -1,0 +1,46 @@
+# 由键盘演奏记录：好运来-演奏
+# 节拍是从按键推断的：约每分钟 107 拍（四分音符），速度有起伏，逐拍跟随，4/4 拍
+# 拍号 4/4；共 444 次按键
+speed=107.2
+0--nh.c.ne.cw.
+aw-cq.h.zg.b.aq.bw.
+nh.c.n.c.xh.n.sw.n.
+nq.c.nh.cg.bs.x.bg.xh.
+zg.bd.a.b.nd.c.nh.cg.
+ah-ch.g.xh.n.sw.nq.
+bw.x.g.x.zq.b~q~aq.bw.
+de.be.aw.bq.ng.c.nq.ch.
+ah.c.h.c.nh.c~h~nq.cq.
+ah-c.h.zg.bd.ag.bq.
+nh.c.h.c.vh.zq.vq.z~q~
+nq.h.zg-ch.mg.cs.mg.
+bd-m.d.nd.cs.na.cd.
+xs.n.s.nd.nh.cg.nd.ch.
+bh.xg.b.x.vh.zq.vq.z~h~
+xw.nw.sw.nq.zh.b.ag.bq.
+nh.c.h.c.nh.c~h~nq.cq.
+ah-c.h.zg.bd.ag.bq.
+nh.c.n.c.
+speed=107
+vh.zq.vq.z~q~
+nq.h.zg-ch.mg.cs.mg.
+bd-m.d.nd.cs.na.cd.
+xs.n.s.nd.nh.cg.nd.ch.
+bh.xg.b.x.vh.zq.vq.z~h~
+xw.nw.sw.nq.zh.b.ag.bq.
+nh.c.h.c.nh.c.ne.cw.
+aw-cq.h.zg.b.aq.bw.
+nh.c.h.c.xh.n.sw.n.
+nq.c.nh.cg.bs.x.bg.xh.
+zg.bd.a.b.nd.c.nh.cg.
+ah-ch.g.xh.n.sw.nq.
+bw.x.g.x.zq.b~q~aq.bw.
+de.be.aw.bq.ng.c.nq.ch.
+ah.c.n.c.zq.b~q~aq.bw.
+de.be.
+speed=89.7
+aw.bq.
+speed=117.2
+ng-c-
+nq-ch-ah-c-
+n-c---

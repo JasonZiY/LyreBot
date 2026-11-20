@@ -2388,7 +2388,7 @@ class App:
             where = path.parent.relative_to(self.scores_dir.parent)
         except ValueError:
             where = path.parent
-        self.text_about.configure(text=f"原文 · {where.as_posix()}/{path.name}")
+        self.text_about.configure(text=f"{where.as_posix()}/{path.name}")
         self.turn_to("text")
         self.check_text()
         text.mark_set("insert", place[0])

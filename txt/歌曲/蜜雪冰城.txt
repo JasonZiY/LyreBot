@@ -1,0 +1,26 @@
+# 由键盘演奏记录：蜜雪冰城-演奏
+# 节拍是从按键推断的：约每分钟 87 拍（四分音符），速度平稳，4/4 拍
+# 拍号 4/4；共 285 次按键
+speed=87.6
+0-.q~w~ze.bt.at.b~y~
+zt.be.aq.b~w~ze.ge.bw.xw.
+zq.b.a-ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.aw.bq.
+bw.x.b.x.ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.bw.xw.
+zq.b.a.b.vr.z.vr.z.
+vr.zy.v.z.zt.b.at.be.
+bw.x.b.x.ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.bw.xw.
+zq.b.aq.q~w~ze.bt.at.b~y~
+speed=87.4
+zt.be.aq.b~w~ze.ge.bw.xw.
+zq.b.a-ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.aw.bq.
+bw.x.b.x.ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.bw.xw.
+zq.b.a.b.vr.z.vr.z.
+vr.zy.v.z.zt.b.at.be.
+bw.x.b.x.ze.bt.at.b~y~
+zt.be.aq.bq~w~ze.be.bw.xw.
+zq----

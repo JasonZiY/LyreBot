@@ -1,0 +1,40 @@
+# 由键盘演奏记录：同桌的你-演奏
+# 节拍是从按键推断的：约每分钟 84 拍（四分音符），速度平稳，3/4 拍
+# 拍号 3/4；共 320 次按键
+speed=83.7
+zg.bg.ag.dg.ad.bf.
+cg.m.d.gj.d.m.
+grace=1
+vh.ah.fh.h'h.f'f.ah.
+bg.s.g.j.g.s.
+zg.bg.ag.dg.aj.bh.
+vg.a.f.fh.f.a.
+bf.sf.fg.fj.dg.s's.
+za.b.a.d.a.b.
+zg.bg.ag.dg.ad.bf.
+cg.m.d.gj.d.m.
+vh.ah.fh.h'h.f'f.ah.
+bg.s.g.j.g.s.
+g.g.g.dg.aj.bh.
+vg.a.f.fh.f.a.
+f.f.f.fj.dg.s's.
+za.b.a.d.a.b.
+zq.bq.aq.dq.ag.bh.
+zq.b.aq.de.a.b.
+bw.sw.gw.jw.gq.sj.
+nh.d.h.a.h.d.
+cj.mj.dj.gj.dj.mq.
+speed=83.5
+bw.s.g.gj.g.s.
+bj.sj.gq.jw.gq.sj.
+zq.b.a.d.a.b.
+z.b.a.d.a.b.
+zq.bq.aq.dq.ag.bh.
+zq.b.aq.de.a.b.
+bw.sw.gw.jw.gq.sj.
+nh.d.h.a.h.d.
+cj.mj.dj.gj.dj.mq.
+bw.s.g.gj.g.s.
+bj.sj.gq.jw.gq.sj.
+zq.b.a.d.a.b.
+z.b.a.d.a.b.

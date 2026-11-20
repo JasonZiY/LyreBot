@@ -89,6 +89,18 @@ class ReadingCleanup(unittest.TestCase):
         self.assertIsNone(sheet.bars[1].tempo)
         self.assertIn("节奏为读谱整理过，演奏以曲谱为准", sheet.notes)
 
+    def test_a_recording_renamed_without_its_suffix_is_still_one(self):
+        """The scores in txt have no -录音 in their names: the first line, naming 曲子-录音.mid, says what it is."""
+        text = self.RECORDING + "speed=100\na{7/8}s{9/8}d--|z----\n"
+        renamed, played = sheet_of(text, "曲子"), sheet_of(text, "曲子-录音")
+        self.assertEqual(renamed.kind, "recording")
+        self.assertEqual(renamed.title, "曲子")
+        self.assertEqual(renamed.notes, played.notes)  # 由录音编配, and its reading tidied alike
+        self.assertEqual([describe(bar.staves[0]) for bar in renamed.bars],
+                         [describe(bar.staves[0]) for bar in played.bars])
+        self.assertEqual(sheet_of("# 由 MIDI 自动编配：曲子.mid\nspeed=100\na----\n", "曲子").kind, "midi")
+        self.assertEqual(sheet_of("# 由 MIDI 自动编配：曲子.mid\nspeed=100\na----\n", "曲子-MIDI").kind, "midi")
+
     def test_a_note_squeezed_out_becomes_a_grace_note(self):
         symbols = sheet_of(self.RECORDING + "speed=100\na-s*d{7/8}f--|z----\n", "曲子-录音").bars[0].staves[0]
         self.assertEqual(describe(symbols), "1 3 4 -")

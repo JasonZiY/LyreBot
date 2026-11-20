@@ -1057,7 +1057,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(text.get("1.0", "end-1c"), path.read_text(encoding="utf-8"))
         self.assertEqual(text.index("insert"), "1.0")  # the first time: the top
         self.assertEqual(app.text_title.cget("text"), "三小节")
-        self.assertEqual(app.text_about.cget("text"), "原文 · txt/歌曲/三小节.txt")
+        self.assertEqual(app.text_about.cget("text"), "txt/歌曲/三小节.txt")  # where it is, and nothing more
         self.assertEqual(app.text_status.cget("text"), TEXT_HINT)
         self.assertFalse(app.undo_button.enabled)
         self.assertEqual(app.root.title(), "三小节 · 原文 · LyreBot")

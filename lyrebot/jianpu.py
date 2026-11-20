@@ -100,7 +100,9 @@ def kind_of(text: str, name: str) -> str:
     if first.startswith("# 由键盘演奏记录"):
         return "keyboard"
     if first.startswith("# 由 MIDI 自动编配"):
-        return "recording" if name.endswith("-录音") else "midi"
+        # A recording is transcribed into 曲名-录音.mid, which the first line names, whatever the score is called now.
+        source = first.removeprefix("# 由 MIDI 自动编配").lstrip("：:").strip().rsplit(".", 1)[0]
+        return "recording" if name.endswith("-录音") or source.endswith("-录音") else "midi"
     return "hand"
 
 
