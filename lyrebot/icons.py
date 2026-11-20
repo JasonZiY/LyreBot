@@ -420,6 +420,17 @@ def score_page(size: int) -> list[Part]:
             gilt(stroke([(stem, high), (stem + round(s * 0.11), high + round(s * 0.11))], pen))]
 
 
+def book(size: int) -> list[Shape]:
+    """An open book in line, for the title bar: 快速开始, how LyreBot is used."""
+    s, pen = size, pen_width(size, 0.052)
+    c = s / 2
+    top, foot, edge, fold = s * 0.30, s * 0.72, s * 0.20, s * 0.07
+    pages = [stroke([(c, top + s * 0.04), (c + way * fold, top), (c + way * (c - edge), top),
+                     (c + way * (c - edge), foot), (c + way * fold, foot), (c, foot + s * 0.04)], pen)
+             for way in (-1, 1)]  # each page from the spine out, round its corner, and back
+    return [*pages, stroke([(c, top + s * 0.04), (c, foot + s * 0.04)], pen)]
+
+
 def minimise(size: int) -> Shape:
     """— for the title bar: one level line on whole pixels."""
     pen = pen_width(size, 0.052)

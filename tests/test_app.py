@@ -46,8 +46,11 @@ def hidden_window(test):
     root = tk.Toplevel(_TK)
 
     def close():
+        # Every timer is cancelled, but its callback is left to the window that made it: after_cancel would
+        # delete it here, and a window of the same test made after this one (its cleanup runs first) would
+        # then find its own gone when it is destroyed ("can't delete Tcl command").
         for job in root.tk.splitlist(root.tk.call("after", "info")):
-            root.after_cancel(job)
+            root.tk.call("after", "cancel", job)
         root.destroy()
         gc.collect()
     test.addCleanup(close)
@@ -362,6 +365,7 @@ class Folders(unittest.TestCase):
     def test_the_window_may_draw_its_own_title_bar_and_lend_it_the_lyre(self):
         app, adopt = self.framed_app(True)
         self.assertIsNotNone(app.title_bar)
+        self.assertEqual(app.title_bar.commands["start"], app.toggle_quickstart)  # the open book: 快速开始
         self.assertEqual(app.root.pack_slaves()[0], app.title_bar)  # on top of everything
         self.assertEqual(app.crest.winfo_manager(), "")  # the lyre went up into the bar
         self.assertIs(adopt.call_args.args[1], app.title_bar.frame)
@@ -1257,6 +1261,36 @@ class Folders(unittest.TestCase):
         app.ribbon_turns("green")  # the page turned: it goes too
         self.assertIsNone(app.guide)
         self.assertFalse(card.winfo_exists())
+
+    def test_quick_start_opens_beside_the_window_and_closes_again(self):
+        import tkinter as tk
+        from lyrebot.app import App
+        from lyrebot.quickstart import STEPS, TIPS
+        app = App(self.window(), self.scores, self.midi)
+        app.toggle_quickstart()
+        card = app.quickstart
+        self.assertTrue(card.winfo_exists())
+        shown = []
+
+        def words(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, tk.Label):
+                    shown.append(child.cget("text"))
+                words(child)
+        words(card)
+        for title, text in STEPS:
+            self.assertIn(title, shown)
+            self.assertIn(text, shown)
+        self.assertIn(TIPS, shown)
+        self.assertNotIn("输入法", TIPS)  # (it makes no difference)
+        app.toggle_quickstart()  # pressed again: closed
+        self.assertIsNone(app.quickstart)
+        self.assertFalse(card.winfo_exists())
+        app.toggle_quickstart()
+        card = app.quickstart
+        card.event_generate("<Escape>")
+        card.update()
+        self.assertIsNone(app.quickstart)
 
     def test_closing_with_a_mistake_asks_first(self):
         from unittest import mock

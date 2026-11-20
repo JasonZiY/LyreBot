@@ -1144,13 +1144,20 @@ class TitleBar(tk.Canvas):
 
     It tells ``frame`` (a ``chrome.Frame``) how tall it is and where its buttons are, so that a press
     on the rest of it moves the window and a press near the edges resizes it, as Windows' own bar
-    would; only presses on the buttons reach it.  A dialog's bar has × alone (``minimise`` None)."""
+    would; only presses on the buttons reach it.  A dialog's bar has × alone (``minimise`` None); the
+    main window's has an open book left of — as well (``start``: 快速开始), which says what it is when the
+    pointer rests on it."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, frame, title: str, note: str,
-                 minimise: Callable[[], None] | None, close: Callable[[], None]):
+                 minimise: Callable[[], None] | None, close: Callable[[], None],
+                 start: Callable[[], None] | None = None):
         px = theme.px
         self.theme, self.frame, self.title, self.note = theme, frame, title, note
-        self.commands = {"close": close, **({"minimise": minimise} if minimise is not None else {})}
+        self.commands = {"close": close, **({"minimise": minimise} if minimise is not None else {}),
+                         **({"start": start} if start is not None else {})}
+        self.tips = {"start": "快速开始"}
+        self.callout: Callout | None = None
+        self.tip_job: str | None = None
         self.bar_height = px(34)
         super().__init__(parent, height=self.bar_height, bg=LEATHER_TOP, highlightthickness=0, borderwidth=0)
         size = self.button_size = px(24)
@@ -1164,6 +1171,8 @@ class TitleBar(tk.Canvas):
             "minimise": {False: face("minimise", icons.minimise, GILT),
                          True: face("minimise-hover", icons.minimise, GILT_BRIGHT, LEATHER_HOVER)},
             "close": {False: face("close", icons.cross, GILT), True: face("close-hover", icons.cross, PAPER, WARN)},
+            "start": {False: face("start", icons.book, GILT),
+                      True: face("start-hover", icons.book, GILT_BRIGHT, LEATHER_HOVER)},
         }
         self.crest = theme.icon("title-crest", px(17), GILT, icons.lyre)
         self.boxes: dict[str, tuple[float, float, float, float]] = {}
@@ -1198,7 +1207,8 @@ class TitleBar(tk.Canvas):
             self.create_text(right + px(8), middle, text=self.note, font=self.theme.fonts.small, fill=EMBER, anchor="w")
         size = self.button_size
         close = width - px(8) - size / 2
-        for name, centre in (("close", close), ("minimise", close - size - px(4)))[:len(self.commands)]:
+        for place, name in enumerate(name for name in ("close", "minimise", "start") if name in self.commands):
+            centre = close - place * (size + px(4))  # from the right: ×, —, then the book
             self.boxes[name] = (centre - size / 2, middle - size / 2, centre + size / 2, middle + size / 2)
             self.create_image(centre, middle, image=self.faces[name][self.inside == name], tags=name)
         dx, dy = self.winfo_x(), self.winfo_y()
@@ -1215,6 +1225,7 @@ class TitleBar(tk.Canvas):
                 if lit:
                     self.itemconfigure(lit, image=self.faces[lit][lit == name])
             self.inside = name
+            self.tip(name)
         if name and not self.watching:
             self.watching = self.winfo_toplevel().after(80, self.watch)
 
@@ -1227,7 +1238,24 @@ class TitleBar(tk.Canvas):
             return
         self.point(self.button_at(x, y))
 
+    def tip(self, name: str | None) -> None:
+        """What a button with no plain sign is for, in a few words under it once the pointer rests there."""
+        top = self.winfo_toplevel()
+        if self.tip_job is not None:
+            top.after_cancel(self.tip_job)
+            self.tip_job = None
+        if self.callout is not None:
+            self.callout.hide()
+        if name in self.tips:
+            if self.callout is None:
+                self.callout = Callout(self, self.theme)
+            left, _, right, bottom = self.boxes[name]
+            words = self.tips[name]
+            self.tip_job = top.after(Tooltip.DELAY, lambda: self.callout.say(
+                words, self.winfo_rootx() + round((left + right) / 2), self.winfo_rooty() + round(bottom)))
+
     def press(self, event: tk.Event) -> None:
+        self.tip(None)
         self.pressed = self.button_at(event.x, event.y)
 
     def release(self, event: tk.Event) -> None:

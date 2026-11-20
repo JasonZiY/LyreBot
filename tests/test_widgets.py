@@ -59,7 +59,7 @@ class Drawing(unittest.TestCase):
         for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
                      icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
                      icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross,
-                     icons.corners_out, icons.corners_in, icons.undo, icons.seal, icons.question):
+                     icons.corners_out, icons.corners_in, icons.undo, icons.seal, icons.question, icons.book):
             pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
         width = icons.fleuron_width(7)
@@ -310,6 +310,30 @@ class Pieces(unittest.TestCase):
             theme.round_corners(self.root, border="#B08D57")
         edges = [call.args[2] for call in setting.call_args_list if call.args[1] == theme.DWMWA_BORDER_COLOR]
         self.assertEqual(edges, [theme.NO_COLOR, 0x578DB0])  # none at all; then old gold, as Windows reads it
+
+    def test_the_main_windows_title_bar_has_an_open_book_left_of_minimise(self):
+        pressed = []
+        frame = chrome.Frame(edge=5, caption=0)
+        bar = TitleBar(self.root, self.theme, frame, "LyreBot", "", lambda: pressed.append("minimise"),
+                       lambda: pressed.append("close"), start=lambda: pressed.append("start"))
+        with mock.patch.object(bar, "winfo_width", return_value=400), mock.patch.object(bar, "winfo_x", return_value=0), \
+                mock.patch.object(bar, "winfo_y", return_value=0):
+            bar.redraw()
+        close, minimise, start = frame.buttons  # (all three told to the frame: presses there reach the bar)
+        self.assertLess(start[2], minimise[0])
+        self.assertEqual(minimise[0] - start[2], close[0] - minimise[2])  # spaced alike
+
+        def at(box):
+            return SimpleNamespace(x=(box[0] + box[2]) / 2, y=(box[1] + box[3]) / 2)
+        bar.point(bar.button_at(at(start).x, at(start).y))
+        self.assertEqual(bar.inside, "start")
+        self.assertIsNotNone(bar.tip_job)  # its words, once the pointer rests on it
+        bar.press(at(start))
+        self.assertIsNone(bar.tip_job)  # (not once it is pressed)
+        bar.release(at(start))
+        self.assertEqual(pressed, ["start"])
+        self.assertNotIn("start", TitleBar(self.root, self.theme, chrome.Frame(edge=0, caption=0), "对话框", "", None,
+                                           lambda: None).commands)  # a dialog's bar has × alone
 
     def test_the_title_bar_shows_the_frame_its_buttons_and_presses_them(self):
         pressed = []

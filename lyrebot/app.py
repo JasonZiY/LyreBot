@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import messagebox as system_dialogs
 from typing import Callable
 
-from . import chrome, dialogs, guide, icons
+from . import chrome, dialogs, guide, icons, quickstart
 from .arrange import ARRANGED, ArrangeError, arrange_file
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .collate import pinyin_key
@@ -826,6 +826,7 @@ class App:
         self.text_job: str | None = None
         self.text_kept = False  # saved since it was last changed
         self.guide: tk.Toplevel | None = None  # the format's card, while it is open (``toggle_guide``)
+        self.quickstart: tk.Toplevel | None = None  # the 快速开始 card, while it is open (``toggle_quickstart``)
         self.leaf_song: tuple[Path, float, Score, object, float] | None = None  # on it: file, its time, score,
         self.leaf_from: float | None = None  # timeline, speed; and where ▶ goes on from (seconds), if stopped
         self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
@@ -1039,7 +1040,7 @@ class App:
         assert self.frame is not None
         self.frame.edge = self.theme.px(5)
         bar = TitleBar(self.root, self.theme, self.frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
-                       self.frame.minimise, self.close)
+                       self.frame.minimise, self.close, start=self.toggle_quickstart)
         bar.pack(side="top", fill="x", before=first)
         self.crest.grid_remove()
         self.title_bar = bar
@@ -2466,6 +2467,31 @@ class App:
         else:
             self.guide = dialogs.card(self.root, guide.TITLE, guide.fill, on_close=self.guide_closed)
             self.root.after(60, self.text_box.focus_force)
+
+    def toggle_quickstart(self) -> None:
+        """The title bar's open book: 快速开始 beside the window, or, while it is open, closed.  The keyboard
+        stays where it was."""
+        if self.quickstart is not None and self.quickstart.winfo_exists():
+            self.quickstart.destroy()
+            self.quickstart = None
+            return
+        pictures = {"play": self.play_images["normal"], "ribbon": self.ribbon_image, "green": self.green_image,
+                    "record": self.record_images["normal"], "keys": self.keys_images["normal"]}
+        self.quickstart = dialogs.card(self.root, quickstart.TITLE,
+                                       lambda frame, theme: quickstart.fill(frame, theme, pictures),
+                                       on_close=self.quickstart_closed)
+        self.root.after(60, self.take_keyboard)
+
+    def quickstart_closed(self) -> None:
+        self.quickstart = None
+        self.take_keyboard()
+
+    def take_keyboard(self) -> None:
+        """The keyboard back to the window: to the text, on the text page."""
+        try:
+            (self.text_box if self.where == "text" else self.root).focus_force()
+        except tk.TclError:
+            pass
 
     def guide_closed(self) -> None:
         self.guide = None
