@@ -78,29 +78,34 @@ class Place(unittest.TestCase):
             found = read_place(dpi, self.path)
         return found, holding
 
-    def test_the_window_opens_where_it_was_left(self):
+    def test_the_window_opens_where_it_was_left_at_the_size_it_first_opens_at(self):
+        import json
         from lyrebot.app import write_place
-        write_place((-1500, 80, 438, 900), 120, self.path)
+        write_place((-1500, 80), 120, self.path)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"left": -1500, "top": 80, "dpi": 120})
         found, holding = self.read((-2400, 0, 0, 1290))
-        self.assertEqual(found, (-1500, 80, 438, 900))
-        holding.assert_called_once_with(-1500, 80, -1062, 980)
+        self.assertEqual(found, (-1500, 80, 438, 800))  # 350 x 640 at 125%
+        holding.assert_called_once_with(-1500, 80, -1062, 880)
+        found, _ = self.read((0, 0, 1920, 1040), dpi=96)  # the main screen at 100% now: that size at 100%
+        self.assertEqual(found[2:], (350, 640))
 
-    def test_with_the_main_screen_scaled_otherwise_since_it_keeps_its_size_to_the_eye(self):
-        from lyrebot.app import write_place
-        write_place((100, 100, 500, 1000), 120, self.path)  # left with LyreBot drawn at 125%
-        found, _ = self.read((0, 0, 1920, 1040), dpi=96)  # and now drawn at 100%
-        self.assertEqual(found, (100, 100, 400, 800))  # 500 x 1000 at 125% is 400 x 800 at 100%
+    def test_a_size_kept_before_is_passed_over(self):
+        self.path.write_text('{"left": 100, "top": 100, "width": 900, "height": 1000, "dpi": 120}', encoding="utf-8")
+        found, _ = self.read((0, 0, 1920, 1040))
+        self.assertEqual(found, (100, 100, 438, 800))
 
-    def test_it_is_no_smaller_than_the_window_may_be_and_all_on_the_screen(self):
-        from lyrebot.app import WINDOW_WIDTH, write_place
-        write_place((1800, 1000, 100, 100), 96, self.path)
+    def test_it_is_all_on_the_screen_it_is_on(self):
+        from lyrebot.app import OPENING_HEIGHT, WINDOW_WIDTH, write_place
+        write_place((1800, 1000), 96, self.path)
         found, _ = self.read((0, 0, 1920, 1040), dpi=96)
-        self.assertEqual(found, (1920 - WINDOW_WIDTH, 1040 - 360, WINDOW_WIDTH, 360))
+        self.assertEqual(found, (1920 - WINDOW_WIDTH, 1040 - OPENING_HEIGHT, WINDOW_WIDTH, OPENING_HEIGHT))
+        found, _ = self.read((0, 0, 1280, 600), dpi=96)  # a screen too short for it: as tall as the screen
+        self.assertEqual(found, (1280 - WINDOW_WIDTH, 0, WINDOW_WIDTH, 600))
 
     def test_nothing_kept_or_a_screen_gone_or_a_spoilt_note_opens_it_afresh(self):
         from lyrebot.app import write_place
         self.assertEqual(self.read((0, 0, 1920, 1040))[0], None)  # nothing kept
-        write_place((-1500, 80, 438, 900), 120, self.path)
+        write_place((-1500, 80), 120, self.path)
         self.assertEqual(self.read(None)[0], None)  # the screen it was on is gone
         self.path.write_text("{", encoding="utf-8")
         self.assertEqual(self.read((0, 0, 1920, 1040))[0], None)

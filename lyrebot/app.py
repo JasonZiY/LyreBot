@@ -100,6 +100,7 @@ GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
 WINDOW_WIDTH = 350  # the window's width when it opens, and the narrowest it goes: the widest controls fit
+OPENING_HEIGHT = 640  # and its height when it opens
 WATERMARK_SIZE = 136  # the lyre pressed into the page, at 100% scaling
 RIBBON_FROM_RIGHT = 59  # the ribbon's left edge, from the window's right, at 100% scaling
 
@@ -876,7 +877,7 @@ class App:
         self.scale = theme.scale
         self.dpi = round(theme.scale * 96)
         px, fonts = theme.px, theme.fonts
-        width, height = size or (px(WINDOW_WIDTH), px(640))
+        width, height = size or (px(WINDOW_WIDTH), px(OPENING_HEIGHT))
         if size is None:
             root.geometry(f"{width}x{height}")  # opens as narrow as it may be
         root.minsize(px(WINDOW_WIDTH), px(360))
@@ -1055,7 +1056,7 @@ class App:
         if self.place is not None:
             root.geometry(geometry(*self.place))
         else:
-            width, height = px(WINDOW_WIDTH), px(640)
+            width, height = px(WINDOW_WIDTH), px(OPENING_HEIGHT)
             left, top, right, bottom = screen_area(root, *root.winfo_pointerxy())
             root.geometry(geometry(left + max(0, right - left - width) // 2,
                                    top + max(0, bottom - top - height) // 2, width, height))
@@ -1074,7 +1075,7 @@ class App:
             return
         box = wintypes.RECT()
         if ctypes.windll.user32.GetWindowRect(self.frame.hwnd, ctypes.byref(box)):
-            write_place((box.left, box.top, box.right - box.left, box.bottom - box.top), self.dpi)
+            write_place((box.left, box.top), self.dpi)
 
     def watch_start_key(self) -> None:
         """F7 plays the chosen song at once, in whatever window is in front, as ▶ would."""
@@ -2006,7 +2007,7 @@ class App:
         goes from the one it last gave to the other; the window keeps its top left corner, and the screen."""
         view = self.score_view
         if self.grown:
-            self.size_window(self.theme.px(WINDOW_WIDTH), self.theme.px(640))
+            self.size_window(self.theme.px(WINDOW_WIDTH), self.theme.px(OPENING_HEIGHT))
             view.most = None
             self.grown = False
         else:
@@ -2631,7 +2632,7 @@ class App:
             self.root.destroy()
 
 
-PLACE = CACHE_ROOT.parent / "window.json"  # where the window was left
+PLACE = CACHE_ROOT.parent / "window.json"  # where the window was left (its top left corner)
 SETTINGS = CACHE_ROOT.parent / "settings.json"  # what was chosen, to be chosen again next time
 
 
@@ -2659,34 +2660,34 @@ def write_timbre(program: int, path: Path) -> None:
         pass
 
 
-def write_place(box: tuple[int, int, int, int], dpi: int, path: Path | None = None) -> None:
-    """Keep the window's place, ``box`` (left, top, width, height in LyreBot's pixels), drawn at ``dpi``."""
+def write_place(corner: tuple[int, int], dpi: int, path: Path | None = None) -> None:
+    """Keep where the window is, ``corner`` (its top left, in LyreBot's pixels), drawn at ``dpi``.  Its size is
+    not kept: it opens at the size it opens at the first time."""
     path = path or PLACE
-    left, top, width, height = box
+    left, top = corner
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"left": left, "top": top, "width": width, "height": height, "dpi": dpi}),
-                        encoding="utf-8")
+        path.write_text(json.dumps({"left": left, "top": top, "dpi": dpi}), encoding="utf-8")
     except OSError:
         pass
 
 
 def read_place(dpi: int, path: Path | None = None) -> tuple[int, int, int, int] | None:
-    """Where the window was left, as (left, top, width, height) for LyreBot drawn at ``dpi`` now (its size
-    made over if the main screen's scaling has changed since), no smaller than the window may be, and the
-    whole of it on the screen it is on.  None when nothing was kept, or that screen is gone."""
+    """Where the window opens, as (left, top, width, height) for LyreBot drawn at ``dpi`` now: at the corner
+    it was left at, the size it opens at the first time (the narrowest, 640 high: what the 简谱 page's button
+    makes it smaller to), and the whole of it on the screen it is on.  None when nothing was kept, or that
+    screen is gone.  (A size kept by LyreBot before 3.18.1 is passed over.)"""
     path = path or PLACE
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
-        left, top, width, height, was = (int(kept[key]) for key in ("left", "top", "width", "height", "dpi"))
+        left, top, was = (int(kept[key]) for key in ("left", "top", "dpi"))
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    width, height = round(WINDOW_WIDTH * dpi / 96), round(OPENING_HEIGHT * dpi / 96)
     area = screen_holding(left, top, left + width, top + height)
     if area is None or was <= 0:
         return None
     area_left, area_top, area_right, area_bottom = area
-    width = max(round(width * dpi / was), round(WINDOW_WIDTH * dpi / 96))
-    height = max(round(height * dpi / was), round(360 * dpi / 96))
     width, height = min(width, area_right - area_left), min(height, area_bottom - area_top)
     left = min(max(left, area_left), area_right - width)
     top = min(max(top, area_top), area_bottom - height)
