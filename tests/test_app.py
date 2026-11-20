@@ -139,6 +139,13 @@ class Folders(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        # No test sounds: the real synthesizer is never opened, and a test that tries fails.
+        from unittest import mock
+        from lyrebot.audition import AuditionError
+        guard = mock.patch("lyrebot.audition._WinMM", side_effect=AuditionError("测试里不出声"))
+        winmm = guard.start()
+        self.addCleanup(guard.stop)  # (cleanups run last first: the count is checked before the guard goes)
+        self.addCleanup(lambda: self.assertEqual(winmm.call_count, 0, "a test opened the real synthesizer"))
         self.midi, self.scores = self.root / "midi", self.root / "txt"
         self.midi.mkdir()
         self.scores.mkdir()
@@ -993,12 +1000,10 @@ class Folders(unittest.TestCase):
             app.size_window(5000, 5000)  # no larger than the screen
         self.assertEqual(placed, [f"{px(350)}x{px(360)}+-500+900", "900x800+-900+490", "2400x1290+-2400+0"])
 
-    def text_page(self, app, path, bar=None):
-        """Turn to ``path``'s text page, as the green ribbon does, after hearing bar ``bar`` (from 0)."""
+    def text_page(self, app, path):
+        """Turn to ``path``'s text page, as the green ribbon does."""
         if app.where != "leaf":
             self.leaf(app, path)
-        if bar is not None:
-            app.hear_note(self.note_at(app, 4.0 * bar))
         app.ribbon_turns("green")
         self.assertEqual(app.where, "text")
         return app.text_box
@@ -1034,21 +1039,33 @@ class Folders(unittest.TestCase):
         self.assertIsNone(app.hung["green"])
         self.assertEqual([image for image, _ in app.page.over], [app.ribbon_image])
 
-    def test_the_text_opens_as_saved_at_the_line_of_the_bar_last_heard(self):
+    def test_the_text_opens_as_saved_at_the_top_then_where_it_was_left(self):
+        from unittest import mock
         from lyrebot.app import TEXT_HINT, App
-        path, _ = self.three_bars()  # its bars on lines 2, 3 and 4
+        path, other = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
         text = self.text_page(app, path)
         self.assertEqual(text.get("1.0", "end-1c"), path.read_text(encoding="utf-8"))
-        self.assertEqual(text.index("insert"), "2.0")  # nothing heard yet: the first bar
+        self.assertEqual(text.index("insert"), "1.0")  # the first time: the top
         self.assertEqual(app.text_title.cget("text"), "三小节")
         self.assertEqual(app.text_about.cget("text"), "原文 · txt/歌曲/三小节.txt")
         self.assertEqual(app.text_status.cget("text"), TEXT_HINT)
         self.assertFalse(app.undo_button.enabled)
         self.assertEqual(app.root.title(), "三小节 · 原文 · LyreBot")
-        app.ribbon_turns("green")
-        text = self.text_page(app, path, bar=2)
-        self.assertEqual(text.index("insert"), "4.0")
+        text.mark_set("insert", "3.4")
+        app.ribbon_turns("green")  # to the 简谱, and back: the cursor and the view where they were left
+        with mock.patch.object(text, "yview", return_value=(0.4, 0.6)), \
+                mock.patch.object(text, "yview_moveto") as moved:
+            self.text_page(app, path)
+        self.assertEqual(text.index("insert"), "3.4")
+        moved.assert_called_with(0.4)
+        text.insert("insert", "# 改 ")
+        app.ribbon_turns("green")  # (saved on the way)
+        self.text_page(app, path)
+        self.assertEqual(text.index("insert"), "3.8")  # read again from the file: still there
+        app.ribbon_turns("orange")
+        self.leaf(app, other)  # another song: from the top
+        self.assertEqual(self.text_page(app, other).index("insert"), "1.0")
 
     def test_a_mistake_is_marked_and_neither_saved_nor_left(self):
         from unittest import mock
@@ -1122,30 +1139,31 @@ class Folders(unittest.TestCase):
         self.assertEqual(len(sizes), 1)
         self.assertFalse(app.grown)
 
-    def test_back_on_the_score_page_the_bar_of_the_cursor_shows(self):
-        from unittest import mock
+    def test_the_score_page_keeps_its_own_place_whatever_the_text_page_does(self):
         from lyrebot.app import App
-        path, _ = self.three_bars()
+        path, other = self.three_bars()
+        path.write_text("speed=60\n" + "a-s-d-f-\ng-h-j-q-\n" * 20, encoding="utf-8")  # long enough to scroll
+        other.write_text("speed=60\n" + "w-e-r-t-\n" * 20, encoding="utf-8")
         app = App(self.window(), self.scores, self.midi)
-        for line, bar in (("4.3", 2), ("1.0", 0), ("3.0", 1)):
-            text = self.text_page(app, path)
-            text.mark_set("insert", line)
-            with mock.patch.object(app.score_view, "reveal") as reveal:
-                app.ribbon_turns("green")
-            self.assertEqual(app.where, "leaf")
-            reveal.assert_called_once_with(bar)
+        view = self.leaf(app, path)
+        view.yview_moveto(0.5)
+        top = view.canvasy(0)
+        self.assertGreater(top, 0)
         text = self.text_page(app, path)
-        self.write(text, "speed=60\na-s-d-f-\n# 中间\ng-h-j-q-\nw-e-r-t-\nq---\n# 完\n")
-        text.mark_set("insert", "3.0")  # between two bars: the one under it
-        with mock.patch.object(app.score_view, "reveal") as reveal:
-            app.ribbon_turns("green")
-        reveal.assert_called_once_with(1)
-        self.assertEqual(len(app.score_view.notes), 13)  # drawn again from the text saved
+        text.mark_set("insert", "end")  # (where the text's cursor is has nothing to do with it)
+        app.ribbon_turns("green")
+        self.assertEqual(app.where, "leaf")
+        self.assertEqual(view.canvasy(0), top)
         text = self.text_page(app, path)
-        text.mark_set("insert", "7.0")  # after the last bar: the top
-        with mock.patch.object(app.score_view, "reveal") as reveal:
-            app.ribbon_turns("green")
-        reveal.assert_called_once_with(None)
+        text.insert("2.0", "# 改过\n")
+        notes = len(view.notes)
+        app.ribbon_turns("green")  # saved, so drawn again from the file: still where it was
+        self.assertEqual(len(view.notes), notes)
+        self.assertNotEqual(view.sheet, None)
+        self.assertAlmostEqual(view.canvasy(0), top, delta=app.theme.px(16))
+        app.ribbon_turns("orange")
+        self.leaf(app, other)  # another song: from the top
+        self.assertEqual(view.canvasy(0), 0)
 
     def test_while_writing_f7_plays_nothing_and_the_mark_at_the_start_is_kept(self):
         from unittest import mock

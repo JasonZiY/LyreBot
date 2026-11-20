@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bisect import bisect_left, bisect_right
+from bisect import bisect_right
 import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -817,7 +817,6 @@ class App:
         self.hearing = 0  # counts the stretches heard, so that progress from one cut short is not shown
         self.leaf = False  # the 简谱 page is shown, not the songs
         self.where = "songs"  # the page shown: "songs", "leaf" (the 简谱) or "text" (the score's text)
-        self.leaf_mark: int | None = None  # the bar (from 0) last heard or clicked on the 简谱 page
         self.text_path: Path | None = None  # on the text page: the file, as it was saved, whether it began with
         self.text_saved = ""  # a byte order mark, the mistake found in it (None: none), the score it reads as
         self.text_bom = False
@@ -1725,8 +1724,6 @@ class App:
     def hear_note(self, index: int) -> None:
         """A note clicked on the 简谱 page: hear the song from it, or, while it is heard, go on from it."""
         note = self.score_view.notes[index]
-        if self.leaf_song is not None:
-            self.leaf_mark = max(bisect_right(self.leaf_song[2].bars, note.beat) - 1, 0)
         if self.auditioning:
             self.leap_to = note.start
             self.hearing += 1  # what is still to come from before is not shown
@@ -2116,8 +2113,8 @@ class App:
             timeline = compile_ringing(score, speed)
             self.leaf_from = None  # a new song, or at another speed: where it stopped is elsewhere in time
             if sheet is not None:
-                self.score_view.show(sheet)
-                self.leaf_mark = None
+                again = self.leaf_song is not None and self.leaf_song[0] == path  # (its file changed): still there
+                self.score_view.show(sheet, top=self.score_view.canvasy(0) if again else 0.0)
                 # 1=C, the meter and the tempo; under them, briefly, where it came from and how it reads.
                 notes = [note.removeprefix("LyreBot ").split("，")[0] for note in sheet.notes
                          if note != "速度随演奏起伏"]  # (the ≈ says as much)
@@ -2356,7 +2353,7 @@ class App:
 
     def show_text(self) -> None:
         """Turn from the 简谱 page to its song's text, read from its file as it is now: the version undo goes
-        back to.  The cursor goes to the line of the bar last heard or clicked, else of the first bar."""
+        back to.  The cursor and the view are where this page was left, for the same song; else at the top."""
         if self.auditioning:
             self.stop()
         path = self.leaf_song[0] if self.leaf_song else None
@@ -2370,6 +2367,7 @@ class App:
         self.text_bom = raw.startswith("\ufeff")
         content = raw.removeprefix("\ufeff")
         text = self.text_box
+        place = (text.index("insert"), text.yview()[0]) if path == self.text_path else ("1.0", 0.0)
         text.delete("1.0", "end")
         text.insert("1.0", content)
         text.edit_reset()  # undo goes back no further than this
@@ -2383,35 +2381,18 @@ class App:
         self.text_about.configure(text=f"原文 · {where.as_posix()}/{path.name}")
         self.turn_to("text")
         self.check_text()
-        score = self.text_score
-        bar = self.leaf_mark if self.leaf_mark is not None else 0
-        line = score.bar_lines[min(bar, len(score.bar_lines) - 1)] if score and score.bar_lines else 1
-        text.mark_set("insert", f"{line}.0")
-        self.root.update_idletasks()
-        shown = max(1, text.winfo_height() // max(1, int(text.tk.call("font", "metrics", self.theme.fonts.mono,
-                                                                        "-linespace"))))
-        lines = int(text.index("end-1c").split(".")[0])
-        text.yview_moveto(max(0.0, (line - 1 - shown / 3) / max(lines, 1)))
-        text.see("insert")
+        text.mark_set("insert", place[0])
+        text.yview_moveto(place[1])
         text.focus_set()
         self.set_playing(False)
 
     def back_to_leaf(self) -> None:
-        """Turn from the text back to the 简谱, drawn again if the text was changed, showing the bar of the line
-        the cursor is on (a line between bars belongs to the bar under it); beyond the bars, the top."""
-        score = self.text_score
-        line = int(self.text_box.index("insert").split(".")[0])
-        bar = None
-        if score is not None and score.bar_lines:
-            at = bisect_left(score.bar_lines, line)
-            bar = at if at < len(score.bar_lines) else None
+        """Turn from the text back to the 简谱, where it was left: drawn again if the text was changed, and still
+        scrolled where it was."""
         self.turn_to("leaf")
         self.root.update_idletasks()
         self.read_leaf()
         self.set_playing(False)
-        self.score_view.reveal(bar)
-        if bar is not None:
-            self.leaf_mark = bar
 
     def text_problem(self) -> str | None:
         """On the text page, the mistake in the text that keeps it from being left; else None."""
@@ -2561,8 +2542,6 @@ class App:
                 hearing, at = value
                 if hearing == self.hearing:
                     self.score_view.heard(at)
-                    if self.score_view.lit_bar is not None:
-                        self.leaf_mark = self.score_view.lit_bar - 1
                     self.show_heard(at)
                     self.leaf_status.configure(text=HEARING, fg=MUTED)
             elif kind == "heard end":

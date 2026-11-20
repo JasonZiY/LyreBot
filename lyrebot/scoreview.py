@@ -321,12 +321,15 @@ class ScoreView(ScrollingPage, tk.Canvas):
         self.notes.append(Note(staff, bar.start + symbol.start, symbol.length, symbol.struck))
         return len(self.notes) - 1
 
-    def show(self, sheet: jianpu.Sheet | None) -> None:
-        """Draw ``sheet`` (or nothing) for the view's width now."""
+    keep_top: float | None = None  # where a score just shown is to be scrolled to, in pixels
+
+    def show(self, sheet: jianpu.Sheet | None, top: float = 0.0) -> None:
+        """Draw ``sheet`` (or nothing) for the view's width now, scrolled ``top`` pixels down: from the top,
+        or, for the same song drawn again, where it was."""
         self.sheet = sheet
         self.lit, self.hovered, self.lit_at, self.timing, self.staves = [], None, None, None, []
         self.lit_bar, self.bar_starts = None, []
-        self.yview_moveto(0)
+        self.keep_top = top
         self.lay_out()
 
     def width_now(self) -> int:
@@ -375,7 +378,6 @@ class ScoreView(ScrollingPage, tk.Canvas):
         systems = jianpu.layout_rows(sheet, LEFT, max(width / s - RIGHT, LEFT + 60), self.most)
         measure = Drawing(self, s)
         y = float(TOP)
-        self.bar_rows = {bar.number: row for row, system in enumerate(systems) for bar in system}
         for row, system in enumerate(systems):
             top, first = y, len(self.notes)
             y = jianpu.draw_system(measure, sheet, system, row, y, {}, rule=GOLD)
@@ -383,6 +385,10 @@ class ScoreView(ScrollingPage, tk.Canvas):
             self.pending.append((row, system, top, first, len(self.notes)))
         self.extent = round((y - 20 + FOOT) * s)
         self.configure(scrollregion=(0, 0, width, self.extent))
+        if self.keep_top is not None:  # (before any is drawn: what comes into view is drawn first)
+            room = max(self.extent - max(self.winfo_height(), 1), 0)
+            self.yview_moveto(min(max(self.keep_top, 0.0), room) / self.extent if self.extent else 0.0)
+            self.keep_top = None
         if self.timing is not None:
             self.time(*self.timing)
         self.light(self.lit_at)
@@ -406,19 +412,6 @@ class ScoreView(ScrollingPage, tk.Canvas):
             return width, math.ceil((TOP + sum(steps) - 20 + FOOT) * s)
         tallest = max(sum(steps[at:at + 4]) for at in range(len(steps) - 3)) - 14
         return width, math.ceil(tallest * s) + 2 * self.theme.px(18)
-
-    bar_rows: dict[int, int] = {}  # the system each bar is drawn in, by its number
-
-    def reveal(self, bar: int | None) -> None:
-        """Bring bar ``bar`` (from 0) into view a third of the way down, as hearing it would; None: the top."""
-        height = max(self.winfo_height(), 1)
-        row = self.bar_rows.get(self.sheet.bars[bar].number) if self.sheet and bar is not None \
-            and 0 <= bar < len(self.sheet.bars) else None
-        if row is None or self.extent <= height:
-            self.yview_moveto(0)
-            return
-        target = max(0.0, min(self.rows[row][0] - height / 3, self.extent - height))
-        self.yview_moveto(target / self.extent)
 
     def stop_drawing(self) -> None:
         if self.drawing is not None:
