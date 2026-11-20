@@ -1,0 +1,186 @@
+# 由 MIDI 自动编配：我曾经爱过你-录音.mid
+# 原曲中途转调，各段分别移调，93% 的音落在白键上
+# 第 1–61 小节相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调
+# 第 62–75 小节相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调
+# 第 76–105 小节相当于 B 大调 / G♯ 小调（5 个升号），升 1 个半音移成 C 大调 / A 小调
+# 第 106–157 小节相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 176 拍（四分音符），速度有起伏，逐拍跟随，3/4 拍
+speed=176.2
+0--h~q~e.|0--nad-
+.~s~f*j-~*h~q~|.~m-.~nad.  # 改动 ♭3→s ♯4→f
+e-~f~j~w-~|-~ms-.~
+h~q~e-~a~d~h.~|nad-.~zcn-~
+.n~a~d-~c~n~a~|.zc-.~0.~
+speed=174.5
+d{1/12}n{11/12}d*h*q~e-~*s*|0-cna-.~*m*  # 改动 ♭3→s
+f{1/10}j{1/10}w-{3/10}d{1/12}h{1/12}q{1/12}e-~|-.cna-.  # 改动 ♯4→f ♭3→w
+~r-.~e-|~mfj-.~ndh-
+.~h~*j~*q.w.e.|---
+{1/3}y{11/12}t-.d~|--.~n~  # 改动 ♯5→t
+h~q~e-s~f~j-|a~d~h-m-.  # 改动 ♭3→s ♯4→f
+.q-{2/3}r{5/6}|.ndh-{2/3}mfj{5/6}
+-q-.~a~|-ndh-.~zvn~
+speed=180
+d~h~q-b~m~d~g.~|-.c-.  # 改动 ♯5→b ♯5→g
+.d-.d.q.|.cm-.zca.ah.
+speed=172.2
+-.j.h.m~d~|-.0-c.
+g~j--.~|---  # 改动 ♯5→g
+h-e-e-|0-a-a-
+0-e-e-|c-a-a-
+speed=176.3
+h-e-e-|0-a-a-
+0-e-e-|c-a-a-
+q-j-h-|n-ad-ad-
+d-h-q-|c-ad-ad-
+e--r-|x-af-af-
+w---|n-af-af-
+w-q-w-|c-sf-sf-  # 改动 ♯1→q
+r-e-j-|m-sf-sf-
+w--q-|n-ad-ad-
+speed=173.6
+d---|c-ca-xm-
+q-j-h-|n-ad-ad-
+0-h-q-|cd-ad-ad-
+e--w-|x-af-af-
+r---|m-nf-nf-
+y--t-|cf-md-md-  # 改动 ♯5→t
+e-r-w-|j-mad-md-
+r--e-|naj-ad-adh-
+e---|ch-ad-ad-
+-c-c-|n-z-z-
+0-a.d.g.j.|0-zc-ad-  # 改动 ♯5→g
+speed=189.9
+q-j-h-|n-ad-ad-
+speed=174.6
+d-h-q-|c-ad-ad-
+e-q-r-|x-af-af-
+w---|n-af-af-
+w'e-q-w-|c-sf-sf-  # 改动 ♯1→q
+r-e-.j.|m-sf-sf-
+w--q-|n-ad-ad-
+d-c-0-|c-z-0-
+q-j-h-|n-ad-ad-
+d-h-q-|c-ad-ad-
+e-q-w-|x-af-af-
+r---|n-af-af-
+u-y-t-|b-mf-mf-
+t-w-.r.|x-mf-mf-
+r--e-|z-ad-ad-
+e-d.g.h.j.|c-cm-md-  # 改动 ♯5→g
+q-j-h-|n-ad-ad-
+d-h-q-|c-ad-ad-
+e-q-w-|xa-af-afj-
+r-e-j-|ms-naf-nf-
+speed=186.9
+q.q.q-.h.|vf.vfg.vfh-.x.  # 改动 伴奏♭3→x
+speed=174.4
+j.j.j-j.q.|cd.cd.cd-cd-
+q-m.a.s.d.|a-b-c-  # 转调到 D 大调 / B 小调，从这里起降 2 个半音
+f.d.s.d.f.f.|za-0--  # 改动 ♭3→s ♯4→f
+g-f-.m.|b-bs-bs-
+g-f--|m-bs-bs-
+g-f-.m.|b-bs-bs-
+q-w-w-|mg-sfg-sg-  # 改动 ♭3→w
+e-d--|af-cb-cb.b.
+f-d--|b-cb-cb-
+w'q-j.q.w.e.|a-dg-dg-
+r.e.w.e.r.r.|b-dg-dg-  # 改动 ♭3→w ♯4→r
+t-r-.j.|b-sg-sg-
+t-r--|m-sg-sg-
+t-r-.j.|b-sg-sg-
+g-f--|m-bs-bs-
+q-j-.g.|n-f-f-  # 转调到 B 大调 / G♯ 小调，从这里起升 1 个半音；改动 伴奏♭7→n
+w-r-w-|m-fj-fj-  # 改动 ♭3→w
+q-g-d-|a-bd-cb-
+a-s.d.f.f.|z-cb-cb-  # 改动 ♭3→s ♯4→f
+g-f-.m.|s-vn-vn-
+g-f--|b-vn-vn-
+g-f-.m.|b-vn-vn-
+g-f--|s-vn-vn-
+speed=176.9
+f-d--|a-cb-cb.b.
+f-d--|b-cb-cb-
+f-d-.b.|n-cb-cb-
+s-a--|z-cb-cb-  # 改动 ♯1→a 伴奏♯1→z
+g-f-.m.|s-vn--
+g-f-a.s.|b-vn-vn-  # 改动 ♯1→a ♭3→s
+g-f-.m.|b-vn-vn-
+speed=172.8
+g-f--|s-vn-vn-
+h-g-.d.|b-md-md-  # 改动 ♯5→g 伴奏♯5→b
+j-h--|n-ad-ad-
+q-j-.f.|m-sf-sf-
+w-q--|a-dh-dh-  # 改动 ♯1→q 伴奏♯1→a
+e-w-h-|s-fh-nf-
+g*j*w~r--.|b-m-s-  # 改动 ♯5→g
+---|m~*s~f--~*
+speed=160.9
+.w.j.~g.~f.|.0--.
+speed=195.4
+s{13/16}m{11/16}b.~v.~|0---
+w.j.g.f.s.m.|mfj---
+f.s.m.b.v.x.|bms---
+m.x.v.b.m.s.|x---  # 改动 ♯5→b
+speed=160.5
+m.s.f.g.j.w.|---  # 改动 ♯5→g
+m.s.f.g.j.w.|xb---
+---|---  # 转调到 D 大调 / B 小调，从这里起降 2 个半音
+speed=174.7
+.h-y-y.|.0-d-d.
+.0-y-y.|.c-d-d.
+.0-y-y.|.n-d-d.
+.0-y-y.|.c-d-d.
+.q-j-h.|.n-ad-ad.
+.d-h-q.|.c-ad-adh.
+.e--r.|.x-fh-fh.
+.w--.|.n-fh-fh.
+.w-q-w.|.c-d-d.  # 改动 ♯1→q
+.r-e-j.|.m-dj-md.
+.w--q.|.n-dh-dh.
+.d--.|.c-cn-va.
+.q-j-h.|.n-ad-ad.
+.d-h-q.|.c-ad-dh.
+.e--w.|.x-sh-sh.
+.r--.|.m-sh-sh.
+.q--u.|.cf-s-sd.
+.r-e-r.|.s-mad-mdj.
+.r--e.|.nj-dh-dh.
+.e--.|.ch-dh-dh.
+.n-n-n.|.0-c-c.
+.0-a.d.g.|.c-cn-nd.  # 改动 ♯5→g
+j.q-j-h.|.n-ad-ad.
+.d-h-q.|.c-ad-dh.
+.e--r.|.x-fh-fh.
+speed=176.9
+.w--.|.n-fh-fh.
+.w'e.q.q-w.|.c-d-d.  # 改动 ♯1→q
+.r-e-.|.m-dj-dj.
+speed=172.9
+j.w--q.|.n-dh-dh.
+.d--.|.c-cn-va.
+.q-j-h.|.n-nd-nd.
+speed=175.1
+.d-h-q.|.c-nd-dh.
+.e--w.|.x-af-af.
+.r--.|.n-af-af.
+.u-y-t.|.b-gj-gj.
+.t-w-.|.xg-gj-gj.
+r.r--e.|.z-dg-ad.
+.e-h-j.|.c-md-md.
+.q-j-h.|.n-nd-nd.
+.d-h-q.|.c-nd-dh.
+.e--w.|.v-af-af.
+.r-e-j.|.m-nf-nf.
+.q.q.q-.|.x-af-af.
+h.j.j.j-j.|.c-md-md.
+q.h--.|.n-nd-.
+~w*e'r-*e-0.|.c-dh-dh.  # 改动 ♭3→w
+0.q.q.q-.|.vf.vf.vf-0.
+h.j.j.j-j.|0.cd.cd.cd-0.
+q.h--.|0.n-cd-za.
+speed=169.8
+---|.n--.
+--0-|--0-

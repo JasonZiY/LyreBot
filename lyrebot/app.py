@@ -1559,9 +1559,13 @@ class App:
         question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
         if not dialogs.confirm("从 MIDI 重新编配", question, parent=self.root, yes="重新编配"):
             return
+        # The whole arrangement runs again, here: a few seconds for a long song.  Say so before it starts.
+        self.say(f"正在重新编配 {source.name}…")
+        self.root.update_idletasks()
         try:
             arrange_file(source, score)
         except (OSError, MidiError, ArrangeError) as error:
+            self.say(f"{source.name} 无法编配：{error}", warn=True)
             dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
             return
         self.failed_midi.pop(source, None)

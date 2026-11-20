@@ -1869,8 +1869,16 @@ class Folders(unittest.TestCase):
         with mock.patch("lyrebot.app.dialogs.confirm", return_value=False):
             app.rearrange()  # declined: the edit stays
         self.assertIn("手改过", target.read_text(encoding="utf-8"))
-        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True):
+        from lyrebot.app import arrange_file
+        said = []
+
+        def arranging(source, score):  # what the window says while the arrangement runs
+            said.append(app.status_label.cget("text"))
+            return arrange_file(source, score)
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True), \
+                mock.patch("lyrebot.app.arrange_file", side_effect=arranging):
             app.rearrange()
+        self.assertEqual(said, ["正在重新编配 曲子.mid…"])
         self.assertEqual(target.read_text(encoding="utf-8"), arranged)
         self.assertIn("已重新编配", app.status_label.cget("text"))
 
