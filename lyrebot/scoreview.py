@@ -37,6 +37,7 @@ COLOURS = {"#111": INK, jianpu.GREY: HELD, "#444": MUTED, "#777": MUTED}
 FOLLOW_PAUSE = 4.0  # seconds after the reader scrolls before the view follows the song again
 GLIDE = (0.25, 0.5, 0.72, 0.88, 0.96, 1.0)  # the steps of a scroll to keep the notes heard in sight
 SNAP = 0.25  # seconds: a note starts with the nearest key pressed this close to where it is written
+SLICE = 0.025  # seconds of drawing at a time: the score is drawn a few systems at a turn, those in view first
 
 
 # ---- smoothed lines, as pictures --------------------------------------------------------------
@@ -131,14 +132,23 @@ class Note:
 
 
 class Drawing:
-    """``jianpu``'s pen on a Tk canvas (see the module's note), ``scale`` pixels to the printed page's unit."""
+    """``jianpu``'s pen on a Tk canvas (see the module's note), ``scale`` pixels to the printed page's unit.
 
-    def __init__(self, view: "ScoreView", scale: float):
+    Without ``first`` it only measures: it notes each note and where it is drawn, and draws nothing.  With
+    it, it draws, numbering the notes from ``first`` as the measuring did."""
+
+    def __init__(self, view: "ScoreView", scale: float, first: int | None = None):
         self.view, self.scale = view, scale
+        self.measuring, self.next = first is None, first or 0
         self.current: int | None = None  # the note what is drawn now belongs to
 
     def note(self, bar, staff: int, symbol) -> None:
-        self.current = self.view.register(bar, staff, symbol) if symbol is not None and symbol.keys else None
+        if symbol is None or not symbol.keys:
+            self.current = None
+        elif self.measuring:
+            self.current = self.view.register(bar, staff, symbol)
+        else:
+            self.current, self.next = self.next, self.next + 1
 
     def _grow(self, left: float, top: float, right: float, bottom: float) -> None:
         if self.current is not None:
@@ -155,14 +165,17 @@ class Drawing:
         plain = weight == "normal"  # bar numbers, tempo marks, triplets' 3: the figures' face, muted
         font = self.view.font("figures" if plain else "digits", size * s, style == "italic")
         colour = MUTED if plain and fill == "#111" else COLOURS.get(fill, INK)
-        ascent, descent = font.metrics("ascent"), font.metrics("descent")
+        ascent, descent = self.view.metrics(font)
         px, baseline = x * s, y * s
+        if self.measuring:
+            if self.current is not None:
+                width = self.view.width_of(font, value)
+                self._grow(px - width / 2, baseline - ascent * 0.75, px + width / 2, baseline + descent)
+            return
         tk_anchor = {"middle": "s", "start": "sw", "end": "se"}[anchor]
         item = self.view.create_text(px, baseline + descent, text=value, anchor=tk_anchor, font=font, fill=colour,
                                      tags=self._tags("digit"))
         if self.current is not None:
-            width = self.view.width_of(font, value)
-            self._grow(px - width / 2, baseline - ascent * 0.75, px + width / 2, baseline + descent)
             self.view.inked[item] = colour
 
     def line(self, x1: float, y1: float, x2: float, y2: float, width: float = 1.3, stroke: str = "#111") -> None:
@@ -170,21 +183,29 @@ class Drawing:
         pen = max(1, round(width * s))
         colour = COLOURS.get(stroke, stroke)
         a, b, c, d = (round(v * s) for v in (x1, y1, x2, y2))  # level and upright: on whole pixels
+        if self.measuring:
+            if self.current is not None:
+                self._grow(min(a, c) - pen, min(b, d) - pen, max(a, c) + pen, max(b, d) + pen)
+            return
         item = self.view.create_line(a, b, c, d, width=pen, fill=colour, capstyle="butt", tags=self._tags("stroke"))
         if self.current is not None:
-            self._grow(min(a, c) - pen, min(b, d) - pen, max(a, c) + pen, max(b, d) + pen)
             self.view.inked[item] = colour
 
     def dot(self, x: float, y: float, r: float = 1.9, fill: str = "#111") -> None:
         s = self.scale
         colour = COLOURS.get(fill, INK)
         radius = max(1.0, round(r * s * 2) / 2)
+        if self.measuring:
+            if self.current is not None:
+                self._grow(x * s - radius, y * s - radius, x * s + radius, y * s + radius)
+            return
         item = self.view.create_image(x * s, y * s, image=self.view.dot(radius, colour), tags=self._tags("dot"))
         if self.current is not None:
-            self._grow(x * s - radius, y * s - radius, x * s + radius, y * s + radius)
             self.view.dotted[item] = (radius, colour)
 
     def path(self, d: str, width: float = 1.1, stroke: str = "#111") -> None:
+        if self.measuring:
+            return
         s = self.scale
         lines = [[(x * s, y * s) for x, y in line] for line in flatten(d)]
         image, left, top = self.view.curve(lines, max(0.9, width * s), COLOURS.get(stroke, stroke))
@@ -204,12 +225,15 @@ class ScoreView(ScrollingPage, tk.Canvas):
         self.inked: dict[int, str] = {}  # what is drawn in a colour of its own, by item: that colour
         self.dotted: dict[int, tuple[float, str]] = {}  # the dots, by item: their radius and colour
         self.fonts: dict[tuple, tkfont.Font] = {}
+        self.metric: dict[str, tuple[int, int]] = {}
         self.widths: dict[tuple, int] = {}
         self.dots: dict[tuple, tk.PhotoImage] = {}
         self.curves: dict[tuple, tuple[tk.PhotoImage, int, int]] = {}
         self.tints: dict[tuple, tk.PhotoImage] = {}
         self.staves: list[list[tuple[float, float, int]]] = []  # per staff: (at, until, note), in order
         self.rows: list[tuple[float, float]] = []  # each system's top and foot, in pixels
+        self.pending: list[tuple] = []  # the systems measured but not drawn yet: (row, system, top, first note, end)
+        self.drawing: str | None = None  # the next few systems' turn to be drawn
         self.laid_width = 0
         self.job: str | None = None
         self.lit: list[int] = []  # the notes shown as being heard
@@ -238,6 +262,13 @@ class ScoreView(ScrollingPage, tk.Canvas):
             self.fonts[key] = tkfont.Font(root=self, family=family, size=-size, weight=weight,
                                           slant="italic" if italic else "roman")
         return self.fonts[key]
+
+    def metrics(self, font: tkfont.Font) -> tuple[int, int]:
+        """The font's ascent and descent."""
+        key = str(font)
+        if key not in self.metric:
+            self.metric[key] = (font.metrics("ascent"), font.metrics("descent"))
+        return self.metric[key]
 
     def width_of(self, font: tkfont.Font, text: str) -> int:
         key = (str(font), text)
@@ -289,23 +320,37 @@ class ScoreView(ScrollingPage, tk.Canvas):
         return width if width > 1 else int(self.cget("width"))
 
     def later(self) -> None:
-        """The view changed size: once it holds still, lay the score out again for a new width."""
+        """The view changed size: once it holds still (and the window too), lay the score out again for a new
+        width.  Not while it is on a page not shown."""
+        top = self.winfo_toplevel()
         if self.job is not None:
-            self.winfo_toplevel().after_cancel(self.job)
-        self.job = self.winfo_toplevel().after(150, self.settle)
+            top.after_cancel(self.job)
+        self.job = top.after(150, self.settle)
+
+    def resizing(self) -> bool:
+        return self.page is not None and self.page.later is not None
 
     def settle(self) -> None:
         self.job = None
-        if self.width_now() != self.laid_width:
+        if self.away:
+            return
+        if self.resizing():  # the window is still being dragged: wait for it
+            self.later()
+        elif self.width_now() != self.laid_width:
             self.lay_out()
 
     def lay_out(self) -> None:
+        """Lay the score out for the view's width: every note measured now, so that where each one is and when
+        it sounds are known at once; the systems in view drawn now, the rest a few at a time (``draw_some``)."""
+        self.stop_drawing()
         self.delete("score")
-        self.notes, self.inked, self.dotted, self.rows = [], {}, {}, []
-        self.itemconfigure(self.hover_item, state="hidden")
         for item in self.lit_items:
             self.delete(item)
         self.lit_items = []
+        self.itemconfigure(self.hover_item, state="hidden", image="")
+        self.hovered = None
+        self.notes, self.inked, self.dotted, self.rows, self.pending = [], {}, {}, [], []
+        self.curves, self.tints = {}, {}  # (their pictures are freed with them: what showed them is gone)
         width = self.laid_width = self.width_now()
         sheet = self.sheet
         if sheet is None:
@@ -314,21 +359,68 @@ class ScoreView(ScrollingPage, tk.Canvas):
             return
         s = self.scale
         systems = jianpu.layout_rows(sheet, LEFT, max(width / s - RIGHT, LEFT + 60))
-        drawing = Drawing(self, s)
-        y, previous = float(TOP), {}
+        measure = Drawing(self, s)
+        y = float(TOP)
         for row, system in enumerate(systems):
-            top = y
-            y = jianpu.draw_system(drawing, sheet, system, row, y, previous, rule=GOLD)
+            top, first = y, len(self.notes)
+            y = jianpu.draw_system(measure, sheet, system, row, y, {}, rule=GOLD)
             self.rows.append((top * s, (y - 14) * s))
+            self.pending.append((row, system, top, first, len(self.notes)))
         self.extent = round((y - 20 + FOOT) * s)
         self.configure(scrollregion=(0, 0, width, self.extent))
-        self.tag_raise("fade")
-        self.tag_raise("over")
         if self.timing is not None:
             self.time(*self.timing)
         self.light(self.lit_at)
+        self.draw_some()
         if self.paper is not None:
             self.lay_paper(*self.paper)
+
+    def stop_drawing(self) -> None:
+        if self.drawing is not None:
+            self.winfo_toplevel().after_cancel(self.drawing)
+            self.drawing = None
+
+    def draw_row(self, entry: tuple) -> None:
+        row, system, top, first, end = entry
+        jianpu.draw_system(Drawing(self, self.scale, first), self.sheet, system, row, top, {}, rule=GOLD)
+        for index in self.lit:
+            if first <= index < end:
+                self.colour(index, ORANGE)
+
+    def draw_some(self) -> None:
+        """Draw systems for ``SLICE``, those in view first, from the top, then the others nearest the view;
+        the rest at the next turn, so that the window never waits long.  Not while the window is being
+        dragged or the view's page is not shown."""
+        self.drawing = None
+        if not self.pending:
+            return
+        top = self.winfo_toplevel()
+        if self.away or self.resizing():
+            self.drawing = top.after(80, self.draw_some)
+            return
+        began = time.perf_counter()
+        view_top = self.canvasy(0)
+        view_foot = view_top + max(self.winfo_height(), 1)
+        while self.pending:
+            shown = [entry for entry in self.pending
+                     if self.rows[entry[0]][0] < view_foot and self.rows[entry[0]][1] > view_top]
+            entry = shown[0] if shown else min(self.pending, key=lambda e: abs(self.rows[e[0]][0] - view_top))
+            self.pending.remove(entry)
+            self.draw_row(entry)
+            if time.perf_counter() - began >= SLICE:  # (one system at least each turn)
+                break
+        self.tag_raise("fade")
+        self.tag_raise("over")
+        if self.pending:
+            self.drawing = top.after(1, self.draw_some)
+
+    def finish(self) -> None:
+        """Draw every system not drawn yet, now."""
+        self.stop_drawing()
+        while self.pending:
+            self.draw_row(self.pending.pop(0))
+        self.tag_raise("fade")
+        self.tag_raise("over")
 
     timing: tuple | None = None
     lit_at: float | None = None

@@ -684,6 +684,8 @@ class ThinScrollbar(OnPage, tk.Canvas):
 
     def redraw(self) -> None:
         self.delete("!paper")
+        if self.first <= 0 and self.last >= 1:  # all of it in view: no thumb (its room may still be kept)
+            return
         busy = self.inside or self.drag is not None
         thick = self.theme.px(6 if busy else 4)
         top, bottom = self.thumb()

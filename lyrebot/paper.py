@@ -427,10 +427,13 @@ class Page:
             try:
                 if not surface.winfo_exists():
                     continue
-                x, y = self.offset(surface)
-                surface.lay_paper(self.image, x, y)
+                if surface.away:  # on a page not shown: only the picture, so none it shows is freed
+                    surface.keep_paper(self.image)
+                else:
+                    x, y = self.offset(surface)
+                    surface.lay_paper(self.image, x, y)
             except tk.TclError:
-                continue
+                pass  # (laid again next time)
             alive.append(surface)
         self.surfaces = alive
 
@@ -448,6 +451,7 @@ class OnPage:
     page over it.  Its drawings clear with ``delete("!paper")``, which leaves both where they lie."""
 
     page: Page | None = None
+    away = False  # on a page that is not shown (the window shows one of two): ``Page.refresh`` passes it by
     paper: tuple[tk.PhotoImage, int, int] | None = None
     laid: tuple[str, float, float] | None = None  # the image and place the paper item has
     hung: list[tuple[str, float, float]] = []  # the images and places of what hangs over it
@@ -474,6 +478,15 @@ class OnPage:
                 canvas.tag_lower(canvas.create_image(left, top, anchor="nw", image=image, tags="paper"))
             self.laid = (str(image), left, top)
         self.lay_over(x, y, left, top)
+
+    def keep_paper(self, image: tk.PhotoImage) -> None:
+        """Away, show the paper's new picture where the old one was, so that the old one may be freed; where
+        it goes is worked out once the canvas is shown again."""
+        canvas: tk.Canvas = self  # type: ignore[assignment]
+        found = canvas.find_withtag("paper&&!over")
+        if found and (self.laid is None or self.laid[0] != str(image)):
+            canvas.itemconfigure(found[0], image=image)
+        self.laid = None
 
     def lay_over(self, x: int, y: int, left: float, top: float) -> None:
         """Lay what hangs over the page where it crosses this canvas, which stands at (x, y) in the window,
@@ -537,6 +550,8 @@ class ScrollingPage(OnPage):
         edition = self.page.edition if self.page is not None else 0  # (marks pressed in anew change the paper)
         if self.faded_for != (str(image), edition, x, y, width, height):
             self.faded_for = (str(image), edition, x, y, width, height)
+            for item in (self.fade_top, self.fade_bottom):  # let go of the old strips before they are freed
+                canvas.itemconfigure(item, image="")
             self.fades = (fade(canvas, image, x, y, width, tall, solid_at_top=True),
                           fade(canvas, image, x, y + height - tall, width, tall, solid_at_top=False))
         top = canvas.canvasy(0)
@@ -544,7 +559,7 @@ class ScrollingPage(OnPage):
         for item, strip, at, show in ((self.fade_top, self.fades[0], top, above),
                                       (self.fade_bottom, self.fades[1], top + height - tall, below)):
             if strip is None:
-                canvas.itemconfigure(item, state="hidden")
+                canvas.itemconfigure(item, image="", state="hidden")
                 continue
             canvas.coords(item, canvas.canvasx(0), at)
             canvas.itemconfigure(item, image=strip, state="normal" if show else "hidden")

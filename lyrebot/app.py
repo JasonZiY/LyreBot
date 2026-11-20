@@ -30,7 +30,7 @@ from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
 from .midi import MidiError
 from .notate import notate
-from .paper import Page, ScrollingPage
+from .paper import OnPage, Page, ScrollingPage
 from .player import play
 from .record import SILENCE, WAIT, record
 from .score import Score, ScoreError, load_score, score_files
@@ -71,7 +71,8 @@ LET_GO = "松开后从该小节开始"  # while the knob is dragged: the bar cou
 HEARING = "正在试听 · 点 ■ 或按 F8 停止，点别的音从那里接着听"
 TO_HEAR = "点简谱上的任何一个音，从那里开始听"
 HEAR_TIP, HALT_TIP = "试听", "停止试听（F8）"
-TO_SCORE, TO_SONGS = "翻到简谱，试听", "翻回曲目"  # what the ribbon does, said when the pointer rests on it
+TO_SCORE, TO_SONGS = "翻到简谱，试听", "翻回曲目"
+LEAVES = 6  # songs kept read for the 简谱 page, the latest last  # what the ribbon does, said when the pointer rests on it
 EMPTY = ("把 .txt 曲谱放进 txt 文件夹，或把 MIDI 放进 midi 文件夹，"
          "也可以点 ● 录一段音乐，或点 ● 左边的键盘记下自己弹的琴")  # when there is no score at all
 SPEEDS = ("80%", "100%", "120%", "150%", "200%")
@@ -803,6 +804,7 @@ class App:
         self.leaf_song: tuple[Path, float, Score, object, float] | None = None  # on it: file, its time, score,
         self.leaf_from: float | None = None  # timeline, speed; and where ▶ goes on from (seconds), if stopped
         self.leaf_bars: list[float] = []  # when its bars begin, in seconds at that speed
+        self.leaves: dict[tuple[Path, float | None], tuple] = {}  # songs read for it lately: (score, 简谱 sheet)
         self.ribbon_inside = False
         self.cursors: dict[str, str] = {}  # what a piece's pointer was before the ribbon made it a hand
         self.written: tuple[Path, str] | None = None  # a score just written from the keys played
@@ -963,6 +965,7 @@ class App:
         for piece in (self.backdrop, top, self.browser, self.scrollbar, *self.leaf_pieces()):
             piece.bindtags((self.ribbon_tag, *piece.bindtags()))
         self.callout = Callout(root, theme)
+        self.set_away([piece for piece, _ in self.leaf_page], True)  # (the songs come first)
         self.dress_page()
         if self.frame is not None:  # drawn again: the title bar with the rest
             chrome.stand_aside(self.frame, (self.backdrop, self.make_title_bar(panel)))
@@ -1928,8 +1931,11 @@ class App:
         self.leaf_body = Sheet(root, theme)
         self.score_view = ScoreView(self.leaf_body, theme, self.hear_note)
         self.score_view.pack(side="left", fill="both", expand=True)
+        # Its room is kept even while all the score is in view: the score's width never changes with it,
+        # which would lay it out a second time.
         self.score_bar = ThinScrollbar(self.leaf_body, theme, self.scroll_score)
-        self.score_view.configure(yscrollcommand=self.score_scrolled)
+        self.score_bar.pack(side="right", fill="y", before=self.score_view)
+        self.score_view.configure(yscrollcommand=self.score_bar.set)
         self.leaf_rule = Ornament(root, theme)
         self.leaf_panel = Sheet(root, theme)
         row = Sheet(self.leaf_panel, theme)
@@ -1962,88 +1968,113 @@ class App:
         self.score_view.read_on()  # the reader took the scrollbar: leave the score where they put it
         self.score_view.yview(*args)
 
-    def score_scrolled(self, first: str, last: str) -> None:
-        if float(first) <= 0 and float(last) >= 1:
-            self.score_bar.pack_forget()
-        else:
-            self.score_bar.pack(side="right", fill="y", before=self.score_view)
-        self.score_bar.set(first, last)
-
     def wheel(self, event: tk.Event) -> None:
         (self.score_view if self.leaf else self.browser).wheel(event)
 
+    def set_away(self, pieces: list[tk.Misc], away: bool) -> None:
+        """Mark ``pieces`` and all in them as on the page not shown (the paper passes them by), or shown."""
+        stack = list(pieces)
+        while stack:
+            piece = stack.pop()
+            if isinstance(piece, OnPage):
+                piece.away = away
+            stack.extend(piece.winfo_children())
+
     def turn_page(self) -> None:
-        """The ribbon clicked: to the chosen song's 简谱, or back to the songs."""
+        """The ribbon clicked: to the chosen song's 简谱, or back to the songs.  The page is turned first and
+        the score drawn after, for the size it shows at."""
         if self.leaf:
             self.show_songs()
             return
         path = self.selected()
         if self.worker:
             self.ribbon_says("正在演奏或录音，结束后再看简谱")
-        elif path is None:
+            return
+        if path is None:
             self.ribbon_says("先选一首曲子")
-        elif self.read_leaf(path):
-            self.show_leaf()
+            return
+        read = self.load_leaf(path)
+        if read is None:
+            return
+        self.show_leaf()
+        self.root.update_idletasks()  # (the score is laid out for the width it has on the page)
+        self.put_leaf(read)
 
-    def read_leaf(self, path: Path | None = None) -> bool:
-        """Read ``path`` (else the song on the 简谱 page, if its file has changed) for the 简谱 page and draw
-        it there.  Says so and answers False when it cannot be read."""
-        again = path is None
-        if again:
-            if self.leaf_song is None:
-                return False
-            path = self.leaf_song[0]
+    def load_leaf(self, path: Path, quietly: bool = False) -> tuple | None:
+        """``path`` read for the 简谱 page: (path, its time, score, sheet), the sheet None when it is the song
+        there already, unchanged.  None, said under the ribbon unless ``quietly``, when it cannot be read."""
         try:
             changed = path.stat().st_mtime
         except OSError:
             changed = None
-        speed = self.speed_factor()
-        if again and changed is not None and changed == self.leaf_song[1]:
-            return True
-        if changed is None and again:  # moved or deleted while it was open
+        if self.leaf_song is not None and self.leaf_song[0] == path and changed == self.leaf_song[1]:
+            return path, changed, self.leaf_song[2], None
+        kept = self.leaves.pop((path, changed), None)  # read lately, unchanged since: not read again
+        if kept is None:
+            try:
+                kept = load_score(path), jianpu.sheet_of(path.read_text(encoding="utf-8-sig"), path.stem)
+            except (OSError, ScoreError, UnicodeDecodeError, ValueError) as error:
+                if not quietly:
+                    self.ribbon_says("曲谱有误，没有简谱可看" if isinstance(error, ScoreError) else "读不了这份曲谱")
+                return None
+        self.leaves[(path, changed)] = kept
+        while len(self.leaves) > LEAVES:
+            self.leaves.pop(next(iter(self.leaves)))
+        return path, changed, *kept
+
+    def read_leaf(self) -> bool:
+        """Draw the song on the 简谱 page again if its file has changed; back to the songs if it has gone.
+        False when it cannot be shown."""
+        if self.leaf_song is None:
+            return False
+        path = self.leaf_song[0]
+        if not path.exists():  # moved or deleted while it was open
             self.show_songs()
             return False
-        try:
-            text = path.read_text(encoding="utf-8-sig")
-            score = load_score(path)
-            sheet = jianpu.sheet_of(text, path.stem)
-        except (OSError, ScoreError, UnicodeDecodeError, ValueError) as error:
-            if not again:
-                self.ribbon_says("曲谱有误，没有简谱可看" if isinstance(error, ScoreError) else "读不了这份曲谱")
+        read = self.load_leaf(path, quietly=True)
+        if read is None:
             return False
-        same = (not again and self.leaf_song is not None and self.leaf_song[0] == path
-                and self.leaf_song[1] == changed)
-        timeline = compile_ringing(score, speed)
-        if not same:
-            self.score_view.show(sheet)
-            self.leaf_from = None
-            # 1=C, the meter and the tempo; under them, briefly, where the score came from and how it reads.
-            notes = [note.removeprefix("LyreBot ").split("，")[0] for note in sheet.notes
-                     if note != "速度随演奏起伏"]  # (the ≈ says as much)
-            about = "　".join(("1=C", f"{sheet.meter[0]}/{sheet.meter[1]}", sheet.tempo))
-            self.leaf_title.configure(text=sheet.title)
-            self.leaf_about.configure(text=about + ("\n" + " · ".join(notes) if notes else ""))
-        elif self.leaf_song[4] == speed:
-            timeline = self.leaf_song[3]
-        else:  # the same song at another speed: where it stopped is somewhere else in time
-            self.leaf_from = None
+        if read[3] is not None:
+            self.put_leaf(read)
+        return True
+
+    def put_leaf(self, read: tuple) -> None:
+        """Show what ``load_leaf`` read on the 简谱 page, timed at the speed chosen now."""
+        path, changed, score, sheet = read
+        speed = self.speed_factor()
+        if sheet is None and self.leaf_song is not None and self.leaf_song[4] == speed:
+            timeline = self.leaf_song[3]  # the same song at the same speed: as it was
+        else:
+            timeline = compile_ringing(score, speed)
+            self.leaf_from = None  # a new song, or at another speed: where it stopped is elsewhere in time
+            if sheet is not None:
+                self.score_view.show(sheet)
+                # 1=C, the meter and the tempo; under them, briefly, where it came from and how it reads.
+                notes = [note.removeprefix("LyreBot ").split("，")[0] for note in sheet.notes
+                         if note != "速度随演奏起伏"]  # (the ≈ says as much)
+                about = "　".join(("1=C", f"{sheet.meter[0]}/{sheet.meter[1]}", sheet.tempo))
+                self.leaf_title.configure(text=sheet.title)
+                self.leaf_about.configure(text=about + ("\n" + " · ".join(notes) if notes else ""))
+            self.score_view.time(score, speed, sorted(event.at for event in timeline.events if event.down))
+            tempo = score.tempo_map(speed)
+            self.leaf_bars = [float(tempo.seconds(Fraction(start))) for start in score.bars]
         self.leaf_song = (path, changed, score, timeline, speed)
-        self.score_view.time(score, speed, sorted(event.at for event in timeline.events if event.down))
-        tempo = score.tempo_map(speed)
-        self.leaf_bars = [float(tempo.seconds(Fraction(start))) for start in score.bars]
         self.show_heard(self.leaf_from or 0.0)
         self.leaf_status.configure(text=TO_HEAR if self.leaf_from is None else "已停止 · 点 ▶ 从亮着的音接着听",
                                    fg=MUTED)
         if not self.worker:
             self.set_playing(False)
-        return True
 
     def show_leaf(self) -> None:
         """Turn to the 简谱 page."""
         for piece, _ in self.songs_page:
             piece.pack_forget()
+        self.set_away([piece for piece, _ in self.songs_page], True)
+        self.set_away([piece for piece, _ in self.leaf_page], False)
         for piece, how in self.leaf_page:
             piece.pack(**how)
+        self.page.schedule()  # (laid where they stand now, whether or not they moved)
+        self.score_view.later()  # a width not laid out for yet: laid out once it holds still
         self.leaf = True
         self.ribbon_leave()
         self.set_playing(False)
@@ -2054,8 +2085,11 @@ class App:
             self.stop()
         for piece, _ in self.leaf_page:
             piece.pack_forget()
+        self.set_away([piece for piece, _ in self.leaf_page], True)
+        self.set_away([piece for piece, _ in self.songs_page], False)
         for piece, how in self.songs_page:
             piece.pack(**how)
+        self.page.schedule()
         self.leaf = False
         self.ribbon_leave()
         if not self.worker:

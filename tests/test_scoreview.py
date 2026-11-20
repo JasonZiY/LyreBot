@@ -80,6 +80,41 @@ class View(unittest.TestCase):
         self.assertGreater(len(narrow.rows), len(wide.rows))
         self.assertGreater(narrow.extent, wide.extent)
 
+    def test_it_is_measured_at_once_and_drawn_a_few_systems_at_a_time_those_in_view_first(self):
+        from unittest import mock
+        view, _ = self.view(300)
+        view.configure(height=60)
+        with mock.patch("lyrebot.scoreview.SLICE", 0):  # one system a turn
+            view.lay_out()
+        self.assertEqual(len(view.notes), 20)  # every note known, where and when
+        self.assertEqual(len(view.pending), len(view.rows) - 1)  # but only the first system drawn
+        drawn = {int(tag[1:]) for item in view.find_withtag("digit") for tag in view.gettags(item)
+                 if tag.startswith("n")}
+        first, end = 0, next(entry[3] for entry in view.pending)
+        self.assertEqual(drawn, set(range(first, end)))
+        view.away = True  # its page turned: nothing more is drawn
+        view.draw_some()
+        self.assertEqual(len(view.pending), len(view.rows) - 1)
+        view.away = False
+        view.heard(view.notes[-1].at, follow=False)  # a note not drawn yet is lit once it is
+        view.finish()
+        self.assertEqual(view.pending, [])
+        lit = view.lit[0]
+        digits = [item for item in view.find_withtag(f"n{lit}") if view.type(item) == "text"]
+        self.assertTrue(digits)
+        from lyrebot.theme import ORANGE
+        self.assertTrue(all(view.itemcget(item, "fill") == ORANGE for item in digits))
+
+    def test_only_the_curves_of_the_layout_shown_are_kept(self):
+        view, _ = self.view(300)
+        view.finish()
+        kept = len(view.curves)
+        for width in (340, 380, 420, 460, 300):
+            view.configure(width=width)
+            view.lay_out()
+            view.finish()
+        self.assertEqual(len(view.curves), kept)  # (each picture holds Windows' drawing objects)
+
     def test_a_click_names_the_note_under_it(self):
         from types import SimpleNamespace
         view, clicked = self.view(400)

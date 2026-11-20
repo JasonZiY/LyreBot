@@ -842,6 +842,7 @@ class Folders(unittest.TestCase):
         path, _ = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
         view = self.leaf(app, path)
+        view.finish()  # (drawn a few systems at a time, otherwise)
         index = self.note_at(app, 5.0)
         digit = next(item for item in view.find_withtag(f"n{index}") if view.type(item) == "text")
         self.assertEqual(view.itemcget(digit, "fill"), INK)
@@ -902,6 +903,29 @@ class Folders(unittest.TestCase):
         self.assertEqual(starts, [0.0, 8.0])
         self.assertEqual(len(made), 2)  # the synthesizer was closed and opened again
         self.assertTrue(app.leaf_status.cget("text").startswith("试听完毕"))
+
+    def test_turning_pages_puts_the_other_page_away_and_reads_a_song_only_once(self):
+        from unittest import mock
+        from lyrebot import jianpu
+        from lyrebot.app import App
+        path, other = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        self.assertTrue(app.score_view.away and not app.browser.away)  # the songs come first
+        real = jianpu.sheet_of
+        with mock.patch("lyrebot.app.jianpu.sheet_of", side_effect=real) as read:
+            self.leaf(app, path)
+            self.assertTrue(app.browser.away and not app.score_view.away)
+            for _ in range(3):
+                app.turn_page()
+                app.turn_page()
+            self.assertEqual(read.call_count, 1)  # turned to again and again: read once
+            app.turn_page()
+            self.leaf(app, other)
+            app.turn_page()
+            self.leaf(app, path)  # read lately, unchanged: not read again
+            self.assertEqual(read.call_count, 2)
+        self.assertEqual(len(app.score_view.notes), 12)
+        self.assertEqual(app.score_bar.winfo_manager(), "pack")  # its room kept, whether or not it is needed
 
     def test_turning_back_stops_hearing_and_the_game_turns_back_to_the_songs(self):
         from unittest import mock

@@ -125,6 +125,56 @@ class OnThePage(unittest.TestCase):
         words.configure(text="风息")
         self.assertEqual(len(words.find_withtag("paper")), 1)  # redrawing keeps the paper
 
+    def test_a_piece_away_keeps_only_the_new_picture_and_is_laid_again_once_shown(self):
+        page = self.page()
+        sheet = Sheet(self.root, self.theme)
+        sheet.pack()
+        sheet.winfo_x, sheet.winfo_y = (lambda: 7), (lambda: 5)
+        page.refresh()
+        [laid] = sheet.find_withtag("paper")
+        sheet.away = True  # its page turned: the paper is washed anew meanwhile
+        old = str(page.image)
+        page.lay(90, 60)
+        self.assertNotEqual(str(page.image), old)
+        self.assertEqual(sheet.itemcget(laid, "image"), str(page.image))  # nothing it shows is freed
+        sheet.winfo_x = lambda: 12  # where it stands now is not worked out while it is away
+        page.refresh()
+        self.assertEqual(sheet.coords(laid), [-7, -5])
+        sheet.away = False
+        page.refresh()
+        self.assertEqual(sheet.coords(laid), [-12, -5])
+
+    def test_a_piece_that_fails_once_is_still_laid_next_time(self):
+        page = self.page()
+        sheet = Sheet(self.root, self.theme)
+        sheet.pack()
+        real = sheet.lay_paper
+        sheet.lay_paper = mock.Mock(side_effect=tk.TclError("once"))
+        page.refresh()
+        self.assertIn(sheet, page.surfaces)
+        sheet.lay_paper = real
+        page.refresh()
+        self.assertEqual(len(sheet.find_withtag("paper")), 1)
+
+    def test_a_fade_off_the_page_lets_go_of_its_strip(self):
+        from lyrebot.paper import ScrollingPage
+
+        class Scroller(ScrollingPage, tk.Canvas):
+            pass
+        page = self.page()
+        scroller = Scroller(self.root, width=60, height=40, highlightthickness=0)
+        scroller.theme = self.theme
+        scroller.make_fades()
+        scroller.extent = 400
+        scroller.winfo_width, scroller.winfo_height = (lambda: 60), (lambda: 40)
+        scroller.take_page(self.theme)
+        page.refresh()
+        self.assertTrue(scroller.itemcget(scroller.fade_bottom, "image"))  # more below: the foot sinks
+        with mock.patch("lyrebot.paper.fade", return_value=None):  # (as when its place is off the paper)
+            page.lay(90, 60)  # a new picture: the strips are made again, and none can be
+        self.assertEqual(scroller.itemcget(scroller.fade_bottom, "image"), "")
+        scroller.itemconfigure("fade", state="hidden")  # (which, holding a freed strip, would fail)
+
     def test_the_paper_is_opaque_so_a_repaint_only_copies_it(self):
         page = self.page()
         image = page.image
