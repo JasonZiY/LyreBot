@@ -107,6 +107,14 @@ class Player(unittest.TestCase):
         self.assertGreaterEqual(clock.now, 2.0)
         self.assertEqual(keyboard.released, 1)
 
+    def test_each_press_is_heard_once_it_is_sent(self):
+        clock = Clock()
+        keyboard = FakeKeyboard(clock)
+        heard = []
+        play(TIMELINE, keyboard, 1, threading.Event(), clock=clock, sleep=clock.sleep,
+             on_strike=lambda keys: heard.append((round(clock.now, 3), keys, len(keyboard.sent))))
+        self.assertEqual(heard, [(0.0, ("a",), 1), (1.0, ("s",), 3)])  # releases are not heard
+
     def test_f8_stops(self):
         reason, keyboard, _ = self.run_with(stop_at=0.5)
         self.assertEqual(reason, "stopped")

@@ -99,6 +99,13 @@ UNFILED = "未归类"
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
+LYRE_SIZE = 17  # the small lyre before the song being played, at 100% scaling (made odd)
+LYRE_ROWS = {key: row for row, keys in enumerate(("zxcvbnm", "asdfghj", "qwertyu")) for key in keys}  # its strings
+SHADES = 5  # steps from a string's gold at rest to the deep orange of one just struck
+FADE = 0.25  # seconds for a struck string's orange to fade to about a third (gold again by 0.6 s)
+SHIVER = 0.15  # seconds a struck string shivers ...
+SWELLS = (1.2, 0.5)  # ... swelling this many pixels at its middle, by turns at each look
+RING_STEP = 40  # milliseconds between looks at the strings while one still rings
 WINDOW_WIDTH = 350  # the window's width when it opens, and the narrowest it goes: the widest controls fit
 OPENING_HEIGHT = 640  # and its height when it opens
 WATERMARK_SIZE = 136  # the lyre pressed into the page, at 100% scaling
@@ -461,8 +468,9 @@ class SongBrowser(ScrollingPage, tk.Canvas):
 
     A shelf's title is set in the serif with a hairline running on to the
     edge; chevrons are old gold; the chosen song sits on a rounded breath of
-    orange with an orange edge, and the song being played shows three small
-    orange bars keeping time.  The page shows through it all, and stays
+    orange with an orange edge, and the song being played has a small gold
+    lyre before it, whose strings light orange as the keys of their row are
+    pressed in the game.  The page shows through it all, and stays
     still while the list scrolls over it; at an edge with more songs beyond
     it, the last lines sink into the paper instead of being cut off.
     """
@@ -490,8 +498,10 @@ class SongBrowser(ScrollingPage, tk.Canvas):
         self.cells: list[Cell] = []
         self.total = 0
         self.fitted: dict[tuple[str, int, tuple], str] = {}
-        self.beat_job: str | None = None
-        self.beat_floor = 0.0
+        self.lyre_size = px(LYRE_SIZE) | 1
+        self.lyre_strings = icons.small_lyre_strings(self.lyre_size)
+        self.struck = [-math.inf] * len(self.lyre_strings[0])  # when each string was last struck (monotonic)
+        self.ring_job: str | None = None
         self.grounds: dict[str, tuple[tuple[int, int], tk.PhotoImage]] = {}  # tints made for this width, by colour
         self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
         self.chosen_box = self.create_image(0, 0, anchor="nw", state="hidden")
@@ -599,8 +609,6 @@ class SongBrowser(ScrollingPage, tk.Canvas):
         self.follow_page()  # a new scroll region may have moved the view (and the fades go over the new lines)
         self.itemconfigure(self.hover_box, state="hidden")
         self.mark_chosen()
-        if self.find_withtag("beat") and not self.beat_job:
-            self.beat()
 
     def draw(self, cell: Cell) -> None:
         """Draw one place in the list: a song, or a shelf or region with its chevron and count."""
@@ -616,13 +624,7 @@ class SongBrowser(ScrollingPage, tk.Canvas):
                 x += size + theme.px(4)
                 ink = WARN
             if cell.path == self.playing:
-                bar, gap = theme.px(2), theme.px(1.5)
-                self.beat_floor = middle + theme.px(5)
-                for index in range(3):
-                    x0 = x + index * (bar + gap)
-                    self.create_rectangle(x0, middle - theme.px(2), x0 + bar, self.beat_floor, fill=ORANGE, width=0,
-                                          tags=("content", "beat"))
-                x += 3 * bar + 2 * gap + theme.px(5)
+                x = self.draw_lyre(x, middle)
             text = self.fit(cell.text, int(right - x) - self.tail, fonts.body)
             self.create_text(x, middle, anchor="w", text=text, fill=ink, font=fonts.body, tags="content")
             return
@@ -665,24 +667,61 @@ class SongBrowser(ScrollingPage, tk.Canvas):
         return self.fitted[key]
 
     def set_playing(self, path: Path | None) -> None:
-        """Mark the song being played (None when nothing plays)."""
+        """Mark the song being played (None when nothing plays).  A new song starts with its lyre at rest."""
         if path != self.playing:
             self.playing = path
+            self.struck = [-math.inf] * len(self.struck)
+            if self.ring_job:
+                self.winfo_toplevel().after_cancel(self.ring_job)
+                self.ring_job = None
             self.lay_out()
 
-    def beat(self) -> None:
-        """Keep the playing song's three bars moving, each at its own pace, while it plays."""
-        self.beat_job = None
-        bars = self.find_withtag("beat")
-        if not bars or self.playing is None:
-            return
-        now, tall = time.monotonic(), self.theme.px(10)
-        for index, bar in enumerate(bars):
-            x0, _, x1, _ = self.coords(bar)
-            height = tall * (0.3 + 0.7 * abs(math.sin(now * (2.6 + 0.9 * index) + 1.7 * index)))
-            self.coords(bar, x0, self.beat_floor - height, x1, self.beat_floor)
-        # Timed on the window, as all of LyreBot's timers are, so closing it cancels them together.
-        self.beat_job = self.winfo_toplevel().after(90, self.beat)
+    def draw_lyre(self, x: float, middle: float) -> float:
+        """The small lyre at ``x``, its strings as they ring now, on a line whose middle is ``middle``; and
+        where the song's name begins after it.  On whole pixels, so that its strings stay sharp."""
+        size, (across, top, bottom) = self.lyre_size, self.lyre_strings
+        left, upper = round(x), round(middle - size / 2)
+        self.create_image(left, upper, anchor="nw", tags="content",
+                          image=self.theme.icon("small-lyre", size, GOLD, icons.small_lyre))
+        now = time.monotonic()
+        for row, at in enumerate(across):
+            self.create_image(left + at - 1.5, upper + top, anchor="nw", image=self.string(row, now),
+                              tags=("content", "string", f"string{row}"))
+        return left + size + self.theme.px(4)
+
+    def shade(self, row: int, now: float) -> int:
+        """How far string ``row`` is from gold towards orange now, 0 to ``SHADES``: all the way when just
+        struck, and back to 0 as it fades."""
+        return round(SHADES * math.exp(-(now - self.struck[row]) / FADE))
+
+    def string(self, row: int, now: float) -> tk.PhotoImage:
+        """The picture of string ``row`` as it rings now: in its shade, and swelling and settling by turns
+        while it shivers."""
+        age, (_, top, bottom) = now - self.struck[row], self.lyre_strings
+        swell = SWELLS[int(now * 1000 / RING_STEP) % len(SWELLS)] if age < SHIVER else 0.0
+        color = icons.blend(GOLD, ORANGE_DEEP, self.shade(row, now) / SHADES)
+        return self.theme.image(f"lyre-string:{color}:{swell}", 3, bottom - top,
+                                lambda: [(color, icons.lyre_string(bottom - top, swell))])
+
+    def strike(self, rows: set[int]) -> None:
+        """Keys of these rows (0 low, 1 middle, 2 high) were just pressed in the game: their strings light."""
+        now = time.monotonic()
+        for row in rows:
+            self.struck[row] = now
+        self.ring()
+
+    def ring(self) -> None:
+        """Show the strings as they ring now, and look again shortly while any of them still does."""
+        if self.ring_job:
+            self.winfo_toplevel().after_cancel(self.ring_job)
+            self.ring_job = None
+        now = time.monotonic()
+        for row in range(len(self.struck)):
+            for item in self.find_withtag(f"string{row}"):
+                self.itemconfigure(item, image=self.string(row, now))
+        if any(self.shade(row, now) for row in range(len(self.struck))):
+            # Timed on the window, as all of LyreBot's timers are, so closing it cancels them together.
+            self.ring_job = self.winfo_toplevel().after(RING_STEP, self.ring)
 
     def cell_of(self, path: Path) -> Cell | None:
         return next((cell for cell in self.cells if cell.path == path), None)
@@ -1917,7 +1956,8 @@ class App:
                 def progress(at: float) -> None:
                     reached[0] = at
                     post(("progress", at))
-                reason = play(timeline, keyboard, target, self.cancel, progress, start=begin)
+                reason = play(timeline, keyboard, target, self.cancel, progress, start=begin,
+                              on_strike=lambda keys: post(("struck", keys)))
                 if reason in ("stopped", "focus"):
                     post(("interrupted", (path, reached[0], speed, "已停止" if reason == "stopped" else "切换了窗口，已停止")))
                     return
@@ -2594,6 +2634,8 @@ class App:
             elif kind == "progress":
                 self.show_progress(value)
                 self.say("正在演奏 · 按 F8 或切换窗口停止")
+            elif kind == "struck":
+                self.browser.strike({LYRE_ROWS[key] for key in value if key in LYRE_ROWS})
             elif kind == "heard":
                 hearing, at = value
                 if hearing == self.hearing:

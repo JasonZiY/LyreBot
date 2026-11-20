@@ -226,6 +226,11 @@ def _rgb(color: str) -> tuple[int, int, int]:
     return int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
 
 
+def blend(color: str, other: str, share: float) -> str:
+    """``color`` turned ``share`` (0 to 1) of the way to ``other``."""
+    return "#%02x%02x%02x" % tuple(round(a + (b - a) * share) for a, b in zip(_rgb(color), _rgb(other)))
+
+
 # ---- icons ----------------------------------------------------------------------
 #
 # Drawn for the pixel grid.  Lines are a whole number of pixels wide, and a level or upright line runs
@@ -603,6 +608,42 @@ def lyre(size: int) -> list[Shape]:
     line = max(1, round(thread * k))
     shapes += [rect(x - line / 2, round(top * k), x + line / 2, round(bottom * k)) for x in lyre_strings(size)]
     return shapes
+
+
+# The small lyre before the song being played.  The crest's arms close in on a narrow sound box, which at the
+# height of a line of the list leaves no room for strings that can be told apart; this one's arms rise from
+# the ends of a wider box, so that three strings stand a few pixels apart: one for each row of the game's
+# lyre, low, middle and high.  On a square of 1: the left arm from the box up to its horn.
+SMALL_LYRE_ARM = [(0.31, 0.88), (0.10, 0.84), (0.06, 0.52), (0.22, 0.36), (0.30, 0.30), (0.26, 0.16), (0.16, 0.16)]
+
+
+def small_lyre(size: int) -> list[Shape]:
+    """The small lyre without its strings: two arms that thin as they rise and turn out at their horns, the
+    yoke and the sound box.  ``size`` should be odd, so that the middle string has a column of its own."""
+    points = bezier([(x * size, y * size) for x, y in SMALL_LYRE_ARM], 40)
+    thick, thin = max(1.0, size * 0.085), max(0.9, size * 0.05)
+    widths = [thin + (thick - thin) * (1 - i / 40) ** 0.8 for i in range(41)]
+    shapes = [stroke(points, widths), stroke([(size - x, y) for x, y in points], widths)]
+    (across, top, bottom), yoke = small_lyre_strings(size), round(size * 0.22)
+    shapes.append(rect(yoke, top - 1, size - yoke, top, 0.5))
+    shapes.append(rect(across[0] - 2.5, bottom, across[-1] + 2.5, bottom + 2, 1))  # past the strings, round ends
+    return shapes
+
+
+def small_lyre_strings(size: int) -> tuple[list[float], int, int]:
+    """Where the small lyre's three strings run: across, low to high (the middles of pixel columns, a few
+    apart), and down, from under the yoke to the top of the sound box (whole pixels)."""
+    gap, middle = max(2, round(size * 0.15)), size // 2 + 0.5
+    return [middle - gap, middle, middle + gap], math.floor(size * 0.33) + 1, round(size * 0.86) - 1
+
+
+def lyre_string(length: int, swell: float) -> Shape:
+    """One string of the small lyre, a pixel wide, down the middle of a picture three pixels wide and
+    ``length`` tall; as it shivers, ``swell`` pixels wider towards its middle, the blur of a string that
+    sounds."""
+    steps = 16
+    points = [(1.5, length * i / steps) for i in range(steps + 1)]
+    return stroke(points, [1.0 + swell * math.sin(math.pi * i / steps) for i in range(steps + 1)])
 
 
 # ---- the page's ornaments ----------------------------------------------------------

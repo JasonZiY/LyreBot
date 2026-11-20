@@ -625,7 +625,7 @@ class Folders(unittest.TestCase):
         """Play ``path`` in ``app`` until ``seconds`` in, stopped there by F8 (or a window switch)."""
         from unittest import mock
 
-        def play(timeline, keyboard, target, cancel, progress, start=0.0):
+        def play(timeline, keyboard, target, cancel, progress, start=0.0, on_strike=None):
             progress(seconds)
             return reason
         with mock.patch("lyrebot.app.Keyboard"), mock.patch("lyrebot.app.play", side_effect=play), \
@@ -1505,6 +1505,42 @@ class Folders(unittest.TestCase):
         app.updates.put(("progress", 4.5))  # twice as fast: 4.5 s in is bar 3
         app.poll()
         self.assertEqual(app.bar_label.cget("text"), "3|3")
+
+    def test_the_song_being_played_has_a_lyre_whose_strings_light_as_their_rows_are_struck(self):
+        from lyrebot.app import App
+        path, _ = self.three_bars()
+        app = App(self.window(), self.scores, self.midi)
+        browser = app.browser
+        self.assertEqual(browser.find_withtag("string"), ())  # nothing plays
+        app.updates.put(("song", (path, 12.0)))
+        app.poll()
+
+        def pictures():
+            return [browser.itemcget(browser.find_withtag(f"string{row}")[0], "image") for row in range(3)]
+        rest = pictures()
+        self.assertEqual(len(set(rest)), 1)  # three strings, all gold
+        app.updates.put(("struck", ("q", "z")))  # a high key and a low one
+        app.poll()
+        lit = pictures()
+        self.assertNotEqual(lit[0], rest[0])
+        self.assertEqual(lit[1], rest[1])  # no middle key: its string stays at rest
+        self.assertNotEqual(lit[2], rest[2])
+        self.assertIsNotNone(browser.ring_job)  # and they fade
+        browser.struck[0] = browser.struck[2] = time.monotonic() - 0.22  # past shivering, half faded
+        browser.ring()
+        fading = pictures()
+        self.assertNotIn(fading[0], (rest[0], lit[0]))
+        browser.lay_out()  # the list laid again (scrolled, a region opened) shows them as they ring
+        self.assertEqual(pictures(), fading)
+        browser.struck = [time.monotonic() - 1.0] * 3  # struck a second ago: gold again, and nothing to look at
+        browser.ring()
+        self.assertEqual(pictures(), rest)
+        self.assertIsNone(browser.ring_job)
+        app.updates.put(("struck", ("a",)))
+        app.updates.put(("done", None))
+        app.poll()
+        self.assertEqual(browser.find_withtag("string"), ())
+        self.assertIsNone(browser.ring_job)
 
     def test_restart_is_live_when_play_is(self):
         from lyrebot.app import App

@@ -28,12 +28,14 @@ def play(
     clock: Callable[[], float] = time.perf_counter,
     sleep: Callable[[float], None] = time.sleep,
     start: float = 0.0,
+    on_strike: Callable[[tuple[str, ...]], None] | None = None,
 ) -> str:
     """Return "done", "stopped" (F8 or cancel) or "focus" (window switched).
 
     If the computer stalls, the rest of the song is delayed by the stall rather
     than sending the missed notes in a burst.  Keys are always released.
-    ``start`` skips the song up to that many seconds in.
+    ``start`` skips the song up to that many seconds in.  ``on_strike`` hears
+    the keys of each press once they are sent.
     """
     origin = clock() - start
     next_report = start
@@ -80,6 +82,8 @@ def play(
             if late > LATE_LIMIT:
                 origin += late
             backend.send(keys, event.down)
+            if event.down and on_strike:
+                on_strike(keys)
         reason = wait(timeline.duration)
         if on_progress:
             on_progress(timeline.duration)
