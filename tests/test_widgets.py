@@ -76,26 +76,16 @@ class Drawing(unittest.TestCase):
         self.assertEqual(at(30, 0), (0xE3, 0xD6, 0xBC, 255))  # a button's edge: one whole row
         self.assertEqual(at(30, 1), (0xFA, 0xF7, 0xF0, 255))
 
-    def test_the_small_lyre_keeps_three_sharp_strings_apart_inside_its_frame(self):
-        for size in (17, 21, 27):
-            across, top, bottom = icons.small_lyre_strings(size)
-            self.assertEqual(len(across), 3)
-            self.assertEqual(across[1], size // 2 + 0.5)  # the middle string down the middle column
-            self.assertEqual({b - a for a, b in zip(across, across[1:])}, {across[1] - across[0]})
-            self.assertGreaterEqual(across[1] - across[0], 3, size)  # a clear column at least between them
-            frame = icons.rgba(size, size, icons.paint(icons.small_lyre(size), "#000000"))[3::4]
-            for x in across:  # each string's column is clear of the frame between the yoke and the box ...
-                column = [frame[y * size + int(x)] for y in range(size)]
-                self.assertEqual(column[top:bottom], [0] * (bottom - top), size)
-                self.assertEqual((column[top - 1], column[bottom]), (255, 255), size)  # ... which it runs between
-            straight = icons.rgba(3, bottom - top, [("#000000", icons.lyre_string(bottom - top, 0.0))])[3::4]
-            self.assertEqual(list(straight), [0, 255, 0] * (bottom - top))  # at rest: one solid pixel wide
-            swollen = icons.rgba(3, bottom - top, [("#000000", icons.lyre_string(bottom - top, 1.2))])[3::4]
-            middle = (bottom - top) // 2 * 3
-            self.assertEqual(swollen[middle + 1], 255)  # shivering: still solid down its own column ...
-            self.assertGreater(swollen[middle], 0)  # ... and blurred into those on either side at its middle
-            self.assertEqual(swollen[middle], swollen[middle + 2])
-            self.assertLess(max(swollen[0], swollen[2]), swollen[middle] / 2)  # much less towards its ends
+    def test_a_string_is_one_sharp_row_at_rest_and_blurs_at_its_middle_as_it_shivers(self):
+        for length in (10, 14, 20):
+            straight = icons.rgba(length, 3, [("#000000", icons.string(length, 0.0))])[3::4]
+            self.assertEqual(list(straight), [0] * length + [255] * length + [0] * length)  # one solid row
+            swollen = icons.rgba(length, 3, [("#000000", icons.string(length, 1.2))])[3::4]
+            middle = length // 2
+            self.assertEqual(list(swollen[length:2 * length]), [255] * length)  # still solid along its own row ...
+            self.assertGreater(swollen[middle], 0)  # ... and blurred into those above and below at its middle
+            self.assertEqual(swollen[middle], swollen[2 * length + middle])
+            self.assertLess(max(swollen[0], swollen[2 * length]), swollen[middle] / 2)  # much less at its ends
 
     def test_the_gilt_is_laid_in_gold_and_the_lines_in_ink(self):
         ink, gold = "#2B2722", "#B08D57"

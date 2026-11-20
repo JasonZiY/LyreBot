@@ -1506,7 +1506,7 @@ class Folders(unittest.TestCase):
         app.poll()
         self.assertEqual(app.bar_label.cget("text"), "3|3")
 
-    def test_the_song_being_played_has_a_lyre_whose_strings_light_as_their_rows_are_struck(self):
+    def test_the_song_being_played_has_three_strings_that_light_as_their_rows_are_struck(self):
         from lyrebot.app import App
         path, _ = self.three_bars()
         app = App(self.window(), self.scores, self.midi)
@@ -1519,6 +1519,17 @@ class Folders(unittest.TestCase):
             return [browser.itemcget(browser.find_withtag(f"string{row}")[0], "image") for row in range(3)]
         rest = pictures()
         self.assertEqual(len(set(rest)), 1)  # three strings, all gold
+        near, far = (browser.coords(post) for post in browser.find_withtag("posts"))
+        self.assertEqual(near, browser.coords(browser.chosen_edge))  # strung from the chosen song's own edge ...
+        self.assertEqual(far[1::2], near[1::2])  # ... to another like it
+        self.assertEqual(far[0] - near[0], browser.mark_width - browser.edge)
+        ends = [browser.coords(browser.find_withtag(f"string{row}")[0]) for row in range(3)]
+        self.assertTrue(ends[2][1] < ends[1][1] < ends[0][1])  # high on top, low at the foot
+        self.assertEqual({x for x, _ in ends}, {near[2]})  # each from the near post ...
+        self.assertEqual(int(browser.tk.call("image", "width", rest[0])), far[0] - near[2])  # ... to the far one
+        name = next(item for item in browser.find_withtag("content")
+                    if browser.type(item) == "text" and browser.itemcget(item, "text") == path.stem)
+        self.assertGreater(browser.coords(name)[0], far[2])  # the name stands after them
         app.updates.put(("struck", ("q", "z")))  # a high key and a low one
         app.poll()
         lit = pictures()

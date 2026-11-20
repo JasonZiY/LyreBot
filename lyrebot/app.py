@@ -99,8 +99,9 @@ UNFILED = "未归类"
 GAP = 1.0  # seconds of silence between songs when playing on
 COOLDOWN = 0.5  # seconds after a stop during which clicks cannot start a song again
 ROW_HEIGHT = 22  # of the song list, in pixels at 100% scaling
-LYRE_SIZE = 17  # the small lyre before the song being played, at 100% scaling (made odd)
-LYRE_ROWS = {key: row for row, keys in enumerate(("zxcvbnm", "asdfghj", "qwertyu")) for key in keys}  # its strings
+MARK_WIDTH = 14  # the H of strings before the song being played, post to post, at 100% scaling ...
+STRING_GAP = 3  # ... and between its strings, which are the game lyre's rows:
+LYRE_ROWS = {key: row for row, keys in enumerate(("zxcvbnm", "asdfghj", "qwertyu")) for key in keys}
 SHADES = 5  # steps from a string's gold at rest to the deep orange of one just struck
 FADE = 0.25  # seconds for a struck string's orange to fade to about a third (gold again by 0.6 s)
 SHIVER = 0.15  # seconds a struck string shivers ...
@@ -468,9 +469,10 @@ class SongBrowser(ScrollingPage, tk.Canvas):
 
     A shelf's title is set in the serif with a hairline running on to the
     edge; chevrons are old gold; the chosen song sits on a rounded breath of
-    orange with an orange edge, and the song being played has a small gold
-    lyre before it, whose strings light orange as the keys of their row are
-    pressed in the game.  The page shows through it all, and stays
+    orange with an orange edge.  The song being played has three gold strings
+    stretched from that edge to another like it, a wide H, and each string
+    lights orange as the keys of its row are pressed in the game.  The page
+    shows through it all, and stays
     still while the list scrolls over it; at an edge with more songs beyond
     it, the last lines sink into the paper instead of being cut off.
     """
@@ -498,9 +500,10 @@ class SongBrowser(ScrollingPage, tk.Canvas):
         self.cells: list[Cell] = []
         self.total = 0
         self.fitted: dict[tuple[str, int, tuple], str] = {}
-        self.lyre_size = px(LYRE_SIZE) | 1
-        self.lyre_strings = icons.small_lyre_strings(self.lyre_size)
-        self.struck = [-math.inf] * len(self.lyre_strings[0])  # when each string was last struck (monotonic)
+        self.edge = px(2)  # the orange edge of the chosen song, and the posts of the playing song's strings
+        self.mark_width, self.string_gap = px(MARK_WIDTH), px(STRING_GAP)
+        self.string_length = self.mark_width - 2 * self.edge
+        self.struck = [-math.inf] * 3  # when each string (low, middle, high) was last struck (monotonic)
         self.ring_job: str | None = None
         self.grounds: dict[str, tuple[tuple[int, int], tk.PhotoImage]] = {}  # tints made for this width, by colour
         self.hover_box = self.create_image(0, 0, anchor="nw", state="hidden")
@@ -618,13 +621,13 @@ class SongBrowser(ScrollingPage, tk.Canvas):
         x = left + self.pad
         if cell.kind == "song":
             ink = INK
+            if cell.path == self.playing:
+                x = self.draw_strings(cell.box)
             if cell.path in self.bad:
                 size = theme.px(11)
                 self.create_image(x + size / 2, middle, image=self.warning(size), tags="content")
                 x += size + theme.px(4)
                 ink = WARN
-            if cell.path == self.playing:
-                x = self.draw_lyre(x, middle)
             text = self.fit(cell.text, int(right - x) - self.tail, fonts.body)
             self.create_text(x, middle, anchor="w", text=text, fill=ink, font=fonts.body, tags="content")
             return
@@ -676,18 +679,27 @@ class SongBrowser(ScrollingPage, tk.Canvas):
                 self.ring_job = None
             self.lay_out()
 
-    def draw_lyre(self, x: float, middle: float) -> float:
-        """The small lyre at ``x``, its strings as they ring now, on a line whose middle is ``middle``; and
-        where the song's name begins after it.  On whole pixels, so that its strings stay sharp."""
-        size, (across, top, bottom) = self.lyre_size, self.lyre_strings
-        left, upper = round(x), round(middle - size / 2)
-        self.create_image(left, upper, anchor="nw", tags="content",
-                          image=self.theme.icon("small-lyre", size, GOLD, icons.small_lyre))
-        now = time.monotonic()
-        for row, at in enumerate(across):
-            self.create_image(left + at - 1.5, upper + top, anchor="nw", image=self.string(row, now),
-                              tags=("content", "string", f"string{row}"))
-        return left + size + self.theme.px(4)
+    def edge_of(self, box: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        """The orange edge at the left of the song in ``box``, as it stands for the chosen song: on whole
+        pixels, so that the strings of the song being played start where it ends and end where its twin
+        starts, at any scale."""
+        left, top, _, bottom = box
+        x = math.floor(left + self.edge / 2)
+        return x, round(top) + self.theme.px(6), x + self.edge, round(bottom) - self.theme.px(6)
+
+    def draw_strings(self, box: tuple[float, float, float, float]) -> float:
+        """The mark of the song being played, in ``box``: the chosen song's orange edge with another like it
+        to its right, three strings stretched between them as they ring now, high on top and low at the
+        foot, like a wide H; and where the song's name begins after it."""
+        x0, y0, x1, y1 = self.edge_of(box)
+        far = x0 + self.mark_width - self.edge
+        for x in (x0, far):
+            self.create_rectangle(x, y0, x + self.edge, y1, fill=ORANGE, width=0, tags=("content", "posts"))
+        middle, now = math.floor((y0 + y1 - 1) / 2), time.monotonic()  # the middle row of the edge's pixels
+        for row in range(len(self.struck)):  # on whole pixels, so that the strings stay sharp
+            self.create_image(x1, middle + self.string_gap * (1 - row) - 1, anchor="nw",
+                              image=self.string(row, now), tags=("content", "string", f"string{row}"))
+        return far + self.edge + self.theme.px(5)
 
     def shade(self, row: int, now: float) -> int:
         """How far string ``row`` is from gold towards orange now, 0 to ``SHADES``: all the way when just
@@ -697,11 +709,11 @@ class SongBrowser(ScrollingPage, tk.Canvas):
     def string(self, row: int, now: float) -> tk.PhotoImage:
         """The picture of string ``row`` as it rings now: in its shade, and swelling and settling by turns
         while it shivers."""
-        age, (_, top, bottom) = now - self.struck[row], self.lyre_strings
+        age, length = now - self.struck[row], self.string_length
         swell = SWELLS[int(now * 1000 / RING_STEP) % len(SWELLS)] if age < SHIVER else 0.0
         color = icons.blend(GOLD, ORANGE_DEEP, self.shade(row, now) / SHADES)
-        return self.theme.image(f"lyre-string:{color}:{swell}", 3, bottom - top,
-                                lambda: [(color, icons.lyre_string(bottom - top, swell))])
+        return self.theme.image(f"string:{color}:{swell}", length, 3,
+                                lambda: [(color, icons.string(length, swell))])
 
     def strike(self, rows: set[int]) -> None:
         """Keys of these rows (0 low, 1 middle, 2 high) were just pressed in the game: their strings light."""
@@ -732,11 +744,8 @@ class SongBrowser(ScrollingPage, tk.Canvas):
             self.itemconfigure(self.chosen_box, state="hidden")
             self.itemconfigure(self.chosen_edge, state="hidden")
             return
-        left, top, right, bottom = cell.box
         self.ground(self.chosen_box, CHOSEN_TINT, cell.box)
-        edge = self.theme.px(2)
-        self.coords(self.chosen_edge, left + edge / 2, top + self.theme.px(6), left + edge / 2 + edge,
-                    bottom - self.theme.px(6))
+        self.coords(self.chosen_edge, *self.edge_of(cell.box))
         self.itemconfigure(self.chosen_edge, state="normal")
 
     def visible_songs(self) -> list[Path]:
