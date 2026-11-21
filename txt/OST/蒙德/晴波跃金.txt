@@ -8,18 +8,18 @@
 speed=97
 z.s.~d-~s.~d.~|0.z.b~x~b.z.z.b~x~b.
 .s.~d-~s.q.w.|z.z.b~x~b.z.z.b~sd~b.
-e-t.~r't'r.~e.r.t.|z.as.b~sd~b.x.ns.v~na~bm.
+e-t.~r't'r.~e.r.t.|z.as.b~asd~b.x.ns.v~na~bm.
 .s.b~s~b.c.t.y.u.|c.m.~m~0-ms.b~ms~b.
 u.t.q.~w'e'w.~q.w.e.|v.vn.z~vn~z.b.bm.x~bm~ba.
 e--.a.q.w.|n.ba.c~ba~c.n.b.c~ba~c.
 e-t.~r't'r.~e.r.t'y.|z.as.b~ad~b.x.ns.v~na~v.
 .u~y~t-.q.w.e.|c.ms.b~ms~b.c.ms.b~ms~b.
-e.r.h.~j'q'j.~h.j.q.|v.vn.z~vn~z.b.bm.x~bm~ba.
+e.r.h.~j'q'j.~h.j.q.|v.vnf.z~vn~z.b.bm.x~bm~ba.
 .s.~d~0.w'q'j.q~w~e~w~e~t~|z.z.b~x~b.z.as.m~bm~c.
 u.~q~0.t-e.w'e'w.q.|n.ba~c~0.na.c.ms.b.ms.
 j.~q~0.t-e.w'e'w.q.|v.vn~z~0.na.z.ba.c.ba.
 j.~q~0.t'y-e.w'e'w.q.|n.ba~c~0.na.v.na.z.na.
-j.~q~0.w-.j~q~e.|x.ns~v~0.na.b.xb.c.cbd.
+j.~q~0.w-.j~q~e.|x.ns~v~0.na.b.xb.c.cb.
 u.~q.~t-e.w'e'w.q.|n.ba~c.~na.c.ms.b.ms.
 j.~q.~t-e.w'e'w.q.|v.vn~z.~na.z.ba.c.ba.
 j.~q~0.t'y-e.w'e'w.q.|n.ba~c~0.na.v.na.z.na.
@@ -35,9 +35,9 @@ d--0-.e~r~|b.ca.b~ca~b.xb.vm.b~vm~bd~f~
 t--.t.r.e.|zg.ad.b~af~b.z.adg.bf~af~bd.
 r't'r'e'r--.x.~x~w~e~|f.sf.v~s~v.n.0-vs~d~  # 改动 伴奏♭7→n
 r-.r.t.r.e~r~w.|xf.af.n~af~nf.bg.sfg.md~sfg~m.
-e-.~e~w-u-|zd.ad.b~af~b.m.ms.bj~ms~b.
+e-.~e'w-~u-|zd.ad.b~af~b.m.ms.bj~ms~b.
 q-.q.j.q.e.t.|na.na.c~na~ca.cm.mas.bd~ms~bg.
-u.q.t'y.t.e'r-.t.|xj.as.g'nh~s~ng.x.s.n~s~ng.  # 改动 ♯4→r
+u.q.y.t.r-.t.|xj.as.nh~s~ng.x.s.n~s~ng.  # 改动 ♯4→r
 t-.u~q~j'q.~y.~t.|cg.ad.m~sg~m.n.ad~h~n~ad~ng.
 r.~w.~q.q.j-q~w~|xf.af~s~n~af~na.ba.mf.b~mf~ba~s~
 q.a~b~v~s~a~b~v.a~b~v~s~a~b~|zfg.zv-zv.z.zv-zv.
@@ -45,5 +45,6 @@ c.a~b~c~s~a~b~c.a~b~c~s~a~b~|z.zb.z.zb.z.zb.z.zb.
 v.q~g.w~q~g~0.q~g.q~j~g~|.af.b~s~af.c.ad.b~a~ad.
 f.d.s.a--.|bns.bm-zcb--.
 ----|----
-speed=89.3
+speed=89.9
 .0---.|.0---.
+0----|0----

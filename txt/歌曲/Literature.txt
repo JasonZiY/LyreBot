@@ -120,3 +120,4 @@ z--~*x*b*z*v*n*a*g*q*w*t.|0--.z.n.z.  # 和弦 G F；改动 ♯1→x ♯5→b �
 a.m.a.g.m.a.g.m.|v.z.n.a.v.z.n.z.  # 和弦 F
 a.g.m.a.g.j.q~*g*t.|v.z-z.v.a.n.z.  # 和弦 F
 ----|v.z.n.a.f.a.n.z.  # 和弦 F
+0----|0----

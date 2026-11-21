@@ -1,0 +1,67 @@
+# 由 MIDI 自动编配：戍望者的歌-录音.mid
+# 原曲中途转调，各段分别移调，91% 的音落在白键上
+# 第 1–35 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 第 36–58 小节相当于 A 大调 / F♯ 小调（3 个升号），升 3 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 100 拍（四分音符），速度平稳，4/4 拍
+speed=100
+0--.e-.|0--.na.adh-
+e.y-e.r.e.w-|adh.xd.adh.a.adh.ba.mgj-
+w.t-w.e.w.q-|mgj.zs.msg.j.asg.vj.nfh-
+q.r-q.w.q.j.e.|nfh.xa.naf.h.sfj.ch.d.j.
+w.h-.d.h-h.|b.nd.ad.c.a.n.ad-  # 改动 伴奏♯5→b
+g.h.j.q.w.e-r.|ad.n.ad.c.ad.x.sf-  # 改动 ♯5→g
+e.j--e-r.|sf.m.ns.v.ns.c.d-
+e.j-q-w-q.|d.m.d.c.d.n.ad-
+j.d.d-d.h-h.|ad.n.a.c.a.n.d-
+g.h.q.e.r.t-r.|d.n.d.z.d.x.sf-  # 改动 ♯5→g ♯1→q 伴奏♯1→z
+e.r-.t.r.y-|sf.n.s.x.s.m.nsf-  # 改动 伴奏♭7→n
+q.w-q.j.h-f.|sf.c.ms.v.s.n.ad.c.  # 改动 伴奏♯4→v
+d-d.f.d.e-.|a.n.a.c.a.na.adh-
+e.y-e.r.e.w-|adh.d.dh.a.sdh.xh.sfh-  # 改动 伴奏♯1→a
+w.t-w.g.w-.|sfh.cs.sg.j.s.n.sf-  # 改动 伴奏♭7→n
+.t-w.e.w.q-|.xs.f.n.af.nh.nfh-  # 改动 伴奏♭7→n
+q.r-q-h-.|nfh.va.af.zh.af.b.n-  # 改动 ♭7→h 伴奏♭7→n
+h.w-h-h-.|b.n.n.b.n.zb.a-  # 改动 ♭7→h ♭3→w ♭7→h ♭7→h 伴奏♭7→n 伴奏♭7→n 伴奏♭7→n
+h.w-j-h-.|ba.b.a.g.a.x.s-  # 改动 ♭7→h ♭3→w ♭7→j
+h.j-g-h-f.|ns.cd.sd.m.sd.n.ad.c.  # 改动 ♯5→g
+d-d.f.d.h-h.|a.n.a.c.a.n.ad-
+g.h.j.q.w.e-r.|ad.n.ad.c.ad.x.sf-  # 改动 ♯5→g
+e.j--e-r.|sf.m.ns.v.ns.c.d-
+e.j-q-w-q.|d.m.d.c.d.n.ad-
+j.h-.d.h-h.|ad.n.ad.c.a.n.d-
+g.h.q.e.r.t-r.|d.n.d.z.d.x.sf-  # 改动 ♯5→g ♯1→q 伴奏♯1→z
+e.r-.t.r.y-|sf.x.mf.m.n.m.nsf-
+q.w-q.j.r-e'r'e.|sf.c.ms.m.s.nh.ad-
+q.h-.d.j.q.w.|ad.n.ad.c.a.b.sf-
+r.r.e-.g.h.j.|mf.z.md.b.md.c.ms-  # 改动 ♯5→g
+w.w.q-.j.q.w.|ms.n.na.c.na.v.mf-
+e.r-e.w.w-q.|mf.z.md.b.md.v.s-
+j.j.h-d.j.q.w.|s.n.ad.c.a.b.sf-
+r.r.e-.q.w.e.|mf.z.md.b.md.n.d~0.~  # 改动 ♯1→q
+t.t.r-.w.e.r.|d.x.sf.n.sf.m.s-  # 改动 ♭3→w ♯4→r 伴奏♭3→s
+r.e.r.t.y.w-.|d.n.d.c.d.xg.as.b.  # 转调到 A 大调 / F♯ 小调，从这里起升 3 个半音；改动 ♯4→r ♯4→r
+.w--r-.|as.x.na.v.na.cj-.  # 改动 ♯4→r 伴奏♯4→v
+.e--e-e.|.mdj--n.ad.c.
+e.y-e.r.e.w.w.|ad.n.ad.c.ad.s.fh.n.
+q.w-.h.w-w.|fh.s.fh~fh~n.f.b.ms.x.  # 改动 ♯1→q
+.t-w.e.w.q.q.|ms.b.ms.x.ms.a.dg.b.
+j.q-.g.q-q.|dg.a.dg~dg~b.d.v.na.z.
+q.r-q.w.q.j.j.|na.v.na.z.na.m.d.v.
+h.j--j-j.|d.m.ms~ms~v.ms.c.s.m.  # 改动 ♭7→h
+j.w-j.q.h-.|s.m.s.c.cs.n.ad.c.
+d.j.q.w.r.e.h.e.|a.n.ad.c.ad.n.ad.c.
+d.y.e-r.e.w.w.|cna.n.adh.c.afh.xd.sfh.ns.
+q.w--w-w.|sfh.xs.sfh.n.sfh.bs.mf.xs.  # 改动 ♯1→q
+w.y-u.e.w.q.q.|msf.bh.mf.xj.mdf.ns.adh.ca.
+j.q--q-q.|nad.na.adh.b.adh.va.naf.za.
+q.r-q-q-q.|naf.vf.naf.za.naf.xa.na.na.
+q.r-q-j-j.|na.xf.na.na.na.m.sd.cm.
+j.w-j-q.q~w~e~r~|msd.ms.s.cm.cs.na.na.c.
+t~y~u~q~u~y~t~r~e~w~q-q.|na.bj.md.c.md.va.naf.za.
+q.r-q-q-q.|naf.vf.naf.za.naf.xa.na.na.
+q.r-q-j-j.|na.xf.na.na.na.bm.sf.bm.
+j.w-j-q-.|msf.bsg.mf.bms.mf.zdg.afg.b.
+--.z-a.|afg.z.afg.b.afg.0-zcb.
+0----|0----

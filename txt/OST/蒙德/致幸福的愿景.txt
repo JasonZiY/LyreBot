@@ -1,0 +1,107 @@
+# 由 MIDI 自动编配：致幸福的愿景-录音.mid
+# 原曲的音阶相当于 D♭ 大调 / B♭ 小调（5 个降号），降 1 个半音移成 C 大调 / A 小调，98% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 132 拍（四分音符），速度平稳，3/4 拍
+speed=132
+e-y-e-|ndh---
+h-y-e-|---
+h-y-j-|bd---
+h-y-e-|b-dh--
+h-y-j-|vd---
+h-y-e-|vd--d-
+h-y-j-|bd--d-
+h-y-e-|b-dh--
+h-y-e-|n-dh-h-
+h-y-e-|n-dh-h-
+h-y--|b-dh-j-
+-y-e-|bh-d--
+h-y-j-|vd-dh--
+h-y-e-|v-dh--
+h-y-e-|bd-dh--
+h-y-u-|b-dh-h-
+q.j.q--|n-h-d-
+--c-|n-h-0-
+0-d-h-|0-n-d-
+j-q-w-|b-h-d-
+e--{1/3}h{1/3}g{1/3}|v-h-d-
+h---|v-n-d-
+-n-c-|b-0--
+0-h-j-|0-nd--
+q.j.q--|n-dh-d-
+-d--|n-n-c-
+0-d-h-|b-m-d-
+j-q-t-|b-md-d-
+e---|v-dj-d-
+y--t.r.|v-dj-d-  # 改动 ♯4→r
+w---|c-sg-d-
+0-w-e-|c-sg--
+r.e.r--|x-dfh-f-
+-d--|s-n-v-
+0-w-e-|x-sh-d-
+r-t-y-|s-sh-d-
+w.q.w--|m-gj-s-
+--x-|b-gj-0-
+b-j-q-|0-mg-s-
+w-e-t-|ms-gj-s-
+q.j.q--|n-fh-a-
+---|n-fh-a-
+j{1/3}h{1/3}g{1/3}h--|v-nf-s-
+--j-|v-nf-s-
+j-s-c-|c-b-0-  # 改动 伴奏♯5→b
+0-s-b-|0-m-0-  # 改动 ♯5→b
+0-s-a-|c-m-c-
+s-h-j-|c-msd-g-  # 改动 伴奏♯5→g
+q.j.q--|n-d-h-
+-d--|n-c-n-
+0-d-h-|b-c-n-
+j-q-w-|b-d-h-
+e--{1/3}h{1/3}g{1/3}|v-d-h-
+h-d--|v-c-n-
+0-d--|b-c-n-
+-h-j-|b-nd-b-
+q.j.q--|n-d-h-
+-d--|n-c-n-
+-d-h-|b-c-n-
+j-q-t-|b-d-h-
+e---|v-d-h-
+y--t.r.|v-dh-h-  # 改动 ♯4→r
+w---|b-d-h-
+-w-e-|b-dh--
+r.e.r--|x-d.f.h.a.
+--n.s.|j.s.d.f.0-
+.x.w-e-|v-sd.f.dh.a.
+r-t-y-|fj.s.dg.f.h.s.
+w---|bs.s.d.f.g.a.
+-c.v.b.z.|j.s.0--
+0-j-q-|0-md.f.ag.a.
+w-e-t-|sj.s.d.f.g.a.
+q---|va.m.a.s.d.m.
+--j~h.g~|g.m.a.s.md~n~m~b~
+h---|vn.m.a.s.d.a.
+e---|dh.m.a.s.d.a.
+j---|m.m.a.s.d.g.  # 改动 伴奏♯5→g
+-q.w.e.t.|m.m.0--  # 改动 ♯5→t
+d.j.q.w.e.t.|0---  # 改动 ♯5→t
+t---|sdj.s.a.s.d.g.  # 改动 ♯5→t 伴奏♯5→g
+y.h.j.q.w.t.|ndh-n-d-
+e.h.j.q.w.t.|n-n-d-
+e.h.j.q.w.t.|b-n-d-
+e.h.j.q.w.t.|b-n-d-
+e.h.j.q.w.t.|v-n-d-
+e.h.j.q.w.t.|v-n-d-
+e.h.j.q.w.t.|b-n-d-
+e.h.j.q.w.t.|b-n-d-
+0-h-d-|nh-d-n-
+h-y-e-|n-d-h-
+h-y-j-|b-d-0-
+h-y-e-|b-d-h-
+h-y-j-|v-d-0-
+h-y-e-|v-d-h-
+h-y-j-|b-d-0-
+h-y-e-|b-d-h-
+---|---
+~e~y--.|~nh--.~
+---|---
+-.0-.|-.0-.
+0---|0---

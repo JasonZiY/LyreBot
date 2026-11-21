@@ -1,0 +1,76 @@
+# 由 MIDI 自动编配：致松针-录音.mid
+# 原曲的音阶相当于 C 大调 / A 小调（没有升降号），不用移调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 122 拍（四分音符），速度平稳，4/4 拍
+speed=122
+q.e.w.e.u.w.q.w.|n-c-a-d-
+y.q.j.q.t.j.h.j.|d----
+r.h.g.h.e.g.f.g.|x-n-x-v-
+w.f.d.f.q--|n-0---
+u.w.q.w.y.q.j.q.|b-x-b-m-
+t.j.h.j.r.h.g.h.|s---0-
+e.g.f.g.w.f.d.f.|z-b-z-c-
+q.d.s.d.j--|b----
+y.q.j.q.t.j.h.j.|v-z-v-n-
+r.h.g.h.e.g.f.g.|a-n---
+w.f.d.f.q.d.s.d.|x-n-x-v-
+j.f.s.f.h.f.s.f.|n-0---
+t.0-.y.0-.|c.j.ch.j.m.a.j.a.  # 改动 ♯5→t
+u.0-.q.0-.|.s.j.s.s.d.s.d.
+w.0-.e.t.e.t.|c.f.cd.f.b-m-  # 改动 ♯5→t ♯5→t 伴奏♯5→b
+w--u--|d----
+e.q.h.q.e.q.h.q.|n-c-n--
+y.q.h.q.t.q.h.q.|na----
+r.h.f.h.e.h.f.h.|x-x-n--
+w.h.f.h.q.h.f.h.|na----
+w.j.g.j.w.j.g.j.|b-x-b--
+t.j.g.j.r.j.g.j.|bm----
+e.g.d.g.w.g.d.g.|z-b-n--
+q.g.d.g.j.g.d.g.|nd----
+q.h.f.h.q.h.f.h.|v-z-f.0-.
+f~d~h.f.h.e.h.f.h.|c~0---.~
+w.f.s.f.q--|m-v-d.f.s.f.
+j-.f.h.f.s.f.|d's.f.s.0--.
+g.d.s.d.g.d.s.d.|c-c-ms--  # 改动 ♯5→g ♯5→g
+h.d.a.d.h.d.a.d.|cas---n-
+j.g.d.g.e.j.g.j.|cnm-c-m-s-  # 改动 ♯5→g ♯5→g ♯5→g
+t.w.j.w.u.t.w.t.|c-m-s--  # 改动 ♯5→t ♯5→t ♯5→t
+e--e-y-|ndh-c-d.a.nh.a.
+t---r-|gh.a.n.a.d.a.nf.a.
+e--a--|xd-n-c.n.v.n.
+m---n-|x-v-z-v-
+m~s~g-.e-y-|b.m.x-sd.m.bh.m.
+t---j-|g.m.b.m.f.m.b-
+e--a--|zdj-b-x.b.c.b.
+w--j--|a.b.c.b.m.b.c.b.
+v-z-q-j-|0--a.n.v.n.
+q---j-|f.n.v.n.d.n.v.n.
+j.h-.h--|m-v-a.v.x.v.
+j--t.e.w.u.|m.v.x.v.n.vd.xs.vj.  # 改动 ♯5→t
+q--g.d.s.d.|ca-c-b-0-  # 改动 ♯5→g 伴奏♯5→b
+h.d.a.d.w.0-.|n-0-h.d.a.d.
+w-0-j.d.s.d.|cj-s-b.0-.  # 改动 伴奏♯5→b
+e.d.a.d.j.d.a.d.|n.0---.
+y--e-y-|n-n-nh.a.n.a.
+t--g-r-|nh.a.n.a.n.a.n.a.
+e--h--|x-n-d.n.v.n.
+w---q-|s.n.v.n.a.n.v.n.
+m--e-y-|xb-x-sd.m.bh.m.
+t---j-|g.m.b.m.f.m.b.m.
+j~e-.~a--|zmd-b-x.b.c.b.
+j--g--|a.b.c.b.m.b.c.b.
+h--r--|vf-z-nf.v.z.v.
+r--d--|f~h~n.v.n-n.v.n.
+h.j-.r--|m-v-a.v.x.v.
+j--r.e.w.j.|m.v.x.v.n.v.x.v.
+q----|c-c-b.d.s.d.  # 改动 伴奏♯5→b
+h-.d.w--|c.d.a-h.d.a.d.
+w--w--|cj-c-b.s.m.s.  # 改动 伴奏♯5→b
+g----|c----  # 改动 ♯5→g
+h----|n-c-n-m-
+a-d-h-e-|0----
+y-d-h-j-|na-0---
+q-e-y-~e.~|0----
+{1/3}y---{2/3}|0{1/3}ndh---{2/3}
+0----|0----

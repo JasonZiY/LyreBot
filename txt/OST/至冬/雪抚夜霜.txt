@@ -1,43 +1,54 @@
-# 雪抚夜霜（至冬野外夜晚BGM），自简谱重新记谱，4/4 拍
-# 第 35、36 小节琶音线只覆盖低音三个音，最上面的高音和琶音的第一个音同时弹
-speed=80
-0-0-d.f.g.e.|0-0-0-0-
-d-.f.f--|xvn----
-0-0-s.d.f.w.|bmd----
+# 由 MIDI 自动编配：雪抚夜霜-录音.mid
+# 原曲中途转调，各段分别移调，96% 的音落在白键上
+# 第 1–16 小节相当于 A 大调 / F♯ 小调（3 个升号），升 3 个半音移成 C 大调 / A 小调
+# 第 17–38 小节相当于 B♭ 大调 / G 小调（2 个降号），升 2 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 77 拍（四分音符），速度分 3 段各自平稳，段与段之间逐拍跟随，4/4 拍
+speed=77
+0--d.f.g.e.|0----
+d-.f.f--|xna----
+d--s.d.g.w.|xvb----
 s-.d.d-.g.|zb----
-a--d.f.g.e.|cn----
-d-.f.f--|xvn--0.x.v.n.
-h-.j.j-.g.|bmd.v.n.m.sg--
-w-.e.e--|zb.c.b.a.g.d.a.m~m~
-0-0-e.r.t.y.|zn.x..v.bms--
-h-.j.j-.w.|vna.n-a.n.a-d.
-w--j.q.w.y.|bms.m-s.m.a-b.
-y-.t.t-.q.|c.m.a.g.m.s.m.b.
-q--h.j.q.t.|ndh--ba.m.a.z.
-t-.r.h-.e.|x.n.a.f.a--
-e-.w.w-.q.|b.f.bmd-bs-b-
-q----|zb.f.s.f.d.q.w.j.
-0-0-d.f.g.e.|bmsf-bs.x.b-x-
-d-.f.f--|xv-na-na-na.x.
-0-0-s.d.f.w.|bm-bm-bm-bm-
-s-.d.d-.g.|z-b-ba-ba-
-a--d.f.g.e.|cn-cn-cn-cn-
-d-.f.f--|xv-na-na-na.x.
-h-.j.j-.g.|bm-bm-bm-bm-
-w-.e.e--|z.b.d.b.g.b.d.b.
-f-g-e.r.t.y.|z.b.d.b.ba-zb-
-h-.j.j-.w.|vn-af-af-af.v.
-w--j.q.w.y.|bm-sg-sg-sg-
-hy-.gt.gt-.q.|cb-sg-s-sg.c.
-^agq----|cn----
-0-h.j.q.t.|0-0-0-
-t-.r.h-.e.|vns----
-e-.w.f-.q.|bsf----
-q----|z.b.a.s.d.a.h.s.
-speed=75
-0-0-h.j.q.t.|^zbad----
-0-.r.h-.e.|t^sfh----
-0-.w.f-.q.|e^sgj----
-speed=65
-q----|zbf.f.g.f.(z.b.a.)-(d.g.q.)-
-0-0-0-0-|0-0-0-0-
+a--d.f.g.e.|cbn----
+d-.f.f--|xna--.x.v.n.
+h-.j.j-.g.|bf.v.n.ba.bmg--
+w-.e.e.g.d{1/3}a{1/3}m{1/3}|zd.d.g-za--
+n-a.v.e.r.t.y.|z.x.0-b-ad-  # 改动 ♭7→n
+h-.j.j-.w.|v.n-a.n.a-d.
+w--j.q.w.y.|vj.m-s.ng.m-b.
+y-.t.t.0-q.|cs.m.z.b.mj.s.m.b.
+q--h.j.q.t.|nad--ba.m.a.z.
+t-.r.h-.e.|x.n.z.v.naf--
+e-.w.f-.q.|b.v.zcn-xb-v-
+q--c.a.s{1/3}n{1/3}b{1/3}|zm.v.x.v.0--  # 改动 ♯5→n
+v-f-d.f.g.e.|x-vbm-b-b.dg.  # 转调到 B♭ 大调 / G 小调，从这里起升 2 个半音
+d-n.f.f-.~a~|xa-xv-xvn-xvn~x.xvn~
+speed=84.6
+-a-s.d.g.w.|-xvn-zvn-xna-
+speed=79.9
+s-a.d.d-.g.|zcb-zcb-zba-zcb-
+a-a-d.f.g.e.|cn-cb-cma-xbm-
+d-n.f.f--|xa-xv-xvn-xvn.z.
+h-.j.j-.g.|vb.n.v.n.zv.m.zv.m.
+w-.e.e-.g.|z.b.s.z.za.b.as-
+f-g-e.r.t.y.|z.x.a.v.b-ad-
+q-d.j.j-.w.|vah-na-nad-nad-
+w--j.q.w.y.|vfj-nm-nmg-nm-
+y-.t.t-.q.|cs.m.ms.sg.sgj.s.m.b.
+speed=75.3
+~q--~h.j.q.|x----  # 改动 伴奏♭3→x
+speed=74
+t.t-.r.h-.|0.zxn--vf-.
+e.e-.w.f-.|.xvb--xvb-.
+q.q---n.|f.zd.b.z.x.c.z.v.
+.a--h.j.q.|x.zcb---.
+t.t-.r.h-.|.xh--sf-.
+e.e-.w.f-.|.b--bm-.
+speed=89.8
+-q-q-n-|-0-zaf--  # 改动 ♭7→n
+speed=74.5
+b-v-z~b~a~s~g-|0--~c-.~  # 改动 ♯5→b
+speed=79.2
+----|----
+0----|0----
