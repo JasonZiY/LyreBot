@@ -1,0 +1,139 @@
+# 由 MIDI 自动编配：幽独的喧嚣-录音.mid
+# 原曲中途转调，各段分别移调，95% 的音落在白键上
+# 第 1–60 小节相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调
+# 第 61–117 小节相当于 A 大调 / F♯ 小调（3 个升号），升 3 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 136 拍（四分音符），速度有起伏，逐拍跟随，3/4 拍
+speed=135.9
+0.h.g.h.j.s.|0-x-n-
+g.h.j.s.g.h.|m-n-x-
+j.h.g.h.j.s.|v-x-b-
+g.h.j.s.g.j.|n-b-x-
+q.j.h.j.q.d.|c-z-b-
+g.j.q.d.g.j.|n-b-z-
+q.j.h.j.q.s.|x-z-b-  # 改动 ♭3→s 伴奏♭3→x
+g.h.q.s.g.h.|n-b-z-  # 改动 ♭3→s
+j.h.g.h.j.s.|b-x-n-
+g.h.j.s.g.h.|m-n-x-
+j.h.g.h.j.s.|v-x-b-
+g.h.j.s.g.j.|n-b-x-
+q.j.h.j.q.d.|c-z-b-
+speed=127.6
+g.j.q.d.g.j.|n-b-z-
+q.j.h.j.q.s.|x-z-b-  # 改动 ♭3→s 伴奏♭3→x
+g.h.q--|n-a--
+j.h.g.h.j.s.|b-x-n-
+speed=137.3
+g.s.h.s.j.s.|m-n-x-
+h.f.s.f.s.n.|v-x-n-
+f.n.v.n.s.n.|m-0-x-
+q.j.h.j.q-|c-z-b.d.
+q.d.j.d.h.d.|n-b-z-
+g.j.h.j.q.d.|x-z-b-  # 改动 伴奏♭3→x
+speed=135.9
+g.j.q.d.g.q.|n-b-z-
+j.h.g.h.j.s.|b-x-n-
+g.s.h.s.j-|m-n-x-
+h.f.s.f.s.n.|v-x-n-
+f.n.v.n.s.n.|m-0-x-
+q.j.h.j.q.d.|c-z-b-
+j.d.h.d.g.d.|n-b-z-
+h.g.f.g.h.a.|x-z-b-  # 改动 ♯4→f 伴奏♭3→x
+f.g.h.s.f.h.|xn---  # 改动 ♯4→f ♯4→f
+w.h.f.d.f.s.|v-x-n-
+j.f.q.f.w.f.|m-n-x-
+q.g.d.s.d.a.|c-z-b-
+g.g.q.j.h.j.|n-b-z-
+q.g.d.s.d.a.|x-z-b-  # 改动 ♭3→d ♭3→d 伴奏♭3→x
+h-j-q-|n-b.s.z.s.  # 改动 伴奏♭3→s 伴奏♭3→s
+j.g.s.a.s.m.|x-m-b-  # 改动 ♯1→a
+s.g.j.h.g.j.|n-b-m-
+h.d.a.n.a.d.|z-n-b-  # 改动 ♯1→a ♯1→a 伴奏♯1→z
+f.s.g.a.h.s.|n-n-v-  # 改动 ♯4→f ♭3→s ♭3→s 伴奏♯4→v
+g.s.m.s.f.g.|m-b-x-  # 改动 ♯4→f
+d.a.f-g.a.|b-.n.0-  # 改动 ♯1→a ♯4→f ♯1→a 伴奏♭7→n
+q.d.a.m.a.n.|n-b-c-
+q.d.j.d.h.d.|a-c-b-
+g.d.a.m.a.n.|xb-z-b-
+h.f.h.q.j.h.|xna---  # 改动 ♯4→f
+m*s*g~j--.|b*m.~*x-n-
+g-h-j-|bm-n-xm-
+h---|vns-x-b-
+f--s-|vn-b-x-
+q---|cag-z-b-
+q-j-h-|na-bm-zn-
+g---|ba-z-b-
+g.h.q.s.g.h.|n-b-z-  # 改动 ♭3→s
+~*g*j--.|bm-x-n-
+g-h-j-|bm-n-xm-
+h---|vns-x-b-
+f--s-|vn-b-x-
+r---|f-v-a-  # 转调到 A 大调 / F♯ 小调，从这里起升 3 个半音
+y-t-r-|s-ag-vf-  # 改动 ♯5→y
+t---|bsg-v-a-
+speed=136
+g-h-j-|bs-na-vm-
+q.d.h.j.q.d.|na-c-n-
+h.d.j.d.a.d.|na-m-n-
+f.f.h.j.q.h.|v-z-n-
+r.h.e.h.s.h.|mf-ad-x-
+e.w.q.g.q.w.|zd-b-a-
+t.e.w.q.g.q.|dg-s-a-
+j.h.g.s.g.h.|bm-x-m-
+g.s.h.s.j.s.|bs-na-m-
+a.d.h.j.q.d.|n-c-n-
+h.d.q-e.h.|nd-as.d.ad-
+h.j.q.r.q.h.|v-z-n-
+q.r.j.r.h.q.|h-g-f-
+t.e.w.q.g.q.|zg-b-d-
+q.t.e.w.e.t.|g-f-d-
+w.q.u.t.u.t.|bs-x-m-
+0-s-a-|ad-x-c-
+f---|zvn---
+f-d-a-|---
+n---|zv---
+n-a-d-|---
+s---|zxb---
+m---|b---
+b---|xc---
+g-q-e-|---
+speed=123.8
+t---|zvn---
+speed=132
+r-e-q-|---
+h---|zvn---
+h-r-q-|---
+*r~q--.*|znh---
+speed=135.1
+---|---
+~*j*r*u--~*|~*xbm--.*
+---|---
+.e.w.q.w.e.|.z-b-s.
+speed=128.7
+g.q.w.e.g.q.|.d-s-b.
+w.e.w.q.w.e.|.n-b-a.  # 改动 伴奏♭7→n
+g.q.w.e.g.q.|.s-a-b.
+e.r.e.w.e.r.|.n-v-a.
+h.q.e.r.h.q.|.s-a-v.
+speed=130.1
+e.r.e.w.e.r.|.b-v-a.  # 改动 伴奏♯5→b
+g.q.w.r.g.q.|.s-a-v.  # 改动 ♯5→g ♯5→g
+w.e.w.q.w.e.|.z-b-s.
+g.q.w.e.g.q.|.d-s-b.
+w.e.w.q.w.e.|.n-b-a.  # 改动 伴奏♭7→n
+g.q.w.e.g.q.|.s-a-b.
+e.r.e.w.e.r.|.n-v-a.
+h.q.e.r.h.q.|.s-a-v.
+speed=125
+e.r.e.w.e.r.|.b-v-a.  # 改动 伴奏♯5→b
+speed=131.8
+g.q.w.r-.|.s-fj-.  # 改动 ♯5→g
+speed=139.8
+-d--|-zba--
+---|---
+---|---
+speed=136.4
+---|---
+--0-|--0-
+0---|0---

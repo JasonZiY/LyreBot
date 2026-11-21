@@ -1,0 +1,32 @@
+# 由 MIDI 自动编配：温情的遥忆-录音.mid
+# 原曲的音阶相当于 E 大调 / C♯ 小调（4 个升号），降 4 个半音移成 C 大调 / A 小调，99% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 70 拍（四分音符），速度平稳，4/4 拍
+speed=70
+0--a-g-|0--c--
+g-f.d.s.a.s.d.|v--b--
+a-.b.a-.s.|n--v--
+a--a.s.d.f.|c--x--
+s--a-g-|b--z.b.d.b.
+g-f.d.s.a.s.d.|m.b.s-n.v.z-
+b-.b.a.b-s.|.c.z-v.z.0-
+a--a.s.d.f.|c.z.b-x.n.xv-
+s-b-a-q-|vnm-c-n.c.a.c.  # 改动 ♯5→b
+j-g-h-g.f.|bm.cm.a-vna.z.bn.v.
+g--h-j.q.|cba.z.b.a.vna.z.nm.za.
+g-a-s-.d.|cb.z.b-z.x.n-
+s--a-q-|xb.x.m-n.v.a.v.
+j-g-f~h.~g.f.|ms.b.s-za.n.v.n.
+d-c.b.a.s.d.f.|zb.b.0-zv.zx.cn.v.
+s-.a.a-c.x.|xb.x.b-zvb--
+c--q-t-|z--adg--
+t-r.e.w.q.w.e.|msg--ndf--
+t-.g.q.g-w.|bad--vna--
+q--q.w.e.r.|cba--xva--
+w--a-g-|bms--c.z.b-
+a~g.~f.d.s.a.s.d.|vn.z.n-xb-vm-
+a-.b.a.b.v.d.|cn--x.z-.
+s-.a.a--|bm--zvb--
+--c--|--0--
+0----|0----

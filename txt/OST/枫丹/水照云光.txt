@@ -1,0 +1,72 @@
+# 由 MIDI 自动编配：水照云光-录音.mid
+# 原曲中途转调，各段分别移调，100% 的音落在白键上
+# 第 1–20 小节相当于 C 大调 / A 小调（没有升降号），不用移调
+# 第 21–35 小节相当于 E♭ 大调 / C 小调（3 个降号），降 3 个半音移成 C 大调 / A 小调
+# 第 36–56 小节相当于 D♭ 大调 / B♭ 小调（5 个降号），降 1 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 126 拍（四分音符），速度分 2 段各自平稳，段与段之间逐拍跟随，4/4 拍
+speed=130.4
+0-.b-s-b.|0----
+speed=126
+.s-b-s-b.|0----
+.s-y-.t.w.|0-.b-s-b.
+---.b.|.s-b-s-0.
+.s-b-s-e.|0---.ba.
+-w.g-s-0.|.s-b-0-b.
+0.s-b-s-b.|.0---.
+.s-h--j.|0-.vf-s-bg.
+---.b.|.s-b-s-0.
+.s-b-s-g.|0---.bs.
+.s-t--y.|.0-bg-s-b.
+-.j--y.|.s-b-s-b.
+-t.w--.|.s-bj-s-b.
+-.b-s-b.|.s-0--.
+.s-e-.w.t.|0-.ba-s.j.bs.
+---.b.|.s-b-s-0.
+.s-b-s-y.|0---.vf.
+-.u--.|.s-bg-s-b.
+-.b-s-b.|.s-0--.
+.s-w-.y.t.|0-.b-s-bs.
+---.d.|.m-c-m-0.  # 转调到 E♭ 大调 / C 小调，从这里起降 3 个半音
+.j-d-j-d.|0----
+speed=120.4
+{2/3}j-{1/12}d-j-~|0----
+speed=126
+h.j.g.a.s.j.g.a.|v-a-v-ba-
+s.j.g.a.s.j.g.a.|v-ba-v-ba-
+s.j.g.a.s.j.g.a.|c-ba-c-ba-
+s.j.g.a.s.j.g.a.|c-ba-c-ba-
+h.j.g.a.s.j.g.a.|x-ba-x-ba-
+s.j.g.a.s.j.g.a.|x-ba-x-ba-
+s.j.g.a.s.j.g.a.|z-bm-z-bm-
+g.q.j.g.m.a.g.j.|z-bm-z-bm-
+h.j.g.a.s.j.g.a.|v-a-v-ba-
+s.j.g.a.h.j.g.a.|v-ba-v-ba-
+s.j.g.a.s.j.g.a.|c-ba-c-ba-
+s.j.g.a.s.j.g.a.|c-ba-c-ba-
+f.w.h.s.f.w.h.s.|v-ad-v-ad-  # 转调到 D♭ 大调 / B♭ 小调，从这里起降 1 个半音
+f.w.h.s.f.w.q.h.|v-ad-v-as-
+f.w.h.s.g.w.h.q.|b-as-b-as-
+j----|bsg----
+d-s-d-s-|b----
+b-s-b-s-|0----
+y-.t.w--|bs-s-b-s-
+b-s-b-s-|0----
+b-s-e-.w.|0--ba-s-
+g-s-b-s-|b-0---
+b-s-b-s-|0----
+h--j--|vf-s-bg-s-
+y--t--|b-s-b-s-
+--w--|b-s-bh-s-
+g-s-t--|bs-0-b-s-
+w----|b-s-b-s-
+speed=121.7
+b-~s-~b-s.|0----
+speed=119.8
+.b---.|0----
+speed=125
+----|0----
+----|0----
+.t---.|0.bgj---.
+0----|0----

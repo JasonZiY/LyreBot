@@ -1,0 +1,76 @@
+# 由 MIDI 自动编配：暮雨的沫痕-录音.mid
+# 原曲中途转调，各段分别移调，95% 的音落在白键上
+# 第 1–40 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 第 41–56 小节相当于 B♭ 大调 / G 小调（2 个降号），升 2 个半音移成 C 大调 / A 小调
+# 第 57–66 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 105 拍（四分音符），速度平稳，3/4 拍
+speed=105
+g.w.u.t.u.t.|0---
+g.w.y.r.y.r.|0---
+g.w.u.t.u.t.|0---
+g.w.y.r.y.r~t~|0---
+t-w-.t.|b.s.j.g.j.g.
+r--w.r.|bf.s.h.f.h.f.
+e'r'e.w.q.w.e.r.|b.a.g.d.g.d.
+w'e'w.q.w-.~g~|b.s.j.g.j.g.
+t-w-t.~y't'r~|b.s.j.g.j.g.
+--w.r.|b.s.h.f.h.f.
+e'r'e.w.q.w.e.r.|b.a.g.d.g.d.
+w'e'w.q-.g.h.|b.s.m.g.m.b.
+j-h-g-|za.b.s.n.b.s.  # 改动 ♭7→j 伴奏♭3→s 伴奏♭7→n 伴奏♭3→s
+h--.a.|xa.n.f--
+s.g.0-.g.|bm.s.m.b.m.b.
+h--.h.|b.s.b.f-.
+j-q-w-|x.n.s.g.h-  # 改动 ♭7→j 伴奏♭3→x 伴奏♭7→n 伴奏♭3→s 伴奏♭7→h
+r-h-.f.|vaf---
+h'j'h.g--.|b.s.m.b.m.b.
+t'y't.r--.|b.s.h.f.h.f.
+r't'r.e--.|b.a.g.d.g.d.
+r-h--|b.s.sf--
+t-h.j.w.t.|b.s.b.s.s.g.
+r--w.r.|b.s.h.f.h.f.
+e'r'e.w.q.w.e.r.|b.a.g.d.g.d.
+w'e'w.q.w-.h.|b.s.d.s.f-
+t-w-t.~y't'r~|bg.s.j.g.j.g.
+--w.r.|b.a.s.g.f.s.
+e'r'e.w.q.w.e.r.|b.a.s.f.d.s.
+e'r'e.w.j.g.y.u.|b.s.0-fj.g.
+y.r.t.y.q.y.|vf.a.h.f.sh.f.
+u--y.u.|bg.s.j.g.fj.g.
+y.r.t.y.q.y.|vf.a.h.sf.dh.f.
+u--y.u.|bg.s.j.g.fj.g.
+y.r.t.y.q.y.|vf.a.h.fg.fh.f.
+u-.w.q-|n.v.af-a-  # 改动 ♭7→u 伴奏♭7→n
+w-j-g.j.|b.s.s--
+h-f--|0---
+w-.q.w.e.|f---
+r-.t.r-|nf---
+h-.g.h.j.|va---  # 转调到 B♭ 大调 / G 小调，从这里起升 2 个半音
+q-.w.q-|ca---
+g-s.f.g.h.|x.n--.  # 改动 ♭3→s 伴奏♭3→x 伴奏♭7→n
+j-f.h.g.f.|v.a--.  # 改动 ♭7→j
+h-g--|zad.b--.
+--h.j.|---
+q-.j.q.w.|nd---  # 改动 ♯1→q ♯1→q
+e-.r.e-|d---  # 改动 ♯4→r
+j-.h.j.q.|bs---  # 改动 ♯1→q
+w-.e.w-|s---
+h-.g.h.j.|v.n.a-a.a.
+q---|n.a.d--
+h-.g.h.e.|v.n.a-n-
+q---|n.a.d--
+h-.g.h.j.|vaf---
+q-j--|b---
+---|---  # 转调到 G 大调 / E 小调，从这里起升 5 个半音
+j-j.g.j.g.|bg.s.0--
+h.s.h.f.h.f.|bf.0-.f-
+j-j.g.q.g.|bg.s.0-m-
+w-w.q.u.y.|bf.s.hj.fh.gh.f.
+t-j.g.j.g.|bj.s--.
+r-e-h.q.|bh.s.h.f-f.
+w-j.g.j.g.|bj.s--.
+q-h-h-|bh.s-f-.
+j---|bg---
+0---|0---

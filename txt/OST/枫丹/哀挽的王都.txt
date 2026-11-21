@@ -1,0 +1,24 @@
+# 由 MIDI 自动编配：哀挽的王都-录音.mid
+# 原曲的音阶相当于 E♭ 大调 / C 小调（3 个降号），降 3 个半音移成 C 大调 / A 小调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 72 拍（四分音符），速度平稳，4/4 拍
+speed=72
+j.q.q.g.f.d~f~s.a.|xs--vns.~c~0-
+a.q.q.j.j--|vbn--sg-vf.~s~
+j.q.q.g.f.~g'f'd's.~a.|c-msg-c-cb-
+a.w.w.q.q--|n-adg-dh-ag.f.
+j.q.q.g.f.d~f'd~s.a.|xnf----
+a.q.q.j~q'j'h-.~h.|xb----
+j--q-w.~e'w'q'j~|zbd----
+---g-|ndg----
+d~f~g~d~f~g~h~q~e~r~e.e~r~e.|x.n.a-a-fh.a.
+d~f~g~d~f~g~h~j~w~e~w.w~e~w.|b.n.a.d.af.s.fg.s.
+s~d~g~s~d~g~j~q~w~e~w.w~e~w.|z.m~z~m~a~m~g~a~g~j~a~s~a~j~g~
+a~s~d~a~s~d~g~j~q-j.~b~|n~b~m.m~a~m~g~h~g~m~g~m~a~s~0~
+c~v~b~c~v~b~n~a~d~f~d.q-|0-z-vna-a-
+c~v~b~c~v~b~n~a~d~f~g-g~f~|0---.n.  # 改动 伴奏♭7→n
+g-.g~f~g-h-|ba-.b~v~vb-b-  # 改动 ♯5→h 伴奏♯5→b
+g--w--|bad--fg--
+~e---.~|~fgj---.~
+0----|0----

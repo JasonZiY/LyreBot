@@ -1,0 +1,64 @@
+# 由 MIDI 自动编配：堕天或早至的忧愁-录音.mid
+# 原曲的音阶相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调，99% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 88 拍（四分音符），速度分 2 段各自平稳，段与段之间逐拍跟随，6/8 拍
+speed=88
+a.g.w.e-.|0---
+.g.w.e.q.g.|a---
+a.h.e.r-.|0---
+q---|af---
+g.b.m.d.m.d.|a---
+h.b.m.d.m.d.|a---
+j.n.a.f.a.f.|s---
+q--e.w.|s.h.a.f-.
+j---|b.s.f.a.f.a.
+b.x.v.m.e.w.|0---
+u.q.e.j.d.j.|z.b.d.0-.
+0-d-b.s.|z.b-m.0-
+t---|n.n.a.d.a.d.
+y--u-|n.a.d.g-.
+t--y-|x.n.a.f.a.f.
+q--h.e.|x.n.a.f.0-
+e--h.e.|b.b.s.f.0-
+e'r'e-w-h.j.|bf---
+q---|z.b.s.f-.
+--g~j~q~w~|d--~n.~
+e-.w-.|v.a.d.a.d.a.
+h-d.j-.|v.a-a.d.a.
+j-.q-.|c.a.d.a.d.a.
+g-a.d.a-|z.n.0-.n.  # 改动 ♯1→a ♯1→a 伴奏♯1→z
+e-.r-.|x.n.f.h.f.a.
+q-.w-.|b.s.f.s.f.s.
+e-u~t~e-t~q~|z.b.a.d.a.b.
+j.g~h~j~q~w~e~r~t.~|z.n.d.g-.  # 改动 ♭7→j 伴奏♭7→n
+e-.w-.|x.n.a.f-.
+r-.e-r.|nfh-.af-.
+t-.e.t.u.|cj.m.d.d.g.j.
+y--e.r.|n.n.a.d.0-  # 改动 伴奏♯1→a
+t-.r-.|x.n.a.f.a.n.
+h-f.q-.|x.n-f-.
+q~e--.~|bh---
+w-g~h~j~q~w~e~r.|bj---
+g---|z.b.a.d.b.m.
+h--j-|d.m.b.d.m.b.
+g---|x.n.s.v.n.a.
+h--j.q.|f.a.n.f.a.n.
+e-.w-.|b.b.fh.gj.ah.sj.
+j-g.h.j.q.|ad.sf.d.bf.g.sh.
+w-j-g-|zdg.b.a.s.d.b.
+d---|a.b.c.a.b.z.
+g---|n.n.a.d.b.a.
+h--j-|n.d.b.a.g.d.
+g--h-|x.n.a.v.n.s.
+a-.n.m.a.|x.n.z.v.z.n.
+d---|b.b.a.v.b.a.
+s---|vnm---
+a---|z.b.z.c.z.b.
+a.h.q.r.q.h.|0---
+.j.w.t.w.j.|z---
+.h.q.r~y~u~q~w~e~|z---
+f~g~h~j~q.~w.~e.|na--.zdg.
+---|---
+-.0-.|-.0-.
+0---|0---
