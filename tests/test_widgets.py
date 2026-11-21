@@ -59,7 +59,8 @@ class Drawing(unittest.TestCase):
         for draw in (icons.play, icons.stop, icons.next_track, icons.restart, icons.keyboard, icons.record,
                      icons.check, icons.magnifier, icons.folder, icons.move_to, icons.quill, icons.score_page,
                      icons.trash, icons.pen_nib, icons.warning, icons.lyre, icons.chevron, icons.minimise, icons.cross,
-                     icons.corners_out, icons.corners_in, icons.undo, icons.seal, icons.question, icons.book):
+                     icons.corners_out, icons.corners_in, icons.undo, icons.seal, icons.question, icons.book,
+                     icons.pin, lambda size: icons.pin(size, pressed=False)):
             pixels = icons.rgba(16, 16, icons.paint(draw(16), "#000000"))
             self.assertTrue(any(pixels[3::4]), draw.__name__)
         width = icons.fleuron_width(7)
@@ -345,6 +346,32 @@ class Pieces(unittest.TestCase):
         self.assertEqual(pressed, ["start"])
         self.assertNotIn("start", TitleBar(self.root, self.theme, chrome.Frame(edge=0, caption=0), "对话框", "", None,
                                            lambda: None).commands)  # a dialog's bar has × alone
+
+    def test_the_pin_sits_between_the_book_and_minimise_and_shows_whether_the_window_is_on_top(self):
+        pressed = []
+        frame = chrome.Frame(edge=5, caption=0)
+        bar = TitleBar(self.root, self.theme, frame, "LyreBot", "", lambda: None, lambda: None,
+                       start=lambda: None, pin=lambda: pressed.append("pin"), pinned=True)
+        with mock.patch.object(bar, "winfo_width", return_value=400), mock.patch.object(bar, "winfo_x", return_value=0), \
+                mock.patch.object(bar, "winfo_y", return_value=0):
+            bar.redraw()
+        close, minimise, pin, start = frame.buttons
+        self.assertLess(start[2], pin[0])
+        self.assertLess(pin[2], minimise[0])
+        self.assertEqual(pin[0] - start[2], minimise[0] - pin[2])  # spaced alike
+        self.assertEqual(bar.itemcget("pin", "image"), str(bar.pin_faces[True][False]))  # pressed in: kept on top
+        self.assertEqual(bar.tips["pin"], "取消置顶")
+        middle = SimpleNamespace(x=(pin[0] + pin[2]) / 2, y=(pin[1] + pin[3]) / 2)
+        bar.press(middle)
+        bar.release(middle)
+        self.assertEqual(pressed, ["pin"])  # the window's to change, and then to say so:
+        bar.show_pinned(False)
+        self.assertEqual(bar.itemcget("pin", "image"), str(bar.pin_faces[False][False]))  # leaning
+        self.assertEqual(bar.tips["pin"], "窗口置顶")
+        bar.point("pin")
+        self.assertEqual(bar.itemcget("pin", "image"), str(bar.pin_faces[False][True]))  # lit under the pointer
+        bar.show_pinned(True)
+        self.assertEqual(bar.itemcget("pin", "image"), str(bar.pin_faces[True][True]))  # and still lit
 
     def test_the_title_bar_shows_the_frame_its_buttons_and_presses_them(self):
         pressed = []

@@ -80,6 +80,7 @@ def card(parent: tk.Misc, title: str, fill: Callable[[tk.Frame, Theme], None],
     window.bind("<Escape>", lambda _: close())
     window.update_idletasks()
     window.geometry(geometry(*_beside(owner, window.winfo_reqwidth(), window.winfo_reqheight())))
+    keep_over(owner, window)
     if leather and chrome.adopt(window, edges, see_through=(window, bar), owner=owner):
         round_corners(window, border=None)
     else:
@@ -88,6 +89,15 @@ def card(parent: tk.Misc, title: str, fill: Callable[[tk.Frame, Theme], None],
         window.deiconify()
         dress(window)
     return window
+
+
+def keep_over(owner: tk.Misc, window: tk.Toplevel) -> None:
+    """Kept on top as ``owner`` is (its title bar's pin): Windows keeps a window over its owner only among the
+    windows not kept on top, so one that is not would open, and stay, under a pinned LyreBot."""
+    try:
+        window.attributes("-topmost", bool(owner.attributes("-topmost")))
+    except tk.TclError:
+        pass
 
 
 def _beside(owner: tk.Misc, width: int, height: int) -> tuple[int, int]:
@@ -165,6 +175,7 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
 
     window.update_idletasks()
     window.geometry(geometry(*_place(owner, window.winfo_reqwidth(), window.winfo_reqheight())))
+    keep_over(owner, window)
     if leather and chrome.adopt(window, edges, see_through=(window, bar), owner=owner):
         round_corners(window, border=None)
     else:

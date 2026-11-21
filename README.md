@@ -19,7 +19,9 @@
 3. 双击曲名或点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle">，然后在 2 秒内切到游戏并打开琴。倒计时结束时在前台的窗口就是演奏对象。也可以先在游戏里打开琴，再按 <kbd>F7</kbd>：不用倒计时，立刻对着当前窗口弹选中的曲子。
 4. 按 <kbd>F8</kbd> 或切换到别的窗口，演奏就会停止。
 
-第一次用，可以点标题栏右上角那本打开的书 <img src="assets/readme/book.png" alt="快速开始" height="22" align="absmiddle">（最小化按钮左边），「快速开始」用六步小图讲怎么用。把鼠标停在按钮上，会显示它的用途。
+第一次用，可以点标题栏右上角那本打开的书 <img src="assets/readme/book.png" alt="快速开始" height="22" align="absmiddle">（图钉左边），「快速开始」用六步小图讲怎么用。把鼠标停在按钮上，会显示它的用途。
+
+想一边弹一边看着 LyreBot，点标题栏上的图钉 <img src="assets/readme/pin.png" alt="窗口置顶" height="22" align="absmiddle">（最小化按钮左边），窗口就置顶，一直盖在游戏和别的窗口上面，图钉立起来、头变成橙色 <img src="assets/readme/pinned.png" alt="取消置顶" height="22" align="absmiddle">；再点一次取消。下次打开还记得。点置顶的 LyreBot 同样算切换窗口，演奏会停下。游戏要用窗口化或无边框窗口，独占全屏时什么窗口都盖不上去。
 
 游戏里没有反应时，可以试着把输入法切成英文：中文输入法或许会有影响。
 

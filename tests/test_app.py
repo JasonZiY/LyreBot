@@ -1515,6 +1515,52 @@ class Folders(unittest.TestCase):
         self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"timbre": 108, "other": 1})
         self.assertEqual(read_timbre(self.root / "nothing.json"), PIANO)
 
+    def test_kept_on_top_the_window_keeps_its_cards_over_it_and_is_kept_so(self):
+        import json
+        from lyrebot.app import App, read_on_top
+        settings = self.root / "settings.json"
+        settings.write_text(json.dumps({"timbre": 47}), encoding="utf-8")
+        app = App(self.window(), self.scores, self.midi, settings=settings)
+        self.assertFalse(app.on_top)
+        self.assertFalse(app.root.attributes("-topmost"))
+        app.toggle_quickstart()  # open beside it, and so over it once it is kept on top
+        self.assertFalse(app.quickstart.attributes("-topmost"))
+        app.set_on_top(True)
+        self.assertTrue(app.root.attributes("-topmost"))
+        self.assertTrue(app.quickstart.attributes("-topmost"))
+        self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"timbre": 47, "on_top": True})
+        self.assertTrue(read_on_top(settings))
+        app.toggle_quickstart()
+        app.toggle_quickstart()  # opened while it is on top: over it from the start
+        self.assertTrue(app.quickstart.attributes("-topmost"))
+        app.set_on_top(False)
+        self.assertFalse(app.root.attributes("-topmost"))
+        self.assertFalse(app.quickstart.attributes("-topmost"))
+        self.assertFalse(read_on_top(settings))
+        app.toggle_quickstart()
+        for text in ("{not json", json.dumps({"on_top": "yes"}), json.dumps([1])):
+            settings.write_text(text, encoding="utf-8")
+            self.assertFalse(read_on_top(settings))
+        self.assertFalse(read_on_top(self.root / "nothing.json"))
+
+    def test_the_title_bars_pin_opens_as_it_was_left_and_lets_go(self):
+        import json
+        from unittest import mock
+        from lyrebot.app import App
+        self.write_scores("甲.txt")
+        settings = self.root / "settings.json"
+        settings.write_text(json.dumps({"on_top": True}), encoding="utf-8")
+        with mock.patch("lyrebot.app.chrome.available", return_value=True), \
+                mock.patch("lyrebot.app.chrome.adopt", return_value=True), mock.patch("lyrebot.app.round_corners"):
+            app = App(self.window(), self.scores, self.midi, own_frame=True, settings=settings)
+        self.assertTrue(app.on_top)
+        self.assertTrue(app.root.attributes("-topmost"))
+        self.assertTrue(app.title_bar.pinned)
+        app.title_bar.commands["pin"]()
+        self.assertFalse(app.root.attributes("-topmost"))
+        self.assertFalse(app.title_bar.pinned)
+        self.assertEqual(json.loads(settings.read_text(encoding="utf-8")), {"on_top": False})
+
     def test_without_a_settings_file_the_choice_lasts_only_while_open(self):
         from lyrebot.app import App
         app = App(self.window(), self.scores, self.midi)

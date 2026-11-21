@@ -1153,16 +1153,18 @@ class TitleBar(tk.Canvas):
     It tells ``frame`` (a ``chrome.Frame``) how tall it is and where its buttons are, so that a press
     on the rest of it moves the window and a press near the edges resizes it, as Windows' own bar
     would; only presses on the buttons reach it.  A dialog's bar has × alone (``minimise`` None); the
-    main window's has an open book left of — as well (``start``: 快速开始), which says what it is when the
-    pointer rests on it."""
+    main window's has a pushpin left of — as well (``pin``: 窗口置顶), upright with an orange head while
+    the window is kept on top (``show_pinned``), and an open book left of that (``start``: 快速开始); these
+    two say what they are for when the pointer rests on them."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, frame, title: str, note: str,
                  minimise: Callable[[], None] | None, close: Callable[[], None],
-                 start: Callable[[], None] | None = None):
+                 start: Callable[[], None] | None = None, pin: Callable[[], None] | None = None,
+                 pinned: bool = False):
         px = theme.px
         self.theme, self.frame, self.title, self.note = theme, frame, title, note
         self.commands = {"close": close, **({"minimise": minimise} if minimise is not None else {}),
-                         **({"start": start} if start is not None else {})}
+                         **({"pin": pin} if pin is not None else {}), **({"start": start} if start is not None else {})}
         self.tips = {"start": "快速开始"}
         self.callout: Callout | None = None
         self.tip_job: str | None = None
@@ -1171,10 +1173,11 @@ class TitleBar(tk.Canvas):
         size = self.button_size = px(24)
         half = size / 2
 
-        def face(name: str, draw: Callable[[int], object], color: str, disc: str | None = None) -> tk.PhotoImage:
+        def face(name: str, draw: Callable[[int], object], color: str, disc: str | None = None,
+                 gold: str | None = None) -> tk.PhotoImage:
             return theme.image(f"title-{name}", size, size,
                                lambda: ([(disc, icons.circle(half, half, half - 0.5))] if disc else [])
-                               + icons.paint(draw(size), color))  # type: ignore[arg-type]
+                               + icons.paint(draw(size), color, gold))  # type: ignore[arg-type]
         self.faces = {
             "minimise": {False: face("minimise", icons.minimise, GILT),
                          True: face("minimise-hover", icons.minimise, GILT_BRIGHT, LEATHER_HOVER)},
@@ -1182,6 +1185,15 @@ class TitleBar(tk.Canvas):
             "start": {False: face("start", icons.book, GILT),
                       True: face("start-hover", icons.book, GILT_BRIGHT, LEATHER_HOVER)},
         }
+        if pin is not None:  # by whether the window is kept on top: leaning in gilt, or pressed in, its head orange
+            def leaning(size: int) -> list:
+                return icons.pin(size, pressed=False)
+            self.pin_faces = {
+                False: {False: face("pin", leaning, GILT), True: face("pin-hover", leaning, GILT_BRIGHT, LEATHER_HOVER)},
+                True: {False: face("pinned", icons.pin, GILT, gold=ORANGE),
+                       True: face("pinned-hover", icons.pin, GILT_BRIGHT, LEATHER_HOVER, gold=ORANGE)},
+            }
+            self.show_pinned(pinned)
         self.crest = theme.icon("title-crest", px(17), GILT, icons.lyre)
         self.boxes: dict[str, tuple[float, float, float, float]] = {}
         self.inside: str | None = None  # the button under the pointer
@@ -1215,14 +1227,22 @@ class TitleBar(tk.Canvas):
             self.create_text(right + px(8), middle, text=self.note, font=self.theme.fonts.small, fill=EMBER, anchor="w")
         size = self.button_size
         close = width - px(8) - size / 2
-        for place, name in enumerate(name for name in ("close", "minimise", "start") if name in self.commands):
-            centre = close - place * (size + px(4))  # from the right: ×, —, then the book
+        for place, name in enumerate(name for name in ("close", "minimise", "pin", "start") if name in self.commands):
+            centre = close - place * (size + px(4))  # from the right: ×, —, the pin, then the book
             self.boxes[name] = (centre - size / 2, middle - size / 2, centre + size / 2, middle + size / 2)
             self.create_image(centre, middle, image=self.faces[name][self.inside == name], tags=name)
         dx, dy = self.winfo_x(), self.winfo_y()
         self.frame.caption = dy + height
         self.frame.buttons = [(round(l + dx), round(t + dy), round(r + dx), round(b + dy))
                               for l, t, r, b in self.boxes.values()]
+
+    def show_pinned(self, pinned: bool) -> None:
+        """The pin as the window is now: pressed in while it is kept on top, else leaning; and its words."""
+        self.pinned = pinned
+        self.faces["pin"] = self.pin_faces[pinned]
+        self.tips["pin"] = "取消置顶" if pinned else "窗口置顶"
+        if self.find_withtag("pin"):
+            self.itemconfigure("pin", image=self.faces["pin"][self.inside == "pin"])
 
     def button_at(self, x: float, y: float) -> str | None:
         return next((name for name, (l, t, r, b) in self.boxes.items() if l <= x < r and t <= y < b), None)

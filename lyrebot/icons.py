@@ -436,6 +436,26 @@ def book(size: int) -> list[Shape]:
     return [*pages, stroke([(c, top + s * 0.04), (c, foot + s * 0.04)], pen)]
 
 
+def pin(size: int, pressed: bool = True) -> list[Part]:
+    """A pushpin in line, for the title bar: upright and pressed in (the window kept over all the others), or
+    leaning over to the right, not pressed in.  Its head, the cap, body and flange, is the gilt."""
+    s, pen = size, pen_width(size, 0.052)
+    c = _centre(s / 2) if pen % 2 else float(round(s / 2))
+    turn = 0.0 if pressed else math.pi / 4
+
+    def at(x: float, y: float) -> tuple[float, float]:  # (x across from the needle, y down) in sizes
+        dx, dy = x * s, (y - 0.5) * s
+        return c + dx * math.cos(turn) - dy * math.sin(turn), c + dx * math.sin(turn) + dy * math.cos(turn)
+
+    def line(*points: tuple[float, float]) -> Shape:
+        placed = [at(x, y) for x, y in points]
+        return crisp(placed, pen) if pressed else stroke(placed, pen)  # upright on whole pixels
+    cap, flange = 0.21, 0.48
+    return [gilt(line((-0.12, cap), (0.12, cap))), gilt(line((-0.06, cap), (-0.06, flange))),
+            gilt(line((0.06, cap), (0.06, flange))), gilt(line((-0.19, flange), (0.19, flange))),
+            line((0.0, flange), (0.0, 0.79))]
+
+
 def minimise(size: int) -> Shape:
     """— for the title bar: one level line on whole pixels."""
     pen = pen_width(size, 0.052)

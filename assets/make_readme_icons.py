@@ -1,6 +1,6 @@
 # Draws the small pictures README.md shows in its text, into assets/readme: LyreBot's buttons as the window
 # draws them, by the window's own code (App.build_images, the title bar's faces, the list's and search
-# field's marks, the ribbons), each laid on a tile of the page's paper (the title bar's book on its leather)
+# field's marks, the ribbons), each laid on a tile of the page's paper (the title bar's book and pin on its leather)
 # so that it shows on a dark page as well as a light one. Each tile is 44 pixels square and is shown 22
 # high, two pixels to one, so that it stays sharp on fine screens. Run it from the project folder whenever
 # a button's face changes: python assets/make_readme_icons.py
@@ -28,8 +28,9 @@ FACES = {  # the picture's name here: what the window calls it
     "recording": "recording-in", "restart": "restart-normal", "next": "next-normal", "keys": "keys-normal",
     "grow": "grow-normal", "shrink": "shrink-normal", "undo": "undo-normal", "save": "save-normal",
     "guide": "guide-normal", "warning": f"warning:{WARN}:{WARN}", "search": f"magnifier:{MUTED}:{GOLD}",
-    "book": "title-start",
+    "book": "title-start", "pin": "title-pin", "pinned": "title-pinned",
 }
+ON_LEATHER = {"book", "pin", "pinned"}  # the title bar's: on its leather
 ROUNDS = {"play", "stop", "halt"}  # as they are; the rest made so many pixels long:
 FIT = {"record": 33, "recording": 33}  # the small round ones a little fuller than the lines
 
@@ -46,7 +47,7 @@ def drawings(root: tk.Tk, scale: float) -> dict[str, tuple[int, int, object]]:
     theme.image = keep  # type: ignore[method-assign]  # what the window would draw, kept here instead
     App.build_images(SimpleNamespace(theme=theme, scale=theme.scale))  # type: ignore[arg-type]
     TitleBar(root, theme, chrome.Frame(edge=0, caption=0), "LyreBot", "", lambda: None, lambda: None,
-             start=lambda: None).destroy()
+             start=lambda: None, pin=lambda: None).destroy()
     theme.icon("warning", theme.px(22), WARN, icons.warning)  # the list's mark on a score that cannot be read
     theme.icon("magnifier", theme.px(20), MUTED, icons.magnifier, GOLD)  # the search field's
     return drawn
@@ -102,7 +103,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name in FACES:
         width, height, layers = chosen[name]
-        ground = tile(LEATHER_TOP, LEATHER_EDGE) if name == "book" else tile(PAPER, HAIR)  # the book: title bar
+        ground = tile(LEATHER_TOP, LEATHER_EDGE) if name in ON_LEATHER else tile(PAPER, HAIR)
         write(name, ground + centred(layers(), width, height))  # type: ignore[operator]
     band, length, notch, drop = 14, 31, 7, 2  # a bookmark hanging from the top of the tile, its end in view
     for name, (body, fold, tuck) in (("ribbon", (RIBBON, RIBBON_FOLD, RIBBON_TUCK)),

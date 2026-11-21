@@ -886,6 +886,7 @@ class App:
         self.listening = False
         self.auditioning = False  # hearing a song on the computer (``audition``)
         self.timbre = read_timbre(settings) if settings else PIANO  # the General MIDI instrument it is heard on
+        self.on_top = bool(settings) and read_on_top(settings)  # kept over all other windows (the title bar's pin)
         self.synth: Audition | None = None  # the synthesizer open while a song is heard
         self.leaping = threading.Event()  # set when a note is clicked while hearing: go on from ``leap_to``
         self.leap_to = 0.0  # seconds into the song
@@ -1114,7 +1115,8 @@ class App:
         assert self.frame is not None
         self.frame.edge = self.theme.px(5)
         bar = TitleBar(self.root, self.theme, self.frame, "LyreBot", "" if is_admin() else "未以管理员身份运行",
-                       self.frame.minimise, self.close, start=self.toggle_quickstart)
+                       self.frame.minimise, self.close, start=self.toggle_quickstart,
+                       pin=lambda: self.set_on_top(not self.on_top), pinned=self.on_top)
         bar.pack(side="top", fill="x", before=first)
         self.crest.grid_remove()
         self.title_bar = bar
@@ -1138,11 +1140,29 @@ class App:
         if chrome.adopt(root, self.frame, see_through=(root, self.backdrop, bar)):
             round_corners(root, border=None)  # rounded, with the system's shadow, and no outline
             root.lyrebot_frame = self.frame  # type: ignore[attr-defined]  # (its dialogs dress to match)
+            if self.on_top:  # as it was left
+                self.set_on_top(True, keep=False)
             return True
         bar.destroy()
         self.frame = self.title_bar = None
         self.crest.grid()
         return False
+
+    def set_on_top(self, on: bool, keep: bool = True) -> None:
+        """The title bar's pin: keep the window over all the others, the game's too, or let it go back among
+        them; and, with ``keep``, open it so next time.  Its dialogs, cards, menus and tips stay over it."""
+        self.on_top = on
+        try:
+            self.root.attributes("-topmost", on)
+        except tk.TclError:
+            pass
+        for card in (self.quickstart, self.guide):  # open beside it, and over it
+            if card is not None and card.winfo_exists():
+                dialogs.keep_over(self.root, card)
+        if self.title_bar is not None:
+            self.title_bar.show_pinned(on)
+        if keep and self.settings:
+            write_setting("on_top", on, self.settings)
 
     def keep_place(self) -> None:
         """Write down where the window is, for it to open there next time (see ``read_place``)."""
@@ -2764,12 +2784,25 @@ def read_timbre(path: Path) -> int:
 
 def write_timbre(program: int, path: Path) -> None:
     """Keep the instrument songs are heard on, beside whatever else ``path`` keeps."""
+    write_setting("timbre", program, path)
+
+
+def read_on_top(path: Path) -> bool:
+    """Whether the window was last kept over all the others (``App.set_on_top``); not unless it was."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["on_top"] is True
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def write_setting(key: str, value: object, path: Path) -> None:
+    """Keep ``value`` as ``key`` in the settings file ``path``, beside whatever else it keeps."""
     try:
         kept = json.loads(path.read_text(encoding="utf-8"))
         kept = kept if isinstance(kept, dict) else {}
     except (OSError, ValueError):
         kept = {}
-    kept["timbre"] = program
+    kept[key] = value
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(kept, ensure_ascii=False), encoding="utf-8")
