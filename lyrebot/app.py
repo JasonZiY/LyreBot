@@ -2238,8 +2238,9 @@ class App:
 
     def turn_to(self, where: str) -> None:
         """Show page ``where`` ("songs", "leaf" or "text") in place of the others, which are put away; the green
-        ribbon hangs on the 简谱 page and the text page only, and the format's card goes with the text page."""
-        if where != "text" and self.guide is not None:
+        ribbon hangs on the 简谱 page and the text page only, and the format's card, opened on the text page,
+        stays open while the green ribbon turns between the two: it goes when they give way to the songs."""
+        if where == "songs" and self.guide is not None:
             if self.guide.winfo_exists():
                 self.guide.destroy()
             self.guide = None

@@ -1143,16 +1143,21 @@ class Folders(unittest.TestCase):
         from unittest import mock
         from types import SimpleNamespace
         from lyrebot.app import App
-        from lyrebot.theme import WARN
+        from lyrebot.theme import PEACH, PEACH_DEEP, WARN
         path, _ = self.three_bars()
         before = path.read_text(encoding="utf-8")
         app = App(self.window(), self.scores, self.midi)
         text = self.text_page(app, path)
+        self.assertEqual(text.cget("selectbackground"), PEACH)
         self.write(text, "speed=60\na-s-d-f-\nk-\n")
         app.check_text()
         self.assertIn("第 2 小节", app.text_error)  # (line 3: the slip numbers bars, so it is said by bar)
         self.assertEqual(app.manuscript.wrong, 3)
         self.assertEqual(text.tag_ranges("wrong")[0].string, "3.0")
+        # A selection then is deeper than the pale red, and lies over it.
+        self.assertEqual(text.cget("selectbackground"), PEACH_DEEP)
+        names = text.tag_names()  # (in the order they lie, the lowest first)
+        self.assertGreater(names.index("sel"), names.index("wrong"))
         self.assertEqual(app.text_status.cget("fg"), WARN)  # where in the line is left to the line marked:
         self.assertEqual(app.text_status.cget("text"), "第 2 小节第 1 声部：无法识别的字符 'k'")
         self.assertIn("（位置：", app.text_error)  # (all of it on save, or on a ribbon)
@@ -1174,6 +1179,7 @@ class Folders(unittest.TestCase):
         self.assertIsNone(app.text_error)
         self.assertIsNone(app.manuscript.wrong)
         self.assertEqual(text.tag_ranges("wrong"), ())
+        self.assertEqual(text.cget("selectbackground"), PEACH)
 
     def test_a_mistake_off_the_bars_is_still_said_by_line(self):
         from lyrebot.app import App
@@ -1334,7 +1340,7 @@ class Folders(unittest.TestCase):
         self.assertEqual(status.words["text"], long)
         self.assertIsInstance(app.leaf_status, type(status))
 
-    def test_the_format_card_opens_beside_the_text_and_goes_with_its_page(self):
+    def test_the_format_card_opens_beside_the_text_and_goes_back_with_the_songs(self):
         import tkinter as tk
         from lyrebot.app import App
         from lyrebot.guide import SECTIONS
@@ -1368,7 +1374,23 @@ class Folders(unittest.TestCase):
         self.assertIsNone(app.guide)
         app.toggle_guide()
         card = app.guide
-        app.ribbon_turns("green")  # the page turned: it goes too
+        app.ribbon_turns("green")  # to the 简谱 and back by the green ribbon: still open
+        self.assertEqual(app.where, "leaf")
+        self.assertIs(app.guide, card)
+        self.assertTrue(card.winfo_exists())
+        app.ribbon_turns("green")
+        self.assertEqual(app.where, "text")
+        self.assertIs(app.guide, card)
+        app.ribbon_turns("orange")  # back to the songs: it goes
+        self.assertEqual(app.where, "songs")
+        self.assertIsNone(app.guide)
+        self.assertFalse(card.winfo_exists())
+        self.text_page(app, path)
+        app.toggle_guide()
+        card = app.guide
+        app.ribbon_turns("green")
+        app.ribbon_turns("orange")  # from the 简谱 page too
+        self.assertEqual(app.where, "songs")
         self.assertIsNone(app.guide)
         self.assertFalse(card.winfo_exists())
 

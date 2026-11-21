@@ -17,7 +17,8 @@ from typing import Callable
 from . import icons, ime
 from .paper import OnPage
 from .theme import (EMBER, FAINT, GILT, GILT_BRIGHT, GILT_DEEP, GOLD, GOLD_SOFT, HAIR, HOVER, INK, LEATHER_EDGE,
-                    LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH, VEIL,
+                    LEATHER_FOOT, LEATHER_HOVER, LEATHER_TOP, MUTED, ORANGE, ORANGE_DEEP, PAPER, PEACH,
+                    PEACH_DEEP, VEIL,
                     VEIL_FAINT, VEIL_HOVER, WARN, WARN_DEEP, WHITE, WRONG, Theme, fit, geometry, round_corners,
                     screen_area)
 
@@ -730,7 +731,8 @@ class Manuscript(Sheet):
     through) edged with a fine line of gold, gold numbers down its left, and the Text (``text``) to write in,
     with no scrollbar: the wheel and the keys move it.  Only the lines ``numbered`` picks from the text are
     numbered, 1, 2, 3 in order (a score's bars: ``score.measure_lines``), counted afresh as it is written.
-    The line ``wrong`` is shown on a pale red, its number in red."""
+    The line ``wrong`` is shown on a pale red, its number in red; while it is, a selection is a deeper peach,
+    over the red too, so that the two are not taken for each other."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, font: tuple, numbers: tuple,
                  numbered: Callable[[str], list[int]]):
@@ -749,6 +751,7 @@ class Manuscript(Sheet):
                             spacing1=px(1), spacing3=px(1), width=1, height=1,
                             yscrollcommand=lambda *_: self.later())
         self.text.tag_configure("wrong", background=WRONG)
+        self.text.tag_raise("sel", "wrong")  # (a tag made later lies over the ones before it, "sel" the first)
         self.gutter.pack(side="left", fill="y", padx=(1, 0), pady=1)
         self.text.pack(side="left", fill="both", expand=True, padx=(0, 1), pady=1)
         self.bind("<Configure>", lambda _: self.redraw(), add="+")
@@ -773,6 +776,8 @@ class Manuscript(Sheet):
         self.text.tag_remove("wrong", "1.0", "end")
         if line is not None:
             self.text.tag_add("wrong", f"{line}.0", f"{line}.0 lineend +1c")
+        if (line is None) != (self.wrong is None):
+            self.text.configure(selectbackground=PEACH if line is None else PEACH_DEEP)
         self.wrong = line
         self.later()
 

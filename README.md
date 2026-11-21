@@ -61,9 +61,9 @@
 
 ## 修改原文
 
-简谱页的橙色书签左边还垂着一条绿色书签 <img src="assets/readme/green.png" alt="绿色书签" height="22" align="absmiddle">。点它，翻到这首曲子的原文，也就是 `txt` 里那个文件，写在一张稿纸上。每个小节那一行的左边标着小节号，和简谱页上的一样；注释、空行和 `speed=` 这样的行不标。直接改，停手半秒 LyreBot 就按曲谱格式查一遍；有错时，那一行垫一层淡红，下面那行说明错在哪里，错在小节里的就说第几小节。
+简谱页的橙色书签左边还垂着一条绿色书签 <img src="assets/readme/green.png" alt="绿色书签" height="22" align="absmiddle">。点它，翻到这首曲子的原文，也就是 `txt` 里那个文件，写在一张稿纸上。每个小节那一行的左边标着小节号，和简谱页上的一样；注释、空行和 `speed=` 这样的行不标。直接改，停手半秒 LyreBot 就按曲谱格式查一遍；有错时，那一行垫一层淡红，下面那行说明错在哪里，错在小节里的就说第几小节；这时用鼠标选中的字垫深一点的桃色，和淡红分得开。
 
-左下角两个按钮是撤销 <img src="assets/readme/undo.png" alt="撤销" height="22" align="absmiddle">（<kbd>Ctrl</kbd>+<kbd>Z</kbd>）和保存 <img src="assets/readme/save.png" alt="保存" height="22" align="absmiddle">（<kbd>Ctrl</kbd>+<kbd>S</kbd>），同一行最右边的 <img src="assets/readme/guide.png" alt="?" height="22" align="absmiddle"> 打开一张曲谱格式速查卡，开在窗口旁边，边看边写，再点一次或按 <kbd>Esc</kbd> 收起。撤销最多退回这次翻进来时的样子。有错时不能保存，也不能翻页：点保存或任何一条书签，都只会冒出那句报错。翻页时没存的改动会自动存。点绿色书签回到简谱，简谱照新的重画；点橙色书签回曲目。简谱页和原文页各自记着离开时看到哪里（原文还记着光标在哪），翻回来还在原处；换了一首曲子，就都从开头看起。在原文页时按 <kbd>F7</kbd> 不会开始演奏。关闭 LyreBot 时原文有错，会先问一句。
+左下角两个按钮是撤销 <img src="assets/readme/undo.png" alt="撤销" height="22" align="absmiddle">（<kbd>Ctrl</kbd>+<kbd>Z</kbd>）和保存 <img src="assets/readme/save.png" alt="保存" height="22" align="absmiddle">（<kbd>Ctrl</kbd>+<kbd>S</kbd>），同一行最右边的 <img src="assets/readme/guide.png" alt="?" height="22" align="absmiddle"> 打开一张曲谱格式速查卡，开在窗口旁边，边看边写，再点一次或按 <kbd>Esc</kbd> 收起；用绿色书签翻到简谱页再翻回来，它一直开着，翻回曲目时才收起。撤销最多退回这次翻进来时的样子。有错时不能保存，也不能翻页：点保存或任何一条书签，都只会冒出那句报错。翻页时没存的改动会自动存。点绿色书签回到简谱，简谱照新的重画；点橙色书签回曲目。简谱页和原文页各自记着离开时看到哪里（原文还记着光标在哪），翻回来还在原处；换了一首曲子，就都从开头看起。在原文页时按 <kbd>F7</kbd> 不会开始演奏。关闭 LyreBot 时原文有错，会先问一句。
 
 ## 手写曲谱
 

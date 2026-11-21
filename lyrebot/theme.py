@@ -33,6 +33,7 @@ GOLD_SOFT = "#D2BC93"  # a gold rule that has to stay quiet
 ORANGE = "#D97757"  # play, and the song that plays
 ORANGE_DEEP = "#C15F3C"
 PEACH = "#F0D3C4"
+PEACH_DEEP = "#E6B49C"  # the text's selection while a line is marked WRONG, to stand apart from it
 HIGHLIGHT = "#F3E6DA"  # the chosen song
 HOVER = "#F1ECE2"  # under the pointer
 WARN = "#B5502F"
