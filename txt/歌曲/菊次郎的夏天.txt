@@ -1,0 +1,42 @@
+# 由键盘演奏记录：菊次郎的夏天-演奏
+# 节拍是从按键推断的：约每分钟 87 拍（四分音符），速度平稳，4/4 拍
+# 拍号 4/4；共 558 次按键
+speed=87.4
+0--n.d.h.d.
+v.a.f.a.b.s.g.s.
+a.g.q.g.n.d.h.d.
+v.a.f.a.b.s.g.s.
+a.g.ag~q~gw~e~nw.dq~q~h.d.
+speed=87.1
+v.a.fg~q~aw~e~bw.sq~w~g.se.
+ae.g.ag~q~gw~e~nw.dq~q~h.d.
+v.a.fg~q~aw~e~bw.sq~w~g.st.
+ae.g.ae.gr.bt.st~t~g.st.
+vt.ae~q~f.ae~r~ct.mt~t~d.mt.
+nt.de~q~h.dq~w~xqe.nqe~qe~s.nqe.
+ve.ay.fw*e*w~aq.bw.s.ghw.sh~h~
+ahw.gj.ag~q~gw~e~nw.dq~q~h.d.
+v.a.fg~q~aw~e~bw.sq~w~g.se.
+ae.g.ag~q~gw~e~nw.dq~q~h.d.
+v.a.fg~q~aw~e~bw.sq~w~g.st.
+ae.g.ae.gr.bt.st~t~g.st.
+vt.ae~q~f.ae~r~ct.mt~t~d.mt.
+nt.de~q~h.dq~w~xqe.nqe~qe~s.nqe.
+bje-w*e*w~q~h~zq.b.aq.bg.
+nd.d.h.d.vd.a.naf.ad.
+bms.s.g.s.zsdg.b.adg.bs~a~
+nsdg.c.dgh.cs~a~vsdg.a.dfg.as~a~
+bg.s.g.s.bt.t~t~xbm.t.
+vt.e~q~vna.e~r~ct.t~t~cbm.t.
+nt.e~q~cna.q~w~xqe.qe~qe~vns.qe.
+ve.y.cvnaw{1/6}e{1/12}w~q.bw-bmshw.h~h~
+bhw.j.g~q~w~e~nw.dq~q~h.d.
+v.a.fg~q~aw~e~bw.sq~w~g.se.
+ae.g.ag~q~gw~e~nw.dq~q~h.d.
+v.a.fg~q~aw~e~bw.sq~w~g.st.
+ae.g.ae.gr.bt.st~t~g.st.
+vt.ae~q~f.ae~r~ct.mt~t~d.mt.
+nt.de~q~h.dq~w~xqe.nqe~qe~s.nqe.
+bje-w*e*w~q~h~zq.b.a.b.
+speed=86
+n.d.h.d.bad{1/6}c{1/6}z-{2/3}

@@ -1,0 +1,46 @@
+# 由键盘演奏记录：MerryChristmas-演奏
+# 节拍是从按键推断的：约每分钟 128 拍（四分音符），速度平稳，3/4 拍
+# 拍号 3/4；共 253 次按键
+speed=127.6
+0--g-
+zq-cq.w.cq.j.
+nh-z-zh-
+nw-xw.e.xw.q.
+bj-xg-xg-
+ze-ce.r.ce.w.
+nq-zh-zg.g.
+vh-xw-bj-
+zq-c-g-
+zq-cq.w.cq.j.
+nh-z-zh-
+nw-xw.e.xw.q.
+bj-xg-xg-
+ze-ce.r.ce.w.
+nq-zh-zg.g.
+vh-xw-bj-
+zq-c-g-
+ze-ce-ce-
+mw-x-xw-
+ne-cw-cq-
+bj-x-xw-
+ze-cw-cq-
+bt-xg-xg.g.
+vh-xw-bj-
+zq-c-g-
+zq-cq.w.cq.j.
+nh-z-zh-
+nw-xw.e.xw.q.
+bj-xg-xg-
+ze-ce.r.ce.w.
+nq-zh-zg.g.
+vh-xw-bj-
+zq-g-g-
+zq-cq.w.cq.j.
+nh-z-zh-
+nw-xw.e.xw.q.
+bj-xg-xg-
+speed=127.9
+ze-ce.r.ce.w.
+nq-zh-zg.g.
+vh-xw-bj-
+zq-c--
