@@ -72,7 +72,9 @@ QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
 SWITCH = 6.0  # what moving the melody to another octave costs, in beats of misplaced notes
 KEY_CHANGE = 0.8  # what changing key part way costs, in average bars of notes left on black keys
-MIN_KEY_BARS = 8  # a key shorter than this is a borrowed cadence or an ending, not a modulation
+# A key shorter than this is a borrowed cadence or an ending, not a modulation.  Eight bars less the one a
+# recording's bar lines can cut in two: drawn from the notes, they may fall part way into the written bars.
+MIN_KEY_BARS = 7
 HELD = Fraction(1)  # beats a note from a recording is taken to sound, at most, when picking lines
 FAR, FAR_HELD = 7, Fraction(4)  # ... except over notes a fifth or more away: then up to its length, at most 4 beats
 DRIFT = 0.04  # seconds the written speeds may let the score run ahead of or behind the source

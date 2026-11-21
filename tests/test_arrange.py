@@ -431,6 +431,20 @@ class Arranging(unittest.TestCase):
         self.assertIn("# 第 35–52 小节相当于 E 大调 / C♯ 小调（4 个升号）", text)
         self.assertIn("# 第 53–74 小节相当于 A 大调 / F♯ 小调（3 个升号）", text)
 
+    def test_eight_bars_in_another_key_are_moved_when_the_bar_lines_cut_them(self):
+        """雪色的再会, recorded: eight written bars of C major between A major, but its bar lines,
+        drawn from the notes, fall three beats into the written bars.  The eight bars then fill only
+        seven of the score's, their first and last beats lying in bars that stay in the old key."""
+        tune = (0, 2, 4, 5, 7, 9, 11, 12, 12, 11, 9, 7, 5, 4, 2, 0)
+
+        def pitch(beat):
+            if 66 <= beat < 68 or 96 <= beat < 98:
+                return 72 if beat % 2 == 0 else 74  # C, D: in both keys
+            return (70 if 68 <= beat < 96 else 67) + tune[beat % 16]  # B♭ major in bars 18-24, else G
+        result = arrange(parse_midi(song((0, [(beat, beat + 1, pitch(beat)) for beat in range(144)]))))
+        self.assertEqual([(key.start, key.shift) for key in result.keys], [(0, 5), (68, 2), (96, 5)])
+        self.assertEqual((result.changes, result.white_share), ([], 1.0))
+
     def test_a_few_bars_leaning_to_the_dominant_keep_the_key(self):
         tune = [(i, i + 1, 72 + (0, 2, 4, 5, 7, 5, 4, 2)[i % 8]) for i in range(16)]
         lean = [(16 + i, 17 + i, (74, 78, 81, 79)[i % 4]) for i in range(8)]  # D F♯ A G, twice
