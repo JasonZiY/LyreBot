@@ -314,6 +314,26 @@ def measure_lines(text: str) -> list[int]:
             if (content := _content(raw)) and not _DIRECTIVE.fullmatch(content)]
 
 
+def differing_bars(old: str, new: str) -> tuple[list[int], bool]:
+    """How text ``new`` differs from ``old`` as a score: the bars (numbered as ``measure_lines`` numbers
+    them) whose notes differ, and whether anything else does, a comment or a line such as speed=."""
+    def read(text: str) -> tuple[list[str], list[str]]:
+        bars, rest = [], []
+        for raw in text.removeprefix("﻿").splitlines():
+            content = _content(raw)
+            if content and not _DIRECTIVE.fullmatch(content):
+                bars.append(content)
+                rest.append(raw.partition("#")[2].strip())
+            elif raw.strip():
+                rest.append(raw.strip())
+        return bars, rest
+
+    (old_bars, old_rest), (new_bars, new_rest) = read(old), read(new)
+    changed = [number for number in range(1, max(len(old_bars), len(new_bars)) + 1)
+               if old_bars[number - 1:number] != new_bars[number - 1:number]]
+    return changed, old_rest != new_rest
+
+
 def parse_score(text: str) -> Score:
     """Parse a score, or raise ScoreError naming the line and part at fault."""
     text = text.removeprefix("﻿")

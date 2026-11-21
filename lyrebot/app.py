@@ -22,19 +22,19 @@ from tkinter import messagebox as system_dialogs
 from typing import Callable
 
 from . import chrome, dialogs, guide, icons, quickstart
-from .arrange import ARRANGED, ArrangeError, arrange_file
+from .arrange import ARRANGED, ArrangeError, arrange, arrange_file, save_score
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .collate import pinyin_key
 from . import jianpu
 from .jianpu import export as export_jianpu
 from .keyboard import Keyboard, foreground_title_and_pid, start_pressed
 from .listen import QUIET, listen
-from .midi import MidiError
+from .midi import MidiError, load_midi
 from .notate import notate
 from .paper import OnPage, Page, ScrollingPage
 from .player import play
 from .record import SILENCE, WAIT, record
-from .score import Score, ScoreError, load_score, measure_lines, parse_score, score_files
+from .score import Score, ScoreError, differing_bars, load_score, measure_lines, parse_score, score_files
 from .scoreview import ScoreView
 from .theme import (CACHE_ROOT, CHOSEN_TINT, FAINT, GOLD, GOLD_SOFT, HAIR, HOVER_TINT, INK, MUTED, ORANGE,
                     ORANGE_DEEP, PAPER, PEACH, WARN, WHITE, Theme, dress, geometry, round_corners, screen_area,
@@ -125,6 +125,18 @@ def parse_speed(text: str) -> float | None:
 def clock(seconds: float) -> str:
     minutes, seconds = divmod(max(0, round(seconds)), 60)
     return f"{minutes}:{seconds:02d}"
+
+
+def bar_ranges(numbers: list[int], most: int = 6) -> str:
+    """Bar numbers in runs, as a sentence names them: 3、5、22–30, the first ``most`` runs and then 等."""
+    runs: list[list[int]] = []
+    for number in numbers:
+        if runs and number == runs[-1][1] + 1:
+            runs[-1][1] = number
+        else:
+            runs.append([number, number])
+    words = [str(first) if first == last else f"{first}–{last}" for first, last in runs]
+    return "、".join(words[:most]) + ("等" if len(words) > most else "")
 
 
 def is_admin() -> bool:
@@ -1597,7 +1609,9 @@ class App:
             self.select(target)
 
     def rearrange(self) -> None:
-        """Arrange the selected score again from its MIDI file, replacing it."""
+        """Arrange the selected score again from its MIDI file, replacing it.  Once it is arranged, and
+        before it is written, a score that differs from the new arrangement asks a second time, naming
+        the bars that would be lost; one that does not is left alone."""
         score = self.selected()
         source = midi_for(score, self.midi_dir) if score and not self.worker else None
         if source is None:
@@ -1609,10 +1623,38 @@ class App:
         self.say(f"正在重新编配 {source.name}…")
         self.root.update_idletasks()
         try:
-            arrange_file(source, score)
+            result = arrange(load_midi(source), title=source.name)
         except (OSError, MidiError, ArrangeError) as error:
             self.say(f"{source.name} 无法编配：{error}", warn=True)
             dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
+            return
+        try:
+            old = score.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            old = None  # (nothing that can be read to keep)
+        if old is not None:
+            bars, other = differing_bars(old, result.text)
+            if not bars and not other:
+                self.notice = (score, "重新编配的结果和现在的曲谱一样，没有改动")
+                self.show_selected()
+                return
+            if bars:
+                where = f"它有 {len(bars)} 个小节和重新编配的结果不一样：第 {bar_ranges(bars)} 小节"
+                where += "，注释或速度也有不同。" if other else "。"
+            else:
+                where = "它的小节都和重新编配的结果一样，只是注释或速度这类设定不同。"
+            again = (f"仍然覆盖「{score.stem}」吗？\n\n{where}这些多半是手动改过的地方，也可能是编配方法更新后"
+                     "写法变了。覆盖以后都换成重新编配的写法，原来的写法就没有了。")
+            if not dialogs.confirm("覆盖改过的地方", again, parent=self.root, yes="仍然覆盖", no="保留原来的",
+                                   danger=True):
+                self.notice = (score, "没有重新编配，曲谱保持原样")
+                self.show_selected()
+                return
+        try:
+            save_score(result, score)
+        except OSError as error:
+            self.say(f"{score.name} 无法写入：{error}", warn=True)
+            dialogs.error("无法编配", f"{score.name}：{error}", parent=self.root)
             return
         self.failed_midi.pop(source, None)
         self.cache.pop(score, None)

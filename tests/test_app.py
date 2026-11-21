@@ -1997,21 +1997,43 @@ class Folders(unittest.TestCase):
         from unittest import mock
         arranged = target.read_text(encoding="utf-8")
         target.write_text(arranged.replace("speed=", "# 手改过\nspeed=", 1), encoding="utf-8")
-        with mock.patch("lyrebot.app.dialogs.confirm", return_value=False):
-            app.rearrange()  # declined: the edit stays
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=False) as asked:
+            app.rearrange()  # declined: the edit stays, and nothing is arranged
+        self.assertEqual(asked.call_count, 1)
         self.assertIn("手改过", target.read_text(encoding="utf-8"))
-        from lyrebot.app import arrange_file
+        with mock.patch("lyrebot.app.dialogs.confirm", side_effect=[True, False]) as asked:
+            app.rearrange()  # asked again, as the score differs from the new arrangement, and declined
+        again = asked.call_args_list[1]
+        self.assertEqual(again.kwargs["yes"], "仍然覆盖")
+        self.assertTrue(again.kwargs["danger"])  # (Enter keeps the score)
+        self.assertIn("只是注释或速度这类设定不同", again.args[1])  # only a comment was added
+        self.assertIn("手改过", target.read_text(encoding="utf-8"))
+        self.assertEqual(app.status_label.cget("text"), "没有重新编配，曲谱保持原样")
+        from lyrebot.app import arrange
         said = []
 
-        def arranging(source, score):  # what the window says while the arrangement runs
+        def arranging(*args, **kwargs):  # what the window says while the arrangement runs
             said.append(app.status_label.cget("text"))
-            return arrange_file(source, score)
-        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True), \
-                mock.patch("lyrebot.app.arrange_file", side_effect=arranging):
+            return arrange(*args, **kwargs)
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True) as asked, \
+                mock.patch("lyrebot.app.arrange", side_effect=arranging):
             app.rearrange()
+        self.assertEqual(asked.call_count, 2)
         self.assertEqual(said, ["正在重新编配 曲子.mid…"])
         self.assertEqual(target.read_text(encoding="utf-8"), arranged)
         self.assertIn("已重新编配", app.status_label.cget("text"))
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True) as asked:
+            app.rearrange()  # as it would be arranged now: asked once, and left alone
+        self.assertEqual(asked.call_count, 1)
+        self.assertEqual(target.read_text(encoding="utf-8"), arranged)
+        self.assertEqual(app.status_label.cget("text"), "重新编配的结果和现在的曲谱一样，没有改动")
+        from lyrebot.score import measure_lines
+        lines = arranged.splitlines()
+        lines[measure_lines(arranged)[0] - 1] = "0----"  # bar 1's notes changed by hand
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        with mock.patch("lyrebot.app.dialogs.confirm", side_effect=[True, False]) as asked:
+            app.rearrange()
+        self.assertIn("它有 1 个小节和重新编配的结果不一样：第 1 小节。", asked.call_args_list[1].args[1])
 
     def test_deleting_a_score_takes_what_it_was_made_from(self):
         """A score goes with the MIDI file and recording it was made from, and
