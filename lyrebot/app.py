@@ -174,12 +174,37 @@ def to_recycle_bin(path: Path) -> None:
         raise OSError("没有删除")
 
 
-def next_song(songs: list[Path], current: Path | None, mode: str) -> Path | None:
+class Shuffle:
+    """随机演奏 in rounds: every song of a playlist once, in a random order, before any of them again.
+
+    A round lasts across stops, F7, ⏭ and songs chosen by hand: whatever plays in 随机演奏 is
+    taken out of what is left of its round.  OST and 歌曲 each have their own round, as the
+    songs played are kept by path and each playlist only looks at its own.  A song
+    added to the playlist joins the round under way; a new round never starts with the song
+    just played.  Only the playing thread uses it while a song plays, and the window only when
+    nothing does, so it needs no lock.
+    """
+
+    def __init__(self, rng: random.Random | None = None) -> None:
+        self.rng = rng or random.Random()
+        self.played: set[Path] = set()
+
+    def playing(self, path: Path) -> None:
+        self.played.add(path)
+
+    def draw(self, songs: list[Path], current: Path | None) -> Path:
+        left = [song for song in songs if song not in self.played and song != current]
+        if not left:  # the round is over
+            self.played.difference_update(songs)
+            left = [song for song in songs if song != current] or songs
+        return self.rng.choice(left)
+
+
+def next_song(songs: list[Path], current: Path | None, mode: str, shuffle: Shuffle | None = None) -> Path | None:
     if not songs:
         return None
     if mode == SHUFFLE:
-        others = [song for song in songs if song != current]
-        return random.choice(others or songs)
+        return (shuffle or Shuffle()).draw(songs, current)
     index = songs.index(current) if current in songs else -1
     return songs[(index + 1) % len(songs)]
 
@@ -845,6 +870,7 @@ class App:
         self.held_mode: str | None = None  # the play mode to go back to after an unfiled song
         self.last_search = ""  # searching for it again goes on to the next song that matches
         self.resume: tuple[Path, int] | None = None  # a song stopped part way, and the bar it stopped in
+        self.shuffle = Shuffle()  # what 随机演奏 has played this round
         self.dragging: tuple[Path, Score] | None = None  # the song whose progress knob is held
         self.drag_bar = 0  # the bar (from 0) the held knob is at
         self.bar_starts: list[float] = []  # of the song playing, in seconds
@@ -1861,7 +1887,7 @@ class App:
             return
         songs = self.playlist(self.selected())
         if songs:
-            self.start(next_song(songs, self.selected(), self.mode.get()), from_top=True)
+            self.start(next_song(songs, self.selected(), self.mode.get(), self.shuffle), from_top=True)
 
     def interrupted(self, path: Path, reached: float, speed: float, why: str) -> None:
         """Remember the bar a song was stopped in, to go on from there."""
@@ -1964,6 +1990,8 @@ class App:
                 return
             while True:
                 post(("song", (path, timeline.duration)))
+                if mode == SHUFFLE:
+                    self.shuffle.playing(path)
                 reached = [begin]
 
                 def progress(at: float) -> None:
@@ -1988,11 +2016,13 @@ class App:
                         return
                     continue
                 for _ in songs:  # skip scores with mistakes, but give up after one lap
-                    path = next_song(songs, path, mode)
+                    path = next_song(songs, path, mode, self.shuffle)
                     try:
                         timeline, begin = compile_timeline(load_score(path), speed), 0.0
                         break
                     except (ScoreError, OSError):
+                        if mode == SHUFFLE:  # not drawn again this round
+                            self.shuffle.playing(path)
                         continue
                 else:
                     post(("status", "没有可以接着演奏的曲谱"))

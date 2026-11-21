@@ -1,13 +1,14 @@
 import os
 from pathlib import Path
+import random
 import shutil
 import sys
 import tempfile
 import time
 import unittest
 
-from lyrebot.app import (IN_ORDER, REGIONS, REPEAT, SETTLE, SHUFFLE, SINGLE, in_columns, midi_for, name_problem, next_match,
-                         next_song,
+from lyrebot.app import (IN_ORDER, REGIONS, REPEAT, SETTLE, SHUFFLE, SINGLE, Shuffle, in_columns, midi_for, name_problem,
+                         next_match, next_song,
                          pending_audio, pending_midi, read_library, recording_name, score_name, song_files)
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
@@ -126,6 +127,42 @@ class NextSong(unittest.TestCase):
         for _ in range(50):
             self.assertNotEqual(next_song(SONGS, SONGS[0], SHUFFLE), SONGS[0])
         self.assertEqual(next_song(SONGS[:1], SONGS[0], SHUFFLE), SONGS[0])
+
+    def test_shuffle_plays_every_song_once_a_round(self):
+        songs = [Path(f"{n}.txt") for n in range(49)]
+        for seed in range(20):
+            shuffle, current, heard = Shuffle(random.Random(seed)), None, []
+            for _ in range(3 * len(songs)):
+                current = next_song(songs, current, SHUFFLE, shuffle)
+                shuffle.playing(current)
+                heard.append(current)
+            for start in range(0, len(heard), len(songs)):  # each round has every song once
+                self.assertEqual(set(heard[start:start + len(songs)]), set(songs))
+            self.assertTrue(all(a != b for a, b in zip(heard, heard[1:])))  # not even across rounds
+
+    def test_a_song_chosen_by_hand_is_taken_out_of_the_round(self):
+        shuffle = Shuffle(random.Random(1))
+        shuffle.playing(SONGS[0])
+        shuffle.playing(SONGS[2])  # chosen by hand, then stopped or played through
+        self.assertEqual(next_song(SONGS, SONGS[2], SHUFFLE, shuffle), SONGS[1])
+        shuffle.playing(SONGS[1])
+        # Every song played: a new round, which does not begin with the one just played.
+        for seed in range(20):
+            shuffle.rng = random.Random(seed)
+            self.assertNotEqual(shuffle.draw(SONGS, SONGS[1]), SONGS[1])
+            shuffle.played.update(SONGS)
+
+    def test_playlists_keep_their_own_rounds_and_new_songs_join_one(self):
+        ost, songs = SONGS, [Path("x.txt"), Path("y.txt")]
+        shuffle = Shuffle(random.Random(2))
+        shuffle.playing(ost[0])
+        shuffle.playing(ost[1])
+        for _ in range(10):  # 歌曲 starts a round of its own over and over, and leaves OST's alone
+            shuffle.playing(shuffle.draw(songs, None))
+        self.assertEqual(shuffle.draw(ost, ost[1]), ost[2])
+        new = Path("d.txt")
+        shuffle.playing(ost[2])
+        self.assertEqual(shuffle.draw([*ost, new], ost[2]), new)
 
     def test_empty_list(self):
         self.assertIsNone(next_song([], None, IN_ORDER))
@@ -614,6 +651,32 @@ class Folders(unittest.TestCase):
             if kind == "song":
                 played.append(value[0])
         self.assertEqual(played, [first, second, third])
+
+    def test_shuffle_goes_on_with_its_round_after_a_stop(self):
+        from unittest import mock
+        from lyrebot.app import App
+        songs = self.write_scores("OST/蒙德/风.txt", "OST/蒙德/白.txt", "OST/璃月/月.txt", "OST/璃月/云.txt")
+        app = App(self.window(), self.scores, self.midi)
+        chosen = songs[2]
+        for seed in range(10):
+            app.shuffle = Shuffle(random.Random(seed))
+            played = []
+            # Chosen by hand and played through, the next one stopped part way; then F7 goes on with it.
+            for path, results in ((chosen, ["done", "stopped"]), (None, ["done", "done", "stopped"])):
+                path = path or played[-1]
+                results = iter(results)
+                with mock.patch("lyrebot.app.COUNTDOWN", 0), mock.patch("lyrebot.app.GAP", 0), \
+                        mock.patch("lyrebot.app.Keyboard"), \
+                        mock.patch("lyrebot.app.play", side_effect=lambda *a, **k: next(results)), \
+                        mock.patch("lyrebot.app.foreground_title_and_pid", return_value=("游戏", os.getpid() + 1)):
+                    app.run(path, mock.Mock(duration=1.0), 0.0, 1.0, SHUFFLE, app.playlist(path))
+                while not app.updates.empty():
+                    kind, value = app.updates.get()
+                    if kind == "song":
+                        played.append(value[0])
+            self.assertEqual(played[1], played[2])  # the stopped song, gone on with
+            self.assertEqual(played[0], chosen)
+            self.assertEqual(sorted(set(played)), sorted(songs))  # all four before any again
 
     def three_bars(self):
         """A song of three bars of four seconds each at 100%, with another beside it."""
