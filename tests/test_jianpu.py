@@ -110,6 +110,18 @@ class ReadingCleanup(unittest.TestCase):
         sheet = sheet_of(self.RECORDING + "speed=100\n(a.s.d.)-f---|z----\n", "曲子-录音")
         self.assertEqual(describe(sheet.bars[0].staves[0]), "1_ 2_ 3_ 4 - -")
 
+    def test_eighths_against_the_other_hands_triplet_stay_eighths(self):
+        """雪抚夜霜 bar 29: the lower part holds a note two beats and two thirds; the upper plays plain
+        eighths over that beat, which the triplet the lower part shares it with must not pull to thirds."""
+        sheet = sheet_of(self.RECORDING + "speed=100\nh-j-q--|z----\n~q--~h.j.q.|x--{2/3}0-{1/3}\n", "曲子-录音")
+        upper, lower = sheet.bars[1].tuplets
+        self.assertEqual(upper, [])
+        self.assertEqual(lower, [(2, 4)])
+        self.assertIn(Fraction(5, 2), [s.start for s in sheet.bars[1].staves[0] if s.struck])
+        # Swaying edges still land on the beat's shared grid, in both parts alike.
+        sheet = sheet_of(self.RECORDING + "speed=100\na{11/24}s{13/24}d--|z{11/24}x{13/24}c--\n", "曲子-录音")
+        self.assertEqual([describe(staff) for staff in sheet.bars[0].staves], ["1_ 2_ 3 -", "1,_ 2,_ 3, -"])
+
     def test_a_hand_written_score_is_left_as_written(self):
         sheet = sheet_of("speed=100\na{7/8}s{9/8}d--|z----\n", "曲子")
         self.assertNotIn("节奏为读谱整理过，演奏以曲谱为准", sheet.notes)

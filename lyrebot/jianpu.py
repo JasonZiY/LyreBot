@@ -261,17 +261,30 @@ def moved(segments: list[Segment], move) -> tuple[list[Segment], int]:
     return found, count
 
 
-def quantize(staves: list[list[Segment]]) -> tuple[list[list[Segment]], int]:
-    """Every staff on sixteenths or triplets of each beat (both staves alike),
-    and how many notes moved."""
-    points = {x for staff in staves for segment in staff for x in (segment.start, segment.end)}
+def _grids(points: set[Fraction]) -> dict[int, int]:
     by_beat: dict[int, list[Fraction]] = {}
     for x in points:
         by_beat.setdefault(math.floor(x), []).append(x - math.floor(x))
-    grids = {beat: _grid(offsets) for beat, offsets in by_beat.items()}
+    return {beat: _grid(offsets) for beat, offsets in by_beat.items()}
+
+
+def quantize(staves: list[list[Segment]]) -> tuple[list[list[Segment]], int]:
+    """Every staff on sixteenths or triplets of each beat (both staves alike,
+    so that notes struck together stay together), and how many notes moved.
+    Only a note written on a sixteenth keeps its place in a beat of triplets
+    when its own staff plays that beat plainly: an eighth against the other
+    hand's triplet is not one."""
+    grids = _grids({x for staff in staves for segment in staff for x in (segment.start, segment.end)})
     result, total = [], 0
     for staff in staves:
-        found, count = moved(staff, lambda x: _snap(x, grids))
+        own = _grids({x for segment in staff for x in (segment.start, segment.end)})
+
+        def move(x: Fraction) -> Fraction:
+            beat = math.floor(x)
+            if ((x - beat) * 4).denominator == 1 and own.get(beat) == 4:
+                return x
+            return _snap(x, grids)
+        found, count = moved(staff, move)
         result.append(found)
         total += count
     return result, total
