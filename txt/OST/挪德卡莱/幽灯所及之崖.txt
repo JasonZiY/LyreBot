@@ -1,0 +1,101 @@
+# 由 MIDI 自动编配：幽灯所及之崖-录音.mid
+# 原曲的音阶相当于 D♭ 大调 / B♭ 小调（5 个降号），降 1 个半音移成 C 大调 / A 小调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 152 拍（四分音符），速度平稳，3/4 拍
+speed=152
+q-h.e.q.e.|cn-.a.cn.a.
+j-w-j-|x-n-v-
+q-h.e.q.e.|cn-.a.cn.a.
+j-w-j-|x-n-v-
+e-.q.h.q.|n-c.n.c-
+w-.e.r-|v-v-ns-
+e--q-|x-zb-c-
+h--j-|v-z-v-
+w'q-e.q.y.q.|b'n-c-n-
+t-.r.e-|cd-cb-m-  # 改动 ♯4→r
+w-q-w-|m-v.nm.v.nm.  # 改动 ♭3→w ♯1→q ♭3→w 伴奏♯4→v 伴奏♯4→v
+e-0-e-|cbm-m-c-
+y--e-|n-c-na-
+t-.y.u-|c-c-bm-
+y--e-|v-v-na-
+w-.e.j-|c-m-cb-
+h-q-e-|x-x-vn-
+w-.q.j-|c-m-b-
+h-q'j-g-|v-cn-xb-
+h-d-0-|n-z-0-
+q-a.d.h.d.|ndh-n-a-
+j-w-j-|xf-nms-v-
+q-0-q.d.|nh-na.d.ch-
+j-w-j-|xf-nms-v-
+e--h-|nd-c.na.c.na.
+w-.e.r-|vf-v-ns-
+e--q-|xg-ca-c-
+h--j-|vf-z-vn-
+q-e-y-|nh-c.na.c.na.
+t-.r.e-|cj-cb-m-  # 改动 ♯4→r
+w-q-w-|m-d.nm.v.nm.  # 改动 ♭3→w ♯1→q ♭3→w 伴奏♯4→v
+e---|cgj-m-c-
+h--d-|n-c-na-
+g-.h.j-|c--bm-
+h--d-|v-v-na-
+s-.d.j-|c-m-cbm-
+h-q-e-|xn-xa-vnd-
+w-.q.j-|cs-m.a.cbm-
+h--n-|vn-z-c-
+b-x-g-|0--bn-
+h-.q.e-|xn-x.a.vnd-
+w-t-j-|cs-mg-cbm-
+q.j.h-b-|va.m.zcn-x-
+n-n-0-|0-zc-0-
+h--q-|v-c-na-
+h--q-|v-c-na-
+j--w-|vnd-c-m-
+j--w-|n-c-m-
+q--e-|x-n-a-
+q--e-|x-n-a-
+w---|vs-x-nm-
+e-w-d-|cj-cd-x-
+h--h-|v-c-na-
+j'h-g-h-|b-c-ba-
+q.j.h.g.d.g.|n-c-na-
+d--m-|c-c-b-
+d--d-|v-c-na-
+s'f-s-d-|c-m-cb-  # 改动 ♯4→f
+g.f.d.s.d.s.|n-c-na-  # 改动 ♯4→f
+d--d-|b-c-bm-
+h--h-|v-c-na-
+j'h-g-h-|b-c-ba-
+q.j.h.g.d.g.|n-c-na-
+d--m-|c-c-b-
+d--d-|v-c-na-
+g'd-s-d-|c-m-cb-
+g.d.s.a.m.a.|v-cn-xb-
+n-h.j~q~w~e~r~t~|0-nad-b-
+y--y-|vh-c-ndh-
+u'y-t-y-|j'bh-cg-bdh-
+q.u.y.t.e.t.|na-c-nad-
+e--d-|c--bm-
+e--e-|vd-c-nad-
+t'e-w-e-|cd-ms-cbd-
+t.r.e.w.j.w.|ng-c-na-  # 改动 ♯4→r
+e--e-|bd-c-bmd-
+y--y-|vh-c-ndh-
+u'y-t-y-|j'bh-cg-bdh-
+q.u.y.t.e.t.|na-c-nad-
+e---|c-c-bmd-
+e--e-|vd-c-nad-
+t'e-w-e-|c~d.~ms-cmd-
+t.e.w.q.j.q.|vg-cna-xb-
+h-d--|n-cna--
+q--q.d.|bnh-c.d.ah-
+j-w-j-|xf-n-v-
+q--q.d.|nh-c.d.ah-
+j-w-j-|xf-n-v-
+q--q.d.|xh-x.d.nh-
+j-w-j-|cg-m-b-
+q--q.d.|vd-c.d.nh-
+j-w-j-|bg-x-b-
+---|---
+-.~0-~|-.~0-~
+0---|0---

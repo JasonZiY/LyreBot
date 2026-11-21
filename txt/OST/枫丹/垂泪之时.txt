@@ -1,0 +1,51 @@
+# 由 MIDI 自动编配：垂泪之时-录音.mid
+# 原曲的音阶相当于 E♭ 大调 / C 小调（3 个降号），降 3 个半音移成 C 大调 / A 小调，99% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 100 拍（四分音符），速度有起伏，逐拍跟随，6/8 拍
+speed=99.3
+0-.g-.|0---
+q---|cbn---
+a-.j.q.e.|cb---
+speed=95.1
+f---|xna---
+speed=101.8
+a-.j.q.e.|vb---
+f-.j-.|xbm-.g-.
+speed=98.7
+-.j.q.w.|b-.bmf-.
+d---|zba---
+d-.g-.|-.bm-.
+q---|cbn---
+-.j.q.e.|~cna--.~
+e-.f-.|xva---
+a-.j.q.e.|vb---
+e-.w-.|xb---
+r-.e-.|bf-.bmd-.
+q--.g.|z.b.a.s.d-
+speed=99.1
+w---|z---
+q---|z.b.a.s.d.f.
+g-.q.w.e.|0---
+e-.w-.|vah-.bs-.
+q-.q.w.e.|afh-.d-a.
+e-r~e~w-y.|va-.bs-.
+t-.q.w.e.|nag-d~f~g.s.a.
+e-.w-t.|vah-.mf-.
+q-.q.w.j.|nad-.cbs-.
+q.w.j.q.w.j.|xva-.bms-.
+q-d~f~q.w.e.|zad-.d.s.za.
+e-r~e~w-.|va-.bs-.
+q-g.q.w.e.|ad-.ad.f.a.
+e-r~e~w-y.|va-.bs-.
+t-d~f~q.w.e.|nag-.g.s.a.
+e-.w-t.|va-.mf-.
+q-.q.w.j.|nad-.cbs-.
+speed=89.9
+q.w.j.q.~w.~|vah-.bsg-.
+speed=106
+j-q--|-zdg--
+speed=100
+---|---
+---|---
+0---|0---

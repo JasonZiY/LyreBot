@@ -1,0 +1,64 @@
+# 由 MIDI 自动编配：山间悠谈-录音.mid
+# 原曲的音阶相当于 F♯ 大调 / D♯ 小调（6 个升号），升 6 个半音移成 C 大调 / A 小调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 89 拍（四分音符），速度平稳，6/8 拍
+speed=89
+m.a.g.m.a.g.|0---
+j~q~w~t~g--|m.a.0--
+m.a.g.m.a.g.|0---
+u~q~w~t~g-.j~q~|j.a.0--
+h~q~w~t~g.n.a.g.|n.a.0--
+n.a.g-.u~q~|0--.h.
+y~q~w~t-~a.g.|h.a.g.h.0-
+n.a.g-~g~j~q~|0---
+~t.e--~|a.g.a-j.a.
+g-.d-.|ad---
+a.g.q-j.q.|0---
+y-.e-.|ad---
+w.g.g--|b.a.s--
+j-.q-.|---
+b.s.j--|0---
+j-.q-.|0---
+.b.s-j.q.|z.0--.
+t-.e-.|0~a--.0~
+z.b.a-g.h.|0---
+e-.q-.|0-.dh-.
+j.q.q--|n.c.m--
+--n.c.|--0-
+d.g.q--|0---
+j-.q.j.q.|0---
+t-.e-.|z.a.g.aj.a.g.
+u~q~w~t-~j.q.|m.a.g.m.a.g.
+y-.e-.|n.a.g.n.a.g.
+--.e.|n.a.g.n.a.g.
+w.g.g.b.s.g.|b.s.0--
+d.s.a.b.s.g.|0---
+b.a.g.b.a.g.|0---  # 改动 ♯5→b ♯5→b
+b.a.g.h.q.w.|0-.b.a.g.  # 改动 ♯5→b ♯5→h 伴奏♯5→b
+t--w.j.|b.s.g.b.s.g.
+q-g-a.t.|n.a-n-g.
+y-e-q-|x.n.a.f.a.n.  # 改动 伴奏♯4→f
+--.w.|n.a.g.n.a.g.
+u.e~y~t--|b.s.g.b.s-
+t.~e~q--|z.bg.a.z.b.a.
+h-.h-.|n.v.n.f.v.n.  # 改动 ♭7→h ♯5→h 伴奏♭7→n 伴奏♭7→n 伴奏♭7→n
+g-.f-a.|zd.b.a.z.b-
+d--j.q.|b.z.b.b.a.g.
+t-.e-.|b.a.g.b.a.g.
+h-g.g-g.|n.a-b.a.0.
+b.a.g.b.a.g.|0---
+b.s.g-j.q.|0-.b.s.g.
+g-.j-.|b.s.b.bm.s.g.
+q---|na.a.g.b.a.g.
+b.z.b.b.z.b.|0---
+m.a.g.m.a.g.|0---
+j~q~w~t~g.a.g.a.|m.a.0--
+m.a.g.m.a.g.|0---
+m.a.g.a.g.j~q~|0--.a.
+h~q~w~t~g.n.a.g.|n.a.0--
+n.a.g.a.g.a.|0---
+n.a.g.n.a.g.|0---
+n.a.g.a.g~g~j~q~|0--.a.
+~t~e-a.g.a.|a.g.a.0-.
+0---|0---

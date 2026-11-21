@@ -1,0 +1,67 @@
+# 由 MIDI 自动编配：清辉下的参礼-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，95% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 120 拍（四分音符），速度平稳，4/4 拍
+speed=120
+w.g.h.w-q.e.q.|x----
+w.g.h.w-q.j.g.|----
+w.g-w-q.e.q.|x----
+w.g.h.w-q.j.g.|----
+q.0-e-.r-|xs.b.n.s-a.d.a.
+.t-.t'y-t.r.|s.b.n.s.n.a.m.b.
+e~r~e-q-.h-|n.b.n.a-n.b.c.
+a.b-a-n.b.c.|n----
+q.0-e-.r.0.|xs.b.n.sd-a.df.a.
+0.t.0-t~y~0.t.r.|xs.b.n.s-a.m.b.
+e----|n.b.n.a-n.b.c.
+q----|cma.b.n.a-n.b.c.
+w-.e-.r-|as.b-s.n.n.b.x.  # 改动 伴奏♭7→n
+.t-.t'y-t.r.|s.b.n.s.n.n.b.x.  # 改动 伴奏♭7→n
+t-.j'q-.r-|v.c.v.a.v.d.vd.a.
+-.e~r~t.r.e.q.|v.c.v.a.v.d.vf.a.
+w.0-t~y~y-t-|s.b.n.s.n.n.b.x.  # 改动 伴奏♭7→n
+q-.w'e-.r-|zd.b-.z.s-n.
+e.r~e~w-.g.h.j.|b.b.n.m.b--
+.h.g.s.b.m.n.b.|b----
+z.a.s.d.g.h.q.e.|0-b-.a.s-  # 改动 ♭3→d ♭7→h ♭3→e 伴奏♭3→s
+w-.e.w{1/3}e{1/3}w{1/3}h.g.|f----  # 改动 ♭3→e ♭3→e ♭7→h
+h-.j.h~j~h.f.a.|v.z-n-.v-  # 改动 ♭7→j ♭7→j
+s-.d.s~d~s.a-|b--z.b.x.x.  # 改动 ♭3→d ♭3→d 伴奏♭3→x
+.m.a.d.j.q.e.t.|n-n-.d-.
+r-.t.y.r.w.h.|x.n.f.g-h-s.  # 改动 ♯4→r ♯4→r 伴奏♯4→f
+q-.w.e.w.h.g.|v.z.n.a-f-n.
+h-.g.f~g~f.d.m.|x.n.v.n.c.m.b-  # 改动 ♯4→f ♯4→f 伴奏♯4→v
+.t.r.w.j.f.h.j.|c.m.f.g.0-s.m.  # 改动 ♯4→r ♯4→f 伴奏♯4→f
+q-.w.q.h-.|nd---.c.  # 改动 ♯1→q ♯1→q
+.r.e.q.h-g.h.|x.n.d.f-d.a.n.
+j-.q.j.g.d.s.|bs.x.m.a.x.m.b.x.
+d---.n.|n.x-n.n.x.c-
+g-.d-.g-|bns.x.c.n.n.x.ca.n.
+g'h~w---.~|xs.b.n.s.x.a.d.a.
+.b.n.s-a.m.b.|s.0-.x.0-.
+s.b.n.s-a.d.a.|x.0-.x.0-.
+s.b.n.s-a.m.b.|0--x--
+w-.e-.r-|x.n.c.v.n.s.d.f.
+.t-.t-.r.|.d.f.h.ah.f-a.
+e-.q-.g'h.q.|n.n.c.a-n.c.n.
+.h-r.e.q.h.g.|-a-.0-.
+w-.e-.r.0.|x.n-v.n.s.d.f.
+0.t-.y-t.r.|.d.f.h.a.f.d.a.
+e----|n.b.d.a.c.b.d.a.
+h'q---d.a.|c.b.d.a.c.b.0-
+w-.e-.r-|n.b.s.n.n.b.s.n.  # 改动 伴奏♭7→n 伴奏♭7→n
+.t-.y-t.r.|n.b-n.n.b.s.n.  # 改动 伴奏♭7→n 伴奏♭7→n
+t-.q-.e-|v.n.d.a.z.n.d.a.
+-.e~r~t.r.e.q.|v.n.d.a.z.n.d-
+w-.y-.t-|n.v.x.vs-a-s.  # 改动 伴奏♭7→n
+q-.e-.r-|z.b.c.bd-s-d.
+e~r~e.w.s-a.d.a.|xs.b.n.0--.
+s.h.j.q.j~q~j.g.j.|0.b.n.s-a.m.b.
+h.b.n.s-a.d.a.|xs.0---.
+s.b.n.s-a.m-|0----
+w.g.h.w-q.e.q.|x.0---.
+w.g.h.w-q.j.g.|0----
+w.g.h.w-q.e.q.|x.0---.
+w----|0----
+0----|0----
