@@ -52,10 +52,10 @@ TOOL_DIRS = tool_folders(PROJECT)
 MIDI_SUFFIXES = (".mid", ".midi")
 SETTLE = 1.5  # seconds a MIDI or audio file must stay unchanged before it is used: it may still be copying
 BAD_NAME_CHARACTERS = set('\\/:*?"<>|')
-OST, SONGS = "OST", "歌曲"  # the two folders of txt that are playlists; other scores are unfiled
+OST, SONGS = "OST", "乐曲"  # the two folders of txt that are playlists; other scores are unfiled
 OTHER_REGION = "其他"  # the last region of OST, which also takes scores not in any region's folder
 REGIONS = ("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬", "夏日", OTHER_REGION)
-SONG_COLUMNS = 2  # beside an open region, and across the 歌曲 shelf
+SONG_COLUMNS = 2  # beside an open region, and across the 乐曲 shelf
 RECORDING_SUFFIX = "-录音"  # a recording of 飞鼠进行曲 is saved as 飞鼠进行曲-录音
 PLAYING_SUFFIX = "-演奏"  # and the keys played for it as 飞鼠进行曲-演奏
 MIDI_FILE_SUFFIX = "-MIDI"  # and the score arranged from a MIDI file of it, 飞鼠进行曲.mid, as 飞鼠进行曲-MIDI
@@ -190,7 +190,7 @@ class Shuffle:
     """随机演奏 in rounds: every song of a playlist once, in a random order, before any of them again.
 
     A round lasts across stops, F7, ⏭ and songs chosen by hand: whatever plays in 随机演奏 is
-    taken out of what is left of its round.  OST and 歌曲 each have their own round, as the
+    taken out of what is left of its round.  OST and 乐曲 each have their own round, as the
     songs played are kept by path and each playlist only looks at its own.  A song
     added to the playlist joins the round under way; a new round never starts with the song
     just played.  Only the playing thread uses it while a song plays, and the window only when
@@ -249,7 +249,7 @@ class Library:
         return [*self.unfiled, *self.ost, *self.songs]
 
     def playlist(self, path: Path | None) -> list[Path]:
-        """The songs ``path`` plays on with: all of OST, region after region, or all of 歌曲."""
+        """The songs ``path`` plays on with: all of OST, region after region, or all of 乐曲."""
         ost = self.ost
         return ost if path in ost else list(self.songs) if path in self.songs else []
 
@@ -262,7 +262,7 @@ def read_library(scores_dir: Path) -> Library:
 
     Scores in txt/OST/地区 belong to that region, and those directly in txt/OST
     to 其他; a folder of OST with another name is one more region, before 其他.
-    Everything in txt/歌曲 is one list.  The rest is unfiled.
+    Everything in txt/乐曲 is one list.  The rest is unfiled.
     """
     unfiled: list[Path] = []
     songs: list[Path] = []
@@ -497,12 +497,12 @@ class Cell:
 
 
 class SongBrowser(ScrollingPage, tk.Canvas):
-    """The song list: unfiled scores across the top, then OST by region and 歌曲.
+    """The song list: unfiled scores across the top, then OST by region and 乐曲.
 
     Everything starts at one left edge and opens downwards: a shelf's
-    regions (or 歌曲's songs) on the lines under its name, a region's songs
+    regions (or 乐曲's songs) on the lines under its name, a region's songs
     under its own.  Songs run down two columns.  It starts with OST open,
-    its regions closed, and 歌曲 closed.
+    its regions closed, and 乐曲 closed.
 
     A shelf's title is set in the serif with a hairline running on to the
     edge; chevrons are old gold; the chosen song sits on a rounded breath of
@@ -1010,7 +1010,7 @@ class App:
         self.song_menu.add_separator()
         self.song_menu.add_command(label="删除", accelerator="Delete", command=self.delete, icon=icons.trash,
                                    danger=True)
-        self.folder_menu = PopupMenu(root, theme)  # for OST, 歌曲 or a region
+        self.folder_menu = PopupMenu(root, theme)  # for OST, 乐曲 or a region
         self.folder_menu.add_command(label="", command=lambda: self.open_folder(self.menu_folder), icon=icons.folder)
 
         rule = Ornament(root, theme)
@@ -1461,7 +1461,7 @@ class App:
         os.startfile(folder)  # type: ignore[attr-defined]
 
     def context_menu(self, event: tk.Event) -> None:
-        """A song's menu on a song; on OST, 歌曲 or a region, one to open its folder; nothing elsewhere."""
+        """A song's menu on a song; on OST, 乐曲 or a region, one to open its folder; nothing elsewhere."""
         cell = self.browser.cell_at(event)
         if cell is None:
             return
@@ -1500,7 +1500,7 @@ class App:
                                        state="disabled" if str(folder).casefold() == here else "normal")
 
     def move(self, score: Path, folder: Path, name: str) -> Path | None:
-        """Move a score into another region, 歌曲 or unfiled, and keep it selected there."""
+        """Move a score into another region, 乐曲 or unfiled, and keep it selected there."""
         if self.worker:
             return None
         target = folder / score.name

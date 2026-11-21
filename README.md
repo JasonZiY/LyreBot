@@ -29,9 +29,9 @@
 
 窗口会回到上次关掉时的位置，大小则总是打开时的默认大小（最窄的宽度，也就是简谱页 <img src="assets/readme/shrink.png" alt="缩小" height="22" align="absmiddle"> 缩回的那个大小）。界面的标题用宋体（Noto Serif SC）显示，电脑上没有这款字体时会改用微软雅黑。
 
-列表里的曲目就是 `txt` 文件夹里的 `.txt` 曲谱，文件改动后列表会自动刷新。`txt/OST/地区名` 里的曲谱归到 OST 的对应地区，`txt/歌曲` 里的归到歌曲，其余都是未归类，显示在最上面。新生成的曲谱也放在 `txt` 里，也就是未归类；想归到哪里，自己把文件挪进去，或者右键曲子选「移到…」，挪到别的地区、歌曲或未归类。
+列表里的曲目就是 `txt` 文件夹里的 `.txt` 曲谱，文件改动后列表会自动刷新。`txt/OST/地区名` 里的曲谱归到 OST 的对应地区，`txt/乐曲` 里的归到乐曲，其余都是未归类，显示在最上面。新生成的曲谱也放在 `txt` 里，也就是未归类；想归到哪里，自己把文件挪进去，或者右键曲子选「移到…」，挪到别的地区、乐曲或未归类。
 
-打开时只展开 OST，各地区和歌曲都是收起的，点名字展开；名字后面的数字是里面有几首曲子。曲子分两列排在下面，先从上到下排满左边一列，再接着排右边一列。同一组里英文名在前、按字母排，中文名在后、按拼音排，以后加进去的曲谱也一样。用滚轮或方向键上下翻，界面上没有滚动条。
+打开时只展开 OST，各地区和乐曲都是收起的，点名字展开；名字后面的数字是里面有几首曲子。曲子分两列排在下面，先从上到下排满左边一列，再接着排右边一列。同一组里英文名在前、按字母排，中文名在后、按拼音排，以后加进去的曲谱也一样。用滚轮或方向键上下翻，界面上没有滚动条。
 
 在列表下方、播放栏分隔线上面右侧的搜索框 <img src="assets/readme/search.png" alt="搜索" height="22" align="absmiddle"> 里输入曲名中的字，按 <kbd>Enter</kbd>，会跳到第一首名字里有这些字的曲子；再按一次 <kbd>Enter</kbd> 跳到下一首，到底后从头再来。写错的曲谱前面有 <img src="assets/readme/warning.png" alt="⚠" height="22" align="absmiddle">，选中后底部会显示错在哪一行。
 
@@ -41,11 +41,11 @@
 
 被打断的曲子会记下停在第几小节，之后点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 或按 <kbd>F7</kbd>，就从那一小节的开头接着弹；点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 左边的 <img src="assets/readme/restart.png" alt="↺" height="22" align="absmiddle"> 则从头弹。按住进度条上的圆点拖动，计数会显示拖到了第几小节，松开后同样倒数 2 秒，从那一小节的开头开始演奏；直接点一下进度条也一样。换了曲子或用进度条选了小节，就不再接着弹。点 <img src="assets/readme/next.png" alt="⏭" height="22" align="absmiddle"> 演奏下一首。
 
-「速度」按比例缩放整首曲子，包括曲中的变速，可选 80%、100%、120%、150% 和 200%，也可以点「自定义…」填 25% 到 300% 之间的任意数值。旁边的选项决定一首弹完以后做什么：「单曲」就此停下，「单曲循环」从头再弹这一首，「顺序演奏」接着弹同一个播放列表的下一首，「随机演奏」像洗牌一样，在这个播放列表里随机挑一首这一轮还没弹的，整个列表都弹过一遍才重新洗，中途自己点的曲子也算这一轮弹过了，后三种会一直弹到按 <kbd>F8</kbd> 或切换窗口为止。OST 和歌曲是两个播放列表：OST 顺序演奏时先弹完本地区，再去下一个地区，随机时在整个 OST 里挑。未归类的曲谱不属于任何播放列表，只能单曲或单曲循环。
+「速度」按比例缩放整首曲子，包括曲中的变速，可选 80%、100%、120%、150% 和 200%，也可以点「自定义…」填 25% 到 300% 之间的任意数值。旁边的选项决定一首弹完以后做什么：「单曲」就此停下，「单曲循环」从头再弹这一首，「顺序演奏」接着弹同一个播放列表的下一首，「随机演奏」像洗牌一样，在这个播放列表里随机挑一首这一轮还没弹的，整个列表都弹过一遍才重新洗，中途自己点的曲子也算这一轮弹过了，后三种会一直弹到按 <kbd>F8</kbd> 或切换窗口为止。OST 和乐曲是两个播放列表：OST 顺序演奏时先弹完本地区，再去下一个地区，随机时在整个 OST 里挑。未归类的曲谱不属于任何播放列表，只能单曲或单曲循环。
 
 ### 生成和删除曲谱
 
-曲谱也可以不手写：把 MIDI 文件放进 `midi` 文件夹，LyreBot 会自动编配成「曲名-MIDI」的曲谱加进列表（见 [从 MIDI 生成曲谱](#从-midi-生成曲谱)）；点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 左边的 <img src="assets/readme/record.png" alt="●" height="22" align="absmiddle">，可以把电脑正在播放的音乐录下来，同样编配成曲谱（见 [从录音生成曲谱](#从录音生成曲谱)）；<img src="assets/readme/record.png" alt="●" height="22" align="absmiddle"> 左边的 <img src="assets/readme/keys.png" alt="键盘" height="22" align="absmiddle"> 会把你在游戏里弹的琴记成曲谱（见 [记录演奏](#记录演奏)）。点列表右上方垂下来的橙色书签 <img src="assets/readme/ribbon.png" alt="橙色书签" height="22" align="absmiddle">，翻到选中曲子的简谱页，可以在电脑上试听（见 [试听](#试听)）。右键曲子可以把它移到别处、按 MIDI 重新编配、导出成简谱（见 [导出简谱](#导出简谱)）或删除；右键 OST、歌曲或地区名会打开对应的文件夹。
+曲谱也可以不手写：把 MIDI 文件放进 `midi` 文件夹，LyreBot 会自动编配成「曲名-MIDI」的曲谱加进列表（见 [从 MIDI 生成曲谱](#从-midi-生成曲谱)）；点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 左边的 <img src="assets/readme/record.png" alt="●" height="22" align="absmiddle">，可以把电脑正在播放的音乐录下来，同样编配成曲谱（见 [从录音生成曲谱](#从录音生成曲谱)）；<img src="assets/readme/record.png" alt="●" height="22" align="absmiddle"> 左边的 <img src="assets/readme/keys.png" alt="键盘" height="22" align="absmiddle"> 会把你在游戏里弹的琴记成曲谱（见 [记录演奏](#记录演奏)）。点列表右上方垂下来的橙色书签 <img src="assets/readme/ribbon.png" alt="橙色书签" height="22" align="absmiddle">，翻到选中曲子的简谱页，可以在电脑上试听（见 [试听](#试听)）。右键曲子可以把它移到别处、按 MIDI 重新编配、导出成简谱（见 [导出简谱](#导出简谱)）或删除；右键 OST、乐曲或地区名会打开对应的文件夹。
 
 删除（右键选「删除」，或选中后按 <kbd>Delete</kbd>）把文件移到回收站，需要时可以从回收站还原，删之前会列出要删的文件。手写的曲谱和「曲名-演奏」只删曲谱本身；从 MIDI 或录音编配的曲谱（「曲名-MIDI」「曲名-录音」，以及第一行写着由哪个 MIDI 编配的曲谱）连同 `midi` 文件夹里的那个 MIDI 和同名录音一起删，不然 LyreBot 一两秒后又会从它们生成一份。导出到 `jianpu_output` 的同名简谱也一起删。
 

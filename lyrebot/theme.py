@@ -92,7 +92,7 @@ class Fonts:
             return (serif, size) if serif else (SANS, size, "bold")
         self.body = (SANS, 9)
         self.small = (SANS, 8)
-        self.shelf = heading(10)  # OST and 歌曲
+        self.shelf = heading(10)  # OST and 乐曲
         self.title = heading(12)  # the song in the player, and a dialog's question
         self.figures = (figures, 9)  # times, bars and counts
         self.figures_small = (figures, 8)
