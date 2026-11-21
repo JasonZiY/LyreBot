@@ -32,7 +32,8 @@ import math
 from statistics import median
 from typing import Iterable
 
-from .arrange import KEY_OF, Grid, _bars, _bpm_text, describe_timing, duration_text, speed_lines
+from .arrange import (KEY_OF, Grid, _bars, _bpm_text, closing_rest, describe_timing, duration_text,
+                      speed_lines)
 from . import beats
 from .beats import PPQ, Timing, find_beats
 from .midi import MidiFile, Note
@@ -388,6 +389,7 @@ def _text(header: list[str], written: list[tuple[Fraction, str, str | None, floa
             following = written[item + 1][0] if item + 1 < len(written) else total
             pieces.append(text + duration_text(min(following, end) - position))
         lines.append("".join(pieces))
+    lines.append(closing_rest([end - begin for begin, end, _ in segments], 1))
     text = "\n".join(lines) + "\n"
     try:
         parse_score(text)

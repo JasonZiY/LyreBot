@@ -305,6 +305,14 @@ def _content(raw: str) -> str:
     return "".join(raw.split("#", 1)[0].split())
 
 
+def is_rest_bar(line: str) -> bool:
+    """Whether a measure is a bar of rest: no key in any voice, and no voice opens by holding on the
+    note before it (a line starting with a length or with +)."""
+    voices = _content(line).split("|")
+    return all(voice and not KEYS & set(voice) and not voice.startswith(("-", ".", "~", "*", "{", "+"))
+               for voice in voices)
+
+
 def measure_lines(text: str) -> list[int]:
     """The lines (from 1) that are measures, in order: bar n is written on the n-th.  A line is told as
     ``parse_score`` tells it (not empty once its comment is gone, and not a directive such as speed=), but

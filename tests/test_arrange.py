@@ -9,7 +9,7 @@ from lyrebot.arrange import (
     mountain, ornaments, outer_line, snap_line, voicing,
 )
 from lyrebot.midi import MidiError, parse_midi
-from lyrebot.score import load_score, parse_score, score_files
+from lyrebot.score import is_rest_bar, load_score, parse_score, score_files
 
 MUSIC = Path(__file__).resolve().parent.parent / "txt"
 PPQ = 480
@@ -350,7 +350,7 @@ class Arranging(unittest.TestCase):
         self.assertEqual(result.shift, -2)  # D major -> C major
         score = parse_score(result.text)
         self.assertEqual(score.parts, 2)
-        self.assertEqual(score.total_beats, 16)
+        self.assertEqual(score.total_beats, 20)  # four bars, then the bar of rest every score ends with
 
     def test_melody_can_be_chosen_by_hand(self):
         high = [(i, i + 1, 84) for i in range(8)]
@@ -366,12 +366,20 @@ class Arranging(unittest.TestCase):
     def test_bars_follow_the_time_signature_and_ties_cross_bar_lines(self):
         melody = [(0, 2, 60), (2, 5, 64), (5, 6, 67)]
         result = arrange(parse_midi(song((0, melody), numerator=3)))
-        self.assertEqual(bars_of(result.text), ["q--e-", "--t-"])
+        self.assertEqual(bars_of(result.text), ["q--e-", "--t-", "0---"])
 
     def test_silences_and_staccato(self):
         melody = [(0, 0.5, 60), (1, 1.5, 62), (2, 2.4, 64), (4, 5, 65)]  # staccato, then a two-beat rest
         result = arrange(parse_midi(song((0, melody))))
-        self.assertEqual(bars_of(result.text), ["q-w-e.0-.", "r-0---"])
+        self.assertEqual(bars_of(result.text), ["q-w-e.0-.", "r-0---", "0----"])
+
+    def test_a_score_ends_with_one_bar_of_rest_as_long_as_its_bars(self):
+        """A bar that holds the last note on is not a bar of rest, so one more follows it."""
+        held = arrange(parse_midi(song((0, [(0, 4, 60), (4, 7, 64)]), (1, [(0, 7, 48)]), numerator=3)))
+        lines = bars_of(held.text)
+        self.assertEqual(lines[-1], "0---|0---")
+        self.assertFalse(is_rest_bar(lines[-2]))
+        self.assertEqual(sum(is_rest_bar(line) for line in lines), 1)
 
     def test_tempo_changes_land_on_bar_lines(self):
         conductor = [(0, -1, tempo(120)), (0, -1, signature(4, 4)), (4 * PPQ, -1, tempo(80))]
@@ -412,7 +420,8 @@ class Arranging(unittest.TestCase):
         self.assertEqual([(key.start, key.shift) for key in result.keys], [(0, 5), (32, 2)])
         self.assertEqual((result.changes, result.white_share), ([], 1.0))
         bars = bars_of(result.text)
-        self.assertEqual(bars[:8], bars[8:])  # both halves land on the same white keys
+        self.assertEqual(bars[-1], "0----|0----")
+        self.assertEqual(bars[:8], bars[8:-1])  # both halves land on the same white keys
         self.assertIn("# 第 1–8 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调", result.text)
         self.assertIn("# 第 9–16 小节相当于 B♭ 大调 / G 小调（2 个降号），升 2 个半音移成 C 大调 / A 小调", result.text)
         ninth = [line for line in result.text.splitlines() if not line.startswith(("#", "speed="))][8]
@@ -471,7 +480,7 @@ class Arranging(unittest.TestCase):
         pad = [(4, 8, 64), (4, 8, 67)]  # a sustained chord while the melody rests
         bass = [(i, i + 1, 36 + (i % 2) * 7) for i in range(12)]
         result = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))), accompaniment="bass")
-        bars = [line.split("|") for line in bars_of(result.text)]
+        bars = [line.split("|") for line in bars_of(result.text)[:-1]]  # the bars before the closing rest
         self.assertEqual([bar[0] for bar in bars], ["q-w-e-r-", "g----", "q-w-e-r-"])  # the pad's top note
         self.assertEqual([bar[1] for bar in bars], ["z-b-z-b-"] * 3)  # the bass is untouched
         unfilled = arrange(parse_midi(song((0, melody), (1, pad), (2, bass))), fill=False, accompaniment="bass")

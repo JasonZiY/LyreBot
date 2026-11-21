@@ -39,7 +39,7 @@ from typing import Callable, Iterable
 
 from .beats import FASTEST, SLOWEST, Timing, find_beats, onset_times
 from .midi import DEFAULT_TEMPO, MidiError, MidiFile, load_midi
-from .score import ScoreError, parse_score
+from .score import ScoreError, is_rest_bar, parse_score
 from .timeline import compile_timeline
 
 SCORES_DIR = Path(__file__).resolve().parent.parent / "txt"
@@ -997,6 +997,13 @@ def duration_text(length: Fraction) -> str:
     return text
 
 
+def closing_rest(lengths: list[Fraction], voices: int) -> str:
+    """The bar of rest a score ends with: as long as most of its bars (``lengths``), silent in every voice.
+    Every score in the library ends with exactly one, the ones written by hand as well."""
+    beats = Counter(lengths).most_common(1)[0][0]
+    return "|".join(["0" + duration_text(beats)] * voices)
+
+
 @dataclass(frozen=True)
 class _Segment:
     start: Fraction
@@ -1458,6 +1465,8 @@ def _arrange(midi: MidiFile, timing: Timing | None, *, title: str, melody: Itera
         if notes:
             line += "  # " + "；".join(notes)
         text_lines.append(line)
+    if not is_rest_bar(text_lines[-1]):
+        text_lines.append(closing_rest([length for _, length in bars[first_bar:]], len(segments)))
     text = "\n".join(text_lines) + "\n"
     try:
         parse_score(text)

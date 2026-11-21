@@ -66,6 +66,9 @@ class Writing(unittest.TestCase):
         # Where the bar starts is anyone's guess in a plain scale; the notes are eighths throughout.
         self.assertIn("a.s.d.f.g.h.j.q.a.s.d.f.", "".join(self.notes(result.text)).replace("0", ""))
         self.assertEqual(result.faithful, 1.0)
+        # The last note is held to the end of its bar, and a bar of rest closes the score.
+        self.assertEqual(self.notes(result.text)[-1], "0----")
+        self.assertNotIn("0", self.notes(result.text)[-2])
 
     def test_chords_rolls_and_grace_notes(self):
         beat = 0.6  # 100 BPM

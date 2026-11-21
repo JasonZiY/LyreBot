@@ -3,7 +3,7 @@ from pathlib import Path
 import math
 import unittest
 
-from lyrebot.score import ScoreError, Strike, load_score, measure_lines, parse_score, score_files
+from lyrebot.score import ScoreError, Strike, is_rest_bar, load_score, measure_lines, parse_score, score_files
 
 MUSIC = Path(__file__).resolve().parent.parent / "txt"
 
@@ -137,6 +137,15 @@ class MeasureLines(unittest.TestCase):
     def test_no_bars(self):
         self.assertEqual(measure_lines(""), [])
         self.assertEqual(measure_lines("speed=60\n# only words\n\n"), [])
+
+
+class RestBars(unittest.TestCase):
+    def test_a_bar_of_rest_is_silent_in_every_voice_from_its_first_beat(self):
+        for line in ("0----", "0-0-0-0-|0-0-0-0-", "0---|0---  # 结尾", "0-+-|0--"):
+            self.assertTrue(is_rest_bar(line), line)
+        # A held note is not a rest, at the start of any voice, nor is a note anywhere in the bar.
+        for line in ("----|----", "-.0-.|-.0-.", "0----|--0--", "{1/3}0--{2/3}", "+-0-", "0-0-|0-z-", ""):
+            self.assertFalse(is_rest_bar(line), line)
 
 
 class Ties(unittest.TestCase):
