@@ -4,10 +4,12 @@ from fractions import Fraction
 import math
 import random
 import unittest
+from unittest import mock
 
 from lyrebot import beats
 from lyrebot.beats import onset_times
-from lyrebot.arrange import _Clock, arrange, beat_readings, mixed_values, played_in_time, speed_lines
+from lyrebot.arrange import (ArrangeError, _Clock, arrange, beat_readings, given_tempo, mixed_values,
+                             played_in_time, speed_lines)
 from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
@@ -173,6 +175,11 @@ class SteadyStretches(unittest.TestCase):
 
 def loose_groove(jitter, seed, bars=40, bpm=150.0):
     """A steady 4/4 groove at ``bpm`` played with ``jitter`` seconds of slop."""
+    return parse_midi(loose_groove_file(jitter, seed, bars, bpm))
+
+
+def loose_groove_file(jitter, seed, bars=40, bpm=150.0):
+    """The bytes of ``loose_groove``'s MIDI file, as a transcription would write it."""
     rng = random.Random(seed)
     played = []
     for bar in range(bars):
@@ -182,10 +189,58 @@ def loose_groove(jitter, seed, bars=40, bpm=150.0):
             played += [(on, on + 0.3, 72 + (0, 4, 7, 4)[beat]), (off, off + 0.2, 67)]
         down = 0.5 + bar * 4 * 60 / bpm + rng.gauss(0, jitter)
         played.append((down, down + 4 * 60 / bpm, 36))
-    return parse_midi(smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])]))
+    return smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])])
+
+
+class GivenTempo(unittest.TestCase):
+    """The tempo printed on a score, given when recording or arranging again (3.30.0)."""
+
+    def test_the_beat_is_read_at_the_tempo_given(self):
+        midi = loose_groove(0.025, 1)  # 150 a minute, guessed at the half note
+        guessed = arrange(midi)
+        self.assertAlmostEqual(guessed.timing.bpm, 75, delta=0.1)
+        self.assertIsNone(given_tempo(guessed.text))
+        result = arrange(midi, tempo=150)
+        self.assertTrue(result.timing.steady)
+        self.assertAlmostEqual(result.timing.bpm, 150, delta=0.1)
+        self.assertEqual(result.doubt, "")
+        self.assertIn("# 节拍按指定的每分钟 150 拍从音符读出：约每分钟 150 拍（四分音符），速度平稳，4/4 拍\n",
+                      result.text)
+        self.assertEqual(given_tempo(result.text), 150)  # so that arranging it again reads it at 150 too
+
+    def test_a_tempo_far_from_the_music_is_doubted(self):
+        midi = loose_groove(0.025, 1)
+        self.assertIn("只有 70% 的音和录音对得上；不填速度时能对上 92%，速度可能填错了", arrange(midi, tempo=97).doubt)
+        self.assertIn("读不出一个稳定的速度，不填速度时整首稳定在每分钟 75 拍", arrange(midi, tempo=200).doubt)
+
+    def test_a_tempo_counts_only_for_a_beat_found_in_the_notes(self):
+        written = parse_midi(song((0, [(0, 1, 60), (1, 2, 62), (2, 3, 64), (3, 4, 65)])))
+        self.assertEqual(arrange(written, tempo=150).text, arrange(written).text)
+        with self.assertRaises(ArrangeError):
+            arrange(loose_groove(0.025, 1), tempo=500)
 
 
 class OneTempo(unittest.TestCase):
+    def test_steady_stretches_are_read_in_one_tempo_as_well(self):
+        """A pulse fitted in steady stretches and followed between them may be the tracker's doing (a
+        recording that kept 171 a minute throughout was read at 85.5 with a bar each at 89.4 and 82.2):
+        the one tempo its notes keep is read first, and the score that plays them better is kept."""
+        midi = loose_groove(0.025, 1)
+        found, timing = beats.find_beats(midi, playback=True)
+        stretched = (found, replace(timing, steady=False, stretches=2))
+        steady = beats.find_beats(midi, playback=True, one_tempo=True)
+        with mock.patch("lyrebot.arrange.find_beats",
+                        side_effect=lambda *args, **kwargs: steady if kwargs.get("one_tempo") else stretched):
+            readings = beat_readings(midi)
+        self.assertEqual([(timing.steady, timing.stretches) for _, timing in readings], [(True, 0), (False, 2)])
+
+    def test_a_real_stop_keeps_its_stretches(self):
+        """Half a second's stop in a steady groove: in one tempo the notes after it are late, so the
+        stretches on either side, which play them in time, are kept."""
+        midi, _ = groove(pause_at=20, pause=0.5)
+        self.assertEqual(len(beat_readings(midi)), 2)  # one tempo is read as well ...
+        self.assertEqual(arrange(midi, beats="notes").timing.stretches, 2)  # ... and loses
+
     def test_steady_playing_the_tracker_follows_keeps_its_tempo(self):
         """Played with 25 ms of slop, a steady groove makes the tracker's
         pulses wobble too much to pass for one tempo; the one tempo its notes
@@ -214,13 +269,6 @@ class OneTempo(unittest.TestCase):
         onsets = [0.3 * index for index in range(100)]
         onsets += [onsets[-1] + 0.26 * index for index in range(1, 101)]
         self.assertIsNone(beats._one_tempo(onsets, onsets, [1.0] * len(onsets)))
-
-    def test_steady_stretches_are_not_read_again(self):
-        """A piece fitted as steady stretches keeps one tempo nearly
-        throughout already; between them (a pause, a ritardando) it is
-        better followed than written in a tempo it does not keep."""
-        midi, _ = groove(pause_at=20, pause=0.5)
-        self.assertEqual(len(beat_readings(midi)), 1)
 
 
 class SlippedBeat(unittest.TestCase):

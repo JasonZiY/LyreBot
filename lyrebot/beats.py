@@ -59,6 +59,7 @@ class Timing:
     denominator: int
     stretches: int = 0  # when not steady as a whole: the steady stretches it was fitted as, 0 if followed
     slides: int = 0  # places where the beat of that tempo was moved to stay on the notes
+    given: float | None = None  # the tempo the user gave (quarter notes a minute), when it was read at that
 
     @property
     def signature(self) -> str:

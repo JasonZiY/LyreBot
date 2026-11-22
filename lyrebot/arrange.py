@@ -67,6 +67,7 @@ MELODY_WORDS = re.compile(r"melod|lead|vocal|voice|sing|solo|\brh\b|\bright\b|�
 OTHER_WORDS = re.compile(r"bass|\blh\b|\bleft\b|accomp|chord|pad|drum|perc|贝斯|低音|左手|伴奏|和弦|鼓", re.I)
 
 MIXED_VALUE = re.compile(r"\{\d+/(?!3\})\d+\}")
+GIVEN_TEMPO = re.compile(r"^# 节拍按指定的每分钟 ([0-9.]+) 拍", re.M)  # see ``describe_timing``
 
 QUARTER, HALF = Fraction(1, 4), Fraction(1, 2)
 LEGATO = Fraction(1, 8)
@@ -82,6 +83,7 @@ OTHER_LEVELS = (2, 0.5)  # other lengths of the beat found to read a recording a
 SHORT = 0.9  # ... when the score of the beat found plays less than this share of the notes in time
 IN_TIME = 0.05  # seconds within which a recording's note played back by its score counts as in time
 CLOSER = 0.005  # how much more of a recording another reading of its beat must play in time to be kept
+MISREAD = 0.05  # how much more of a recording the guessed tempo must play in time than one given doubts it
 MIXED_VALUES = 0.1  # note values per bar mixing thirds and quarters of a beat, from which a steady
 #                     recording's beat is looked at again
 TIDIER = 0.6  # the beat moved onto the notes is kept if it leaves at most this share of those values ...
@@ -168,6 +170,7 @@ class Arrangement:
     chords: list[ChordSpan] = field(default_factory=list)
     timing: Timing | None = None  # set when the beat was found in the notes
     keys: list[KeyRegion] = field(default_factory=list)  # one per key, more than one when the song modulates
+    doubt: str = ""  # a word for the user when the tempo they gave plays the recording clearly worse than a guess
 
 
 def note_name(pitch: int) -> str:
@@ -1119,7 +1122,16 @@ def describe_timing(timing: Timing) -> str:
         pace = f"速度分 {timing.stretches} 段各自平稳，段与段之间逐拍跟随"
     else:
         pace = "速度有起伏，逐拍跟随"
-    return f"节拍是从音符推断的：约每分钟 {timing.bpm:.0f} 拍（四分音符），{pace}，{timing.signature} 拍"
+    found = f"约每分钟 {timing.bpm:.0f} 拍（四分音符），{pace}，{timing.signature} 拍"
+    if timing.given:  # (``given_tempo`` reads it back, so that arranging again reads it at the same tempo)
+        return f"节拍按指定的每分钟 {_bpm_text(timing.given)} 拍从音符读出：{found}"
+    return f"节拍是从音符推断的：{found}"
+
+
+def given_tempo(text: str) -> float | None:
+    """The tempo (quarter notes a minute) a score's beat was read at because the user gave it, if it was."""
+    found = GIVEN_TEMPO.search(text)
+    return float(found.group(1)) if found else None
 
 
 def key_name(shift: int) -> str:
@@ -1187,63 +1199,117 @@ def _grid(midi: MidiFile) -> Grid:
 
 def arrange(midi: MidiFile, *, title: str = "", melody: Iterable[int] = (), drop: Iterable[int] = (),
             transpose: int | None = None, fill: bool = True, accompaniment: str = "auto",
-            beats: str = "auto", meter: int | None = None) -> Arrangement:
+            beats: str = "auto", meter: int | None = None, tempo: float | None = None) -> Arrangement:
     """``accompaniment`` is "chords" (broken chords rewritten from the
     harmony), "bass" (the lowest line of the source accompaniment), "keep"
     (the source accompaniment as played) or "auto": "keep" for a recording,
     whose arrangement should sound like what was recorded, "chords" otherwise.
     ``beats`` is "auto" (find the beat in the notes when the file has none of
     its own), "midi" (always trust the file) or "notes" (always find it);
-    ``meter`` fixes the beats per bar."""
+    ``meter`` fixes the beats per bar.  ``tempo`` (quarter notes a minute, as
+    a score prints it) is how fast a beat found in the notes goes: it is read
+    at that tempo rather than at one guessed from the notes, which may be half
+    or twice the music's own.  Whether the music keeps it throughout, the
+    notes still tell, and a tempo that plays the recording clearly worse than
+    the guess would leaves a ``doubt``.  A file with a beat of its own keeps it."""
     if accompaniment not in ACCOMPANIMENTS and accompaniment != "auto":
         raise ArrangeError(f"未知的伴奏方式 {accompaniment!r}")
     if beats not in ("auto", "midi", "notes"):
         raise ArrangeError(f"未知的节拍来源 {beats!r}")
     if meter is not None and not 1 <= meter <= 12:
         raise ArrangeError("每小节的拍数应在 1 到 12 之间")
+    if tempo is not None and not SLOWEST <= tempo <= FASTEST:
+        raise ArrangeError(f"速度应在每分钟 {SLOWEST:g} 到 {FASTEST:g} 拍之间")
     grid = _grid(midi)
     choices = dict(title=title, melody=melody, drop=drop, transpose=transpose, fill=fill,
                    accompaniment=accompaniment)
     if beats == "notes" or (beats == "auto" and needs_beats(midi, grid)):
-        # Each reading of the beat is written out, and the score that plays the most notes back when they
-        # were played is kept, the first on a tie.  The beat found may be half or twice the music's own.
-        # Then its score plays the recording back short, and a beat twice or half as long is read as
-        # well.  Only then: a shorter beat always fits a little closer, its grid being finer, without
-        # being the beat.
-        readings = beat_readings(midi, meter)
-        if readings:
-            onsets = onset_times(midi)
-            bpm = readings[-1][1].bpm
-            best: tuple[float, Arrangement] | None = None
-            period = chosen = None
-            for level in (None, *OTHER_LEVELS):
-                if level is not None:
-                    if best[0] >= SHORT or not SLOWEST <= bpm / level <= FASTEST:
-                        continue
-                    period = 60.0 * level / bpm
-                    readings = beat_readings(midi, meter, period)
-                for reading in readings:
-                    scored = _scored(_arrange(*reading, **choices), onsets)
-                    if best is None or scored[0] > best[0] + CLOSER:
-                        best, chosen = scored, period
-            return _on_the_notes(midi, best, chosen, meter, onsets, choices)
+        onsets = onset_times(midi)
+        found = (_read_at(tempo, midi, meter, onsets, choices) if tempo is not None
+                 else _guessed(midi, meter, onsets, choices))
+        if found is not None:
+            return found
     elif meter:
         midi = replace(midi, time_signatures=((0, meter, 4),))
     return _arrange(midi, None, **choices)
 
 
+def finds_beats(midi: MidiFile) -> bool:
+    """Whether arranging the file finds its beat in its notes, as for a transcribed recording: only then
+    does a tempo given for it count."""
+    return needs_beats(midi, _grid(midi))
+
+
+def _guessed(midi: MidiFile, meter: int | None, onsets: list[float], choices: dict) -> Arrangement | None:
+    """The arrangement at the beat found in the notes, or None when there are too few to tell.
+
+    Each reading of the beat is written out, and the score that plays the most notes back when they
+    were played is kept, the first on a tie.  The beat found may be half or twice the music's own.
+    Then its score plays the recording back short, and a beat twice or half as long is read as well.
+    Only then: a shorter beat always fits a little closer, its grid being finer, without being the beat.
+    """
+    readings = beat_readings(midi, meter)
+    if not readings:
+        return None
+    bpm = readings[-1][1].bpm
+    best: tuple[float, Arrangement] | None = None
+    period = chosen = None
+    for level in (None, *OTHER_LEVELS):
+        if level is not None:
+            if best[0] >= SHORT or not SLOWEST <= bpm / level <= FASTEST:
+                continue
+            period = 60.0 * level / bpm
+            readings = beat_readings(midi, meter, period)
+        for reading in readings:
+            scored = _scored(_arrange(*reading, **choices), onsets)
+            if best is None or scored[0] > best[0] + CLOSER:
+                best, chosen = scored, period
+    return _on_the_notes(midi, best, chosen, meter, onsets, choices)
+
+
+def _read_at(tempo: float, midi: MidiFile, meter: int | None, onsets: list[float],
+             choices: dict) -> Arrangement | None:
+    """The arrangement at the beat of the tempo the user gave, or None when there are too few notes to tell.
+    Of its readings (one tempo, or followed where the music moves), the one that plays the recording best
+    is kept; when that plays it short and the guessed tempo would play clearly more, it carries a doubt."""
+    period = 60.0 / tempo
+    readings = [(file, replace(timing, given=tempo)) for file, timing in beat_readings(midi, meter, period)]
+    if not readings:
+        return None
+    best: tuple[float, Arrangement] | None = None
+    for reading in readings:
+        scored = _scored(_arrange(*reading, **choices), onsets)
+        if best is None or scored[0] > best[0] + CLOSER:
+            best = scored
+    result = _on_the_notes(midi, best, period, meter, onsets, choices, given=tempo)
+    in_time = played_in_time(result.text, onsets)
+    if in_time < SHORT or not result.timing.steady:
+        guess = _guessed(midi, meter, onsets, choices)
+        guessed = played_in_time(guess.text, onsets) if guess else 0.0
+        if guessed >= in_time + MISREAD:
+            result.doubt = (f"按每分钟 {_bpm_text(tempo)} 拍读，只有 {in_time:.0%} 的音和录音对得上；"
+                            f"不填速度时能对上 {guessed:.0%}，速度可能填错了")
+        elif guess and guess.timing.steady and not result.timing.steady and guessed >= in_time - MISREAD:
+            result.doubt = (f"按每分钟 {_bpm_text(tempo)} 拍读不出一个稳定的速度，不填速度时整首稳定在"
+                            f"每分钟 {guess.timing.bpm:.0f} 拍，速度可能填错了")
+    return result
+
+
 def beat_readings(midi: MidiFile, meter: int | None = None,
                   period: float | None = None) -> list[tuple[MidiFile, Timing]]:
     """The file rewritten against the beat found in its notes (or the one
-    ``period`` seconds long): in the one tempo its notes keep, when its
-    pulse was followed beat by beat all the same (as it may be by the
-    tracker's doing), and then as followed.  A pulse fitted in steady
-    stretches is not read again: it keeps one tempo nearly throughout
-    already, and the rest (a ritardando) reads better followed."""
+    ``period`` seconds long): when its pulse was not taken for one tempo as a
+    whole, first in the one tempo its notes keep, if they keep one, and then as
+    found.  A pulse followed beat by beat, or fitted in steady stretches and
+    followed between them, may be the tracker's doing: a recording that keeps
+    one tempo throughout was read at 85.5 in two stretches, with a bar each at
+    89.4 and 82.2 between them that it never played.  A real ritardando or
+    change of tempo leaves the one tempo, so its notes keep none, or the score
+    in one tempo plays them clearly worse than as found."""
     found = find_beats(midi, meter, playback=True, period=period)
     if not found:
         return []
-    if not found[1].steady and not found[1].stretches:
+    if not found[1].steady:
         steady = find_beats(midi, meter, playback=True, period=period, one_tempo=True)
         if steady and steady[1].steady:
             return [steady, found]
@@ -1261,7 +1327,7 @@ def mixed_values(text: str) -> int:
 
 
 def _on_the_notes(midi: MidiFile, best: tuple[float, Arrangement], period: float | None, meter: int | None,
-                  onsets: list[float], choices: dict) -> Arrangement:
+                  onsets: list[float], choices: dict, given: float | None = None) -> Arrangement:
     """The arrangement ``best``, or a tidier one if its beat has slipped off the notes.
 
     At a fast tempo every note lies within the time that counts as in time
@@ -1275,7 +1341,7 @@ def _on_the_notes(midi: MidiFile, best: tuple[float, Arrangement], period: float
     found = find_beats(midi, meter, playback=True, period=period, one_tempo=True, slide=True)
     if not found or not found[1].slides:
         return result
-    moved_in_time, moved = _scored(_arrange(*found, **choices), onsets)
+    moved_in_time, moved = _scored(_arrange(found[0], replace(found[1], given=given), **choices), onsets)
     if mixed_values(moved.text) <= TIDIER * mixed and moved_in_time >= in_time - GIVEN_UP:
         return moved
     return result
@@ -1501,9 +1567,9 @@ def save_score(result: Arrangement, target: Path) -> None:
     target.write_text(result.text, encoding="utf-8", newline="\n")
 
 
-def arrange_file(source: Path, target: Path) -> Arrangement:
-    """Arrange a MIDI file with the automatic choices and save the score."""
-    result = arrange(load_midi(source), title=source.name)
+def arrange_file(source: Path, target: Path, tempo: float | None = None) -> Arrangement:
+    """Arrange a MIDI file with the automatic choices (and the tempo given, if any) and save the score."""
+    result = arrange(load_midi(source), title=source.name, tempo=tempo)
     save_score(result, target)
     return result
 
@@ -1539,6 +1605,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="节拍从哪来：auto 只在 MIDI 没有拍号和速度信息时（如音频转录的）从音符推断，"
                              "midi 一律用 MIDI 自带的，notes 一律从音符推断")
     parser.add_argument("--meter", type=int, help="指定每小节几拍，如 3 或 4")
+    parser.add_argument("--tempo", type=float, help="从音符推断节拍时按这个速度读：四分音符每分钟几拍，如 171")
     parser.add_argument("--force", action="store_true", help="覆盖同名曲谱，而不是另存为「名字 (2).txt」")
     args = parser.parse_args(argv)
     if args.output and len(args.midi) > 1:
@@ -1552,7 +1619,7 @@ def main(argv: list[str] | None = None) -> int:
             result = arrange(midi, title=path.name, melody=_numbers_argument(args.melody),
                              drop=_numbers_argument(args.drop), transpose=args.transpose,
                              accompaniment="bass" if args.bass_line else args.accompaniment,
-                             beats=args.beats, meter=args.meter)
+                             beats=args.beats, meter=args.meter, tempo=args.tempo)
         except (OSError, MidiError, ArrangeError) as error:
             print(f"   无法编配：{error}")
             failed += 1
@@ -1566,6 +1633,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{'按原谱的拍点' if result.exact else '已按拍子量化'}；共 {result.bars} 小节")
         if result.timing:
             print(f"   {describe_timing(result.timing)}")
+        if result.doubt:
+            print(f"   注意：{result.doubt}")
         if result.changes:
             print(f"   {len(result.changes)} 个黑键音改到了相邻白键，曲谱里对应小节末尾有注释")
         if result.strays:
