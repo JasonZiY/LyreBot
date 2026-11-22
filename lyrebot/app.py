@@ -22,7 +22,8 @@ from tkinter import messagebox as system_dialogs
 from typing import Callable
 
 from . import chrome, dialogs, guide, icons, quickstart
-from .arrange import ARRANGED, ArrangeError, arrange, arrange_file, finds_beats, given_tempo, save_score
+from .arrange import (ARRANGED, ArrangeError, arrange, arrange_file, finds_beats, given_tempo, read_tempo, save_score,
+                      tempo_text)
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
 from .beats import FASTEST, SLOWEST
 from .collate import pinyin_key
@@ -453,23 +454,27 @@ def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
     return f"已经有叫「{name}」的曲谱或文件了，请换一个：" if taken else None
 
 
-TEMPO_LABEL = "速度（四分音符每分钟几拍）"
+TEMPO_LABEL = "速度（四分音符每分钟几拍，或 ♩.=56）"
 TEMPO_HINT = "不填就自动判断"
 TEMPO_NOTE = ("谱上印着速度的话可以填上，编配就按这个速度读拍子；不填就由它自己判断。"
-              "谱上印的是附点四分音符的速度（♩.=）的话，先乘以 1.5。")
-TEMPO_PROBLEM = f"速度要填四分音符每分钟的拍数，{SLOWEST:g} 到 {FASTEST:g} 之间，比如 171；不填就自动判断。"
-TEMPO_TEXT = re.compile(r"(?:♩\s*=\s*)?(\d+(?:\.\d+)?)\s*(?:bpm|拍)?", re.I)
+              "谱上印的是附点四分音符的速度，就照样写成 ♩.=56，会按 6/8 这类复拍子读。")
+TEMPO_PROBLEM = (f"速度要填四分音符每分钟的拍数，{SLOWEST:g} 到 {FASTEST:g} 之间，比如 171；"
+                 "附点四分音符的速度写成 ♩.=56；不填就自动判断。")
 
 
-def tempo_answer(text: str) -> float | None:
-    """The tempo written in a tempo box (171, or ♩=171), None when it is left empty; ValueError when it is
-    something else, or out of the range the beat is looked for in."""
-    if not text.strip():
-        return None
-    found = TEMPO_TEXT.fullmatch(text.strip())
-    if not found or not SLOWEST <= float(found.group(1)) <= FASTEST:
-        raise ValueError(text)
-    return float(found.group(1))
+def tempo_answer(text: str) -> tuple[float, bool] | None:
+    """The tempo written in a tempo box (171, ♩=171, or ♩.=56 for dotted quarters) as (quarter notes a
+    minute, whether dotted), None when it is left empty; ValueError when it is something else, or out of
+    the range the beat is looked for in."""
+    return read_tempo(text)
+
+
+def tempo_written(tempo: tuple[float, bool] | None) -> str:
+    """A tempo as it is written in a tempo box: 171, or ♩.=56."""
+    if tempo is None:
+        return ""
+    bpm, dotted = tempo
+    return f"♩.={bpm / 1.5:g}" if dotted else f"{bpm:g}"
 
 
 def midi_for(score: Path, midi_dir: Path) -> Path | None:
@@ -913,7 +918,8 @@ class App:
         # selecting a row also fires <<TreeviewSelect>> later, which redraws the details.
         # (A third element, True, shows it as a warning.)
         self.notice: tuple[Path, str] | tuple[Path, str, bool] | None = None
-        self.tempos: dict[str, float] = {}  # the tempo given for a recording, by its name, until it is arranged
+        # The tempo given for a recording (quarter notes a minute, whether dotted), by its name, until arranged.
+        self.tempos: dict[str, tuple[float, bool]] = {}
         self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
         self.worker: threading.Thread | None = None  # playing or recording
         self.recording = False
@@ -1621,7 +1627,7 @@ class App:
         self.say(f"正在编配 {source.name}…")
         self.root.update_idletasks()
         try:
-            result = arrange_file(source, target, self.tempos.pop(source.stem, None))
+            result = arrange_file(source, target, *self.tempos.pop(source.stem, (None, False)))
         except (OSError, MidiError, ArrangeError) as error:
             try:
                 self.failed_midi[source] = source.stat().st_mtime
@@ -1659,8 +1665,7 @@ class App:
         question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
         tempo = None
         if finds_beats(midi):
-            given = given_tempo(old) if old else None
-            written = f"{given:g}" if given else ""
+            written = tempo_written(given_tempo(old) if old else None)
             message = f"{question}{TEMPO_NOTE}"
             while True:
                 answer = dialogs.ask_fields("从 MIDI 重新编配", message, [(TEMPO_LABEL, written, TEMPO_HINT)],
@@ -1678,14 +1683,15 @@ class App:
         # The whole arrangement runs again, here: a few seconds for a long song.  Say so before it starts.
         self.say(f"正在重新编配 {source.name}…")
         self.root.update_idletasks()
+        bpm, dotted = tempo or (None, False)
         try:
-            result = arrange(midi, title=source.name, tempo=tempo)
+            result = arrange(midi, title=source.name, tempo=bpm, dotted=dotted)
         except (OSError, MidiError, ArrangeError) as error:
             self.say(f"{source.name} 无法编配：{error}", warn=True)
             dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
             return
         if result.doubt and not dialogs.confirm(
-                "速度可能填错了", f"仍按每分钟 {tempo:g} 拍编配「{score.stem}」吗？\n\n{result.doubt}。",
+                "速度可能填错了", f"仍按{tempo_text(bpm, dotted)}编配「{score.stem}」吗？\n\n{result.doubt}。",
                 parent=self.root, yes="仍按这个速度", no="不编配了", danger=True):
             self.notice = (score, "没有重新编配，曲谱保持原样")
             self.show_selected()
@@ -1753,7 +1759,7 @@ class App:
         self.worker = threading.Thread(target=self.run_recording, args=(self.midi_dir / f"{name}.wav",), daemon=True)
         self.worker.start()
 
-    def ask_recording(self) -> tuple[str, float | None] | None:
+    def ask_recording(self) -> tuple[str, tuple[float, bool] | None] | None:
         """The name to save a recording under and the tempo to read its beat at (None: guessed), or None
         if the user cancelled.  A name or tempo that will not do asks again, with what was written kept."""
         question = f"要录的是哪首曲子？\n\n曲谱会叫「曲名{RECORDING_SUFFIX}」。{TEMPO_NOTE}"

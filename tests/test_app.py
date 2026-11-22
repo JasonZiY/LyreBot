@@ -184,15 +184,17 @@ class TypedSpeed(unittest.TestCase):
 
 class TypedTempo(unittest.TestCase):
     def test_a_tempo_may_be_written_as_a_score_prints_it(self):
-        from lyrebot.app import tempo_answer
-        for text, bpm in (("171", 171.0), (" ♩=171 ", 171.0), ("♩ = 96.5", 96.5), ("120bpm", 120.0),
-                          ("88 拍", 88.0), ("40", 40.0), ("220", 220.0)):
-            self.assertEqual(tempo_answer(text), bpm)
+        from lyrebot.app import tempo_answer, tempo_written
+        for text, tempo in (("171", (171.0, False)), (" ♩=171 ", (171.0, False)), ("♩ = 96.5", (96.5, False)),
+                            ("120bpm", (120.0, False)), ("88 拍", (88.0, False)), ("40", (40.0, False)),
+                            ("220", (220.0, False)), ("♩.=56", (84.0, True)), ("♩. = 40", (60.0, True))):
+            self.assertEqual(tempo_answer(text), tempo)
         self.assertIsNone(tempo_answer("  "))  # left empty: guessed from the notes
+        self.assertEqual([tempo_written(tempo) for tempo in ((171.0, False), (84.0, True), None)], ["171", "♩.=56", ""])
 
     def test_what_is_no_tempo_to_read_at_is_refused(self):
         from lyrebot.app import tempo_answer
-        for text in ("快", "39.9", "220.1", "-120", "1/4=120", "♩.=60"):  # (♩.= is to be multiplied by 1.5 first)
+        for text in ("快", "39.9", "220.1", "-120", "1/4=120", "56.", "♩.=150"):  # (♩.=150 is 225 quarters)
             with self.assertRaises(ValueError):
                 tempo_answer(text)
 
@@ -345,7 +347,7 @@ class Folders(unittest.TestCase):
         from lyrebot.app import App, TEMPO_LABEL, TEMPO_PROBLEM
         app = App(self.window(), self.scores, self.midi)
         with mock.patch("lyrebot.app.dialogs.ask_fields", side_effect=[["新歌", "快"], ["新歌", "♩=171"]]) as asked:
-            self.assertEqual(app.ask_recording(), ("新歌-录音", 171.0))
+            self.assertEqual(app.ask_recording(), ("新歌-录音", (171.0, False)))
         first, again = asked.call_args_list
         self.assertEqual([label for label, _, _ in first.args[2]], ["曲名", TEMPO_LABEL])
         self.assertIn(TEMPO_PROBLEM, again.args[1])  # not a tempo: asked again, with what was written kept
@@ -363,7 +365,7 @@ class Folders(unittest.TestCase):
         app = App(root, self.scores, self.midi)
         source = self.midi / "律动-录音.mid"
         source.write_bytes(loose_groove_file(0.025, 1))  # a steady 150 a minute, guessed at 75
-        app.tempos["律动-录音"] = 150.0  # as record() leaves it
+        app.tempos["律动-录音"] = (150.0, False)  # as record() leaves it
         app.arrange_one(source, "刚从录音编配好")
         target = self.scores / "律动-录音.txt"
         text = target.read_text(encoding="utf-8")
@@ -390,7 +392,7 @@ class Folders(unittest.TestCase):
 
         again = self.midi / "律动二-录音.mid"
         again.write_bytes(loose_groove_file(0.025, 1))
-        app.tempos["律动二-录音"] = 97.0
+        app.tempos["律动二-录音"] = (97.0, False)
         app.arrange_one(again, "刚从录音编配好")
         root.update()
         self.assertIn("刚从录音编配好。按每分钟 97 拍读", app.status_label.cget("text"))

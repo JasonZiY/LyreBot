@@ -79,7 +79,7 @@
 
 ## 从录音生成曲谱
 
-点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 左边的 <img src="assets/readme/record.png" alt="●" height="22" align="absmiddle">，填上曲名（录音和曲谱都叫「曲名-录音」，不填就按时间起名）；手里有这首的谱子的话，还可以填上谱上印的速度，也就是四分音符每分钟几拍，编配就按这个速度读拍子，不填就由它自己判断。然后在别处播放想编配的音乐，视频网站、音乐软件、游戏里的背景音乐都可以。LyreBot 录的是电脑扬声器正在播放的声音，所以开始前先关掉其他声音。有声音时才开始录（等 5 分钟还没有声音就不录了），点 <img src="assets/readme/recording.png" alt="■" height="22" align="absmiddle">、安静 5 秒或录满 10 分钟时结束。
+点 <img src="assets/readme/play.png" alt="▶" height="22" align="absmiddle"> 左边的 <img src="assets/readme/record.png" alt="●" height="22" align="absmiddle">，填上曲名（录音和曲谱都叫「曲名-录音」，不填就按时间起名）；手里有这首的谱子的话，还可以填上谱上印的速度，也就是四分音符每分钟几拍，编配就按这个速度读拍子，不填就由它自己判断；谱上印的是附点四分音符的速度（6/8 这类拍子常见），就照样写成 ♩.=56。然后在别处播放想编配的音乐，视频网站、音乐软件、游戏里的背景音乐都可以。LyreBot 录的是电脑扬声器正在播放的声音，所以开始前先关掉其他声音。有声音时才开始录（等 5 分钟还没有声音就不录了），点 <img src="assets/readme/recording.png" alt="■" height="22" align="absmiddle">、安静 5 秒或录满 10 分钟时结束。
 
 录完以后，录音存成 `midi` 文件夹里的「曲名-录音.wav」，再由 MuScriptor 模型转成同名的 MIDI，最后照上一节的方法编配成 `txt` 里的曲谱并选中它。转录在后台进行，不影响演奏；演奏时不会开始新的转录。也可以直接把音频文件放进 `midi` 文件夹：WAV 可以直接转，MP3、FLAC、M4A、OGG 需要电脑上装有 [ffmpeg](https://ffmpeg.org/)。已经有同名 MIDI 或曲谱的音频不会再转。
 
