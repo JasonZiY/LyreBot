@@ -21,8 +21,8 @@ b.h.h.j.q-|0.a.v.a.f.a.
 w-e--|g.a.a.g.a.g.
 -e--|d.g.a.g.a.g.
 .e'r~e~w--|s.g.b.s.g.s.
--j--|h.g.c.m.~d.m~
--{1/3}q-{2/3}|~g.m{7/12}n{2/3}d.h.
+-j--|h.g.c.m.d.m.
+-q--|g.m-n.d.h.
 .h.g.j-.|m.a-n.d.n.
 q-g.t-.|m.a-na.d.h.
 -e~r~e-w.|j.a.g.na.d.hj.
@@ -51,7 +51,7 @@ e-w-t-|z.b.a.b.s.b.
 w---|b.x.b.x.n.x.
 w---|b.x.b.x.n.x.
 w--.w~e~|b.x.b.x.n.x.
--q-t-|.x.b.x.n.x.
+w-q-t-|b.x.b.x.n.x.
 q--m.c.|n.c.n.c.0-
 q--m.c.|n.c.n.c.0-
 q--m.c.|n.c.n.c.0-
@@ -72,8 +72,6 @@ t--.d.|va.z.v.b.n-
 q.w.e.r~t~y~u.q~|v.z.v.b.n.d.
 w--.w~e'w~|bs.x.b.n.m.s.
 q-j-g-|b.x.b.n.m.s.
----|--~0.~
-w~q~t--.|0.zs-~x-~
-~m-a~a~m~a~a~m~a~|---
-a~m~a~a~a~m~a~a~m~a~a.|--.xb.
+---|---
+w~q~t--.|0.zs--.
 0---|0---

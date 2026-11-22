@@ -1,0 +1,73 @@
+# 由 MIDI 自动编配：暮夜绮想-录音.mid
+# 原曲的音阶相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调，88% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍按指定的每分钟 171 拍从音符读出：约每分钟 171 拍（四分音符），速度平稳，4/4 拍
+speed=171
+0-q.j.q.q-w.|0-a.m.a.a-s.  # 改动 ♯1→q 伴奏♯1→a
+.q.w.w-e.r.r.|.a.s.s-d.f.f.  # 改动 ♯1→q ♭3→w ♯4→r 伴奏♯1→a 伴奏♭3→s 伴奏♯4→f
+t-t-r.e-w.|g-g-f.d-s.
+-t--m.a.|-bg-b.b.0-
+s-a-.f.d.s.|z-cb-b-cb-  # 改动 ♭3→s
+d-a-.f.d.s.|z-cb-b-cb-  # 改动 ♭3→s
+d.s.d.a-b.m.a.|z-cb-b-cb-  # 改动 ♭3→s
+s.a.f.d-b.m.a.|z-cb-b-c-
+s-a-.f.d.s.|n-zc-c-zc-  # 改动 ♭3→s
+d-a-.f.g.g~f~|n-zc-c-zc-  # 改动 ♯4→g
+d.s.d.a-.g.f.|n-zc-c-0-  # 改动 ♭3→s ♯4→f
+g.f.g.q.a.m.a.g.|0-.b.0-v-  # 改动 ♯4→f
+f.f-g.f.d.f-|vna.vna.z-vn-v-
+s.b-f.d.s.d-|v-z-v-zcb-  # 改动 ♯5→b ♭3→s
+d.g-f.g.q-.|0-bm-.cn-0.  # 改动 ♯4→f
+t~t~r~e~e~w~q-.s-|0-.m.a.d.x-  # 改动 ♯4→t ♭3→e
+n.v-d.s.a.s-|x.x.0-x-x-  # 改动 ♯4→v ♯1→a
+s.n-s-s~a~b.v.|x.x.0-x.0-.  # 改动 ♯1→s ♯4→v
+b.n-b.b.n-b.|0----  # 改动 ♯5→n ♯5→b ♯5→b
+n.m.0.a.s.t~y~y-|0---zg-  # 改动 ♭7→m ♯1→a
+q~y~e~q~g.g.j.q.w-|cb-b-cb-z-  # 改动 ♭7→y
+q-.r.e.w.e-|cb-b-cb-z-  # 改动 ♭3→w
+q-.r.e.w.e.w.|cb-b-cb-z-  # 改动 ♭3→w ♭3→w
+e.q-.m.a.s-|cb-b.b.c-z-
+f.d-g.j.q.w-|cb-b-cb-n-
+q-.r.e.w.e-|zc-c-zc-n-  # 改动 ♭3→w
+q-.r.t.t~r~e.w.|zc-c-zc-n-  # 改动 ♯4→t ♭3→w
+e.q-.d.d-d.|zc-c-zca.a.z.a.
+.g.q.j.q.t-r.|cb-b-cb-v-
+-.t.r.e.r-|vna-vna-vna-v-
+-.e.w.r-.|vas-vas-vas-z-
+.e.r.q.e--|cba-cba-cba-c-
+.r.e.w-q-.|c-b-m-n-  # 改动 伴奏♯5→b
+-.j.q.e.w-|cna-c-cna-x-
+h-.e.r.t-.|ns.ns.n-ns-0-  # 改动 ♯4→t
+g.f.g.g-h-g.|b.v.b.b-n-b.  # 改动 ♯4→f ♯5→g ♯5→g 伴奏♯4→v 伴奏♯5→b 伴奏♯5→b
+h.h-j.q.q-w.|n.n-m.a.a-ms.  # 改动 ♭7→h ♯1→q 伴奏♭7→n 伴奏♯1→a
+w.q.q.w-t-.|ms.n.n.ms-bg-.  # 改动 ♯1→q ♯1→q 伴奏♭7→n 伴奏♭7→n
+h.g.h.g.h.q.q-|0---v-  # 改动 ♯5→g ♯5→g
+-.h.q.r-.|vna-vna-vna-vna-
+.e-w-e.w.q.|vna-vna-vna-c-
+a.g.a.t.r.t-t.|cb-cb.d.cba.d.cba.d.  # 改动 ♯4→r
+r.t.a.f.g.g.h-|cba.d.cb-cba-v-  # 改动 ♯4→r ♯4→f ♯5→g
+-.h.q.r-.|vna-vna-vna-vna-
+.e-w-w.e.t.|vna-vna-vna-z-  # 改动 ♭3→w
+.t---.|cba-cba-cba-v-
+h.g.h.g.h.q-.|0---v-  # 改动 ♯5→g ♯5→g
+-.h.q.r-.|vna.vna.z-vna-v-
+.e.e.w.w.e.w.q.|va.va.z-va-z-  # 改动 ♭3→e
+.g-w.e.t.a.g.|cba.cba.b-cba-z.d.  # 改动 ♭3→w
+g.g.h.h.j.q-q.|d.zad.za-0--  # 改动 ♭7→h ♯1→q
+w.q.w.j.w.h.w.h.|bmf-0-bmf-0-  # 改动 ♭7→h
+w.g---f.|bmf-.x.v.v.b-  # 改动 ♯5→g 伴奏♯4→v
+f.g.h.h.0-t.t.|0-xvf.xvf.0-bg-  # 改动 ♯4→f ♯5→h ♯5→h
+t-t.b.m.a.s-|.g.0--z-
+a-.f.d.s.d-|cb-b-c-z-  # 改动 ♭3→s
+a-.f.d.s.d.s.|cn-b-c-z-  # 改动 ♭3→s ♭3→s
+d.a-g.j.q.w.q.|cb-b-cb-b-
+r.t--.s-|xm-b.b.xm.a.z-
+a-.f.d.s.d-|cb.cb.b-c-z-  # 改动 ♭3→s
+a-.f.g.g~f~d.s.|cn-b-c-z-  # 改动 ♯4→g ♭3→s
+d.a-.g.g.g.g.|cb.cb.b-cb-z-
+g.g-g.j.q.w-|cb-b-cb-z-
+q-.t-e.e.w.|cba-z.cba-.z.b.  # 改动 ♭3→w
+d.g-f.g.q-q.|c.b-v.b.a-a.  # 改动 ♯4→f 伴奏♯4→v
+j.q.w.q.--|m.a.s.a.--
+0----|0----
