@@ -59,8 +59,6 @@ class Timing:
     denominator: int
     stretches: int = 0  # when not steady as a whole: the steady stretches it was fitted as, 0 if followed
     slides: int = 0  # places where the beat of that tempo was moved to stay on the notes
-    given: float | None = None  # the tempo the user gave (quarter notes a minute), when it was read at that
-    dotted: bool = False  # ... given for a dotted quarter (♩.=), the beat of 6/8
 
     @property
     def signature(self) -> str:
@@ -498,8 +496,7 @@ def _align(accent: list[float], span: int, group: int, mend: bool) -> list[int]:
 
 
 def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
-           meter: int | None = None, mend: bool = True,
-           compound: bool = False) -> tuple[int, int, int, list[float]]:
+           meter: int | None = None, mend: bool = True) -> tuple[int, int, int, list[float]]:
     """(eighths per beat, beats per bar, index of the first downbeat, pulses).
 
     Each eighth gets an accent from the notes starting on it (bass and long
@@ -532,14 +529,9 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
 
     if meter:
         span = 2 * meter
-    elif compound:  # the beat is a dotted quarter: 6/8
-        span = 6
     else:
         span = 6 if repeats(6) + repeats(12) > repeats(8) + repeats(16) else 8
-    if compound:
-        group = 3 if span % 3 == 0 else 2
-    else:
-        group = 3 if span == 6 and not meter and repeats(3) > repeats(2) else 2
+    group = 3 if span == 6 and not meter and repeats(3) > repeats(2) else 2
     places = _align(accent, span, group, mend)
     mended = [pulses[0]]
     for index in range(1, len(pulses)):
@@ -554,8 +546,7 @@ def _meter(pulses: list[float], notes: list[tuple[float, float, int]],
 
 def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
                playback: bool = False, period: float | None = None,
-               one_tempo: bool = False, slide: bool = False,
-               stretches: bool = True, compound: bool = False) -> tuple[MidiFile, Timing] | None:
+               one_tempo: bool = False, slide: bool = False) -> tuple[MidiFile, Timing] | None:
     """The file rewritten against the beat found in its notes, or None when
     there are too few notes to tell.  ``meter`` fixes the quarter-note beats
     per bar; ``steady`` is how much the pulse may wobble and still be taken
@@ -567,12 +558,10 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
 
     With ``playback`` the beat only has to play the notes back as they were
     played: a pulse that is not one tempo but a few steady stretches is
-    fitted as those instead of followed (unless ``stretches`` is False), and
-    no pulse is ever added or dropped to square the bars.  Mending the bars
-    that way turns a pulse the tracker slipped into a bar of a wrong tempo,
-    which is heard; a bar line in the wrong place is not.  ``compound`` says
-    the beat is a dotted quarter, as a tempo given as ♩.= says: the bar is 6/8
-    (or, with ``meter``, that many quarters' worth of eighths in threes).
+    fitted as those instead of followed, and no pulse is ever added or
+    dropped to square the bars.  Mending the bars that way turns a pulse the
+    tracker slipped into a bar of a wrong tempo, which is heard; a bar line
+    in the wrong place is not.
     """
     seconds = _seconds_of(midi)
     pitched = [note for note in midi.notes if note.channel != 9]
@@ -596,7 +585,7 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
         fitted = _one_tempo(pulses, times, weights)
     is_steady = fitted is not None
     pieces = 0
-    if not is_steady and playback and stretches:
+    if not is_steady and playback:
         fitted, pieces = _steady_stretches(pulses, steady) or (None, 0)
     slides = 0
     if slide:
@@ -604,7 +593,7 @@ def find_beats(midi: MidiFile, meter: int | None = None, steady: float = STEADY,
             return None
         fitted, slides = _slid(fitted, times, weights)
     pulses = fitted or pulses
-    group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not (is_steady or playback), compound=compound)
+    group, per_bar, phase, pulses = _meter(pulses, notes, meter, mend=not (is_steady or playback))
 
     first_gap, last_gap = pulses[1] - pulses[0], pulses[-1] - pulses[-2]
 

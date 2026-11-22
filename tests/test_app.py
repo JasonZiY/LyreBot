@@ -13,11 +13,9 @@ from lyrebot.app import (IN_ORDER, REGIONS, REPEAT, SETTLE, SHUFFLE, SINGLE, Shu
 
 try:  # run as part of the tests package, or by unittest discovery from the tests folder
     from .test_arrange import song
-    from .test_beats import loose_groove_file
     from .test_transcribe import fake_tools
 except ImportError:
     from test_arrange import song
-    from test_beats import loose_groove_file
     from test_transcribe import fake_tools
 
 SONGS = [Path("a.txt"), Path("b.txt"), Path("c.txt")]
@@ -182,23 +180,6 @@ class TypedSpeed(unittest.TestCase):
             self.assertIsNone(parse_speed(text))
 
 
-class TypedTempo(unittest.TestCase):
-    def test_a_tempo_may_be_written_as_a_score_prints_it(self):
-        from lyrebot.app import tempo_answer, tempo_written
-        for text, tempo in (("171", (171.0, False)), (" ♩=171 ", (171.0, False)), ("♩ = 96.5", (96.5, False)),
-                            ("120bpm", (120.0, False)), ("88 拍", (88.0, False)), ("40", (40.0, False)),
-                            ("220", (220.0, False)), ("♩.=56", (84.0, True)), ("♩. = 40", (60.0, True))):
-            self.assertEqual(tempo_answer(text), tempo)
-        self.assertIsNone(tempo_answer("  "))  # left empty: guessed from the notes
-        self.assertEqual([tempo_written(tempo) for tempo in ((171.0, False), (84.0, True), None)], ["171", "♩.=56", ""])
-
-    def test_what_is_no_tempo_to_read_at_is_refused(self):
-        from lyrebot.app import tempo_answer
-        for text in ("快", "39.9", "220.1", "-120", "1/4=120", "56.", "♩.=150"):  # (♩.=150 is 225 quarters)
-            with self.assertRaises(ValueError):
-                tempo_answer(text)
-
-
 class Folders(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -329,74 +310,16 @@ class Folders(unittest.TestCase):
         told.assert_called_once()
         self.assertIsNone(app.worker)
         self.add_midi("旧歌-录音.mid")
-        answers = [["旧歌", ""], ["a:b", "171"], None]
+        answers = ["旧歌", "a:b", None]
         with mock.patch("lyrebot.app.find_tools", return_value=fake_tools(self.root)), \
-                mock.patch("lyrebot.app.dialogs.ask_fields", side_effect=answers) as asked:
+                mock.patch("lyrebot.app.dialogs.ask_text", side_effect=answers) as asked:
             app.record()  # two names refused, then cancelled
         self.assertEqual(asked.call_count, 3)
         self.assertIn("已经有叫「旧歌-录音」", asked.call_args_list[1].args[1])
         self.assertIn("不能", asked.call_args_list[2].args[1])
-        self.assertEqual(asked.call_args_list[1].args[2][0][1], "旧歌")  # the title is kept to edit
-        self.assertEqual(asked.call_args_list[2].args[2][1][1], "171")  # and so is the tempo
+        self.assertEqual(asked.call_args_list[1].kwargs["initialvalue"], "旧歌")  # the title is kept to edit
         self.assertIsNone(app.worker)
         self.assertFalse(app.recording)
-        self.assertEqual(app.tempos, {})
-
-    def test_a_recording_is_asked_the_tempo_printed_on_its_score(self):
-        from unittest import mock
-        from lyrebot.app import App, TEMPO_LABEL, TEMPO_PROBLEM
-        app = App(self.window(), self.scores, self.midi)
-        with mock.patch("lyrebot.app.dialogs.ask_fields", side_effect=[["新歌", "快"], ["新歌", "♩=171"]]) as asked:
-            self.assertEqual(app.ask_recording(), ("新歌-录音", (171.0, False)))
-        first, again = asked.call_args_list
-        self.assertEqual([label for label, _, _ in first.args[2]], ["曲名", TEMPO_LABEL])
-        self.assertIn(TEMPO_PROBLEM, again.args[1])  # not a tempo: asked again, with what was written kept
-        self.assertEqual(again.args[2][1][1], "快")
-        with mock.patch("lyrebot.app.dialogs.ask_fields", return_value=["", ""]):
-            name, tempo = app.ask_recording()
-        self.assertTrue(name.startswith("录音 "))  # no title: named by the time
-        self.assertIsNone(tempo)  # no tempo: guessed from the notes
-
-    def test_a_recording_is_arranged_at_the_tempo_given_and_asked_it_again(self):
-        from unittest import mock
-        from lyrebot.app import App, TEMPO_PROBLEM
-        from lyrebot.theme import WARN
-        root = self.window()
-        app = App(root, self.scores, self.midi)
-        source = self.midi / "律动-录音.mid"
-        source.write_bytes(loose_groove_file(0.025, 1))  # a steady 150 a minute, guessed at 75
-        app.tempos["律动-录音"] = (150.0, False)  # as record() leaves it
-        app.arrange_one(source, "刚从录音编配好")
-        target = self.scores / "律动-录音.txt"
-        text = target.read_text(encoding="utf-8")
-        self.assertIn("# 节拍按指定的每分钟 150 拍从音符读出：约每分钟 150 拍", text)
-        self.assertEqual(app.tempos, {})
-        with mock.patch("lyrebot.app.dialogs.ask_fields", return_value=["150"]) as asked, \
-                mock.patch("lyrebot.app.dialogs.confirm") as confirmed:
-            app.rearrange()
-        self.assertEqual(asked.call_args.args[2][0][1], "150")  # the tempo it was given, filled in
-        self.assertEqual(asked.call_args.kwargs["yes"], "重新编配")
-        confirmed.assert_not_called()  # arranged as it is: nothing more to ask
-        self.assertEqual(target.read_text(encoding="utf-8"), text)
-        with mock.patch("lyrebot.app.dialogs.ask_fields", return_value=["97"]), \
-                mock.patch("lyrebot.app.dialogs.confirm", return_value=False) as asked:
-            app.rearrange()  # far from the music: asked whether to keep it, and declined
-        self.assertEqual(asked.call_args.kwargs["yes"], "仍按这个速度")
-        self.assertIn("只有 70% 的音和录音对得上", asked.call_args.args[1])
-        self.assertEqual(target.read_text(encoding="utf-8"), text)
-        with mock.patch("lyrebot.app.dialogs.ask_fields", side_effect=[["快"], [""]]) as asked, \
-                mock.patch("lyrebot.app.dialogs.confirm", return_value=True):
-            app.rearrange()  # no tempo at all: asked again; left empty, it is guessed
-        self.assertIn(TEMPO_PROBLEM, asked.call_args_list[1].args[1])
-        self.assertIn("# 节拍是从音符推断的：约每分钟 75 拍", target.read_text(encoding="utf-8"))
-
-        again = self.midi / "律动二-录音.mid"
-        again.write_bytes(loose_groove_file(0.025, 1))
-        app.tempos["律动二-录音"] = (97.0, False)
-        app.arrange_one(again, "刚从录音编配好")
-        root.update()
-        self.assertIn("刚从录音编配好。按每分钟 97 拍读", app.status_label.cget("text"))
-        self.assertEqual(app.status_label.cget("fg"), WARN)
 
     def test_the_window_writes_down_the_keys_played(self):
         from unittest import mock

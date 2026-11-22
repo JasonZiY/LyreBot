@@ -22,10 +22,8 @@ from tkinter import messagebox as system_dialogs
 from typing import Callable
 
 from . import chrome, dialogs, guide, icons, quickstart
-from .arrange import (ARRANGED, ArrangeError, arrange, arrange_file, finds_beats, given_tempo, read_tempo, save_score,
-                      tempo_text)
+from .arrange import ARRANGED, ArrangeError, arrange, arrange_file, save_score
 from .audition import INSTRUMENTS, PIANO, Audition, AuditionError
-from .beats import FASTEST, SLOWEST
 from .collate import pinyin_key
 from . import jianpu
 from .jianpu import export as export_jianpu
@@ -452,29 +450,6 @@ def name_problem(name: str, scores_dir: Path, midi_dir: Path) -> str | None:
     taken = name.casefold() in score_names(scores_dir) or (
         midi_dir.is_dir() and any(path.stem.casefold() == name.casefold() for path in midi_dir.iterdir()))
     return f"已经有叫「{name}」的曲谱或文件了，请换一个：" if taken else None
-
-
-TEMPO_LABEL = "速度（四分音符每分钟几拍，或 ♩.=56）"
-TEMPO_HINT = "不填就自动判断"
-TEMPO_NOTE = ("谱上印着速度的话可以填上，编配就按这个速度读拍子；不填就由它自己判断。"
-              "谱上印的是附点四分音符的速度，就照样写成 ♩.=56，会按 6/8 这类复拍子读。")
-TEMPO_PROBLEM = (f"速度要填四分音符每分钟的拍数，{SLOWEST:g} 到 {FASTEST:g} 之间，比如 171；"
-                 "附点四分音符的速度写成 ♩.=56；不填就自动判断。")
-
-
-def tempo_answer(text: str) -> tuple[float, bool] | None:
-    """The tempo written in a tempo box (171, ♩=171, or ♩.=56 for dotted quarters) as (quarter notes a
-    minute, whether dotted), None when it is left empty; ValueError when it is something else, or out of
-    the range the beat is looked for in."""
-    return read_tempo(text)
-
-
-def tempo_written(tempo: tuple[float, bool] | None) -> str:
-    """A tempo as it is written in a tempo box: 171, or ♩.=56."""
-    if tempo is None:
-        return ""
-    bpm, dotted = tempo
-    return f"♩.={bpm / 1.5:g}" if dotted else f"{bpm:g}"
 
 
 def midi_for(score: Path, midi_dir: Path) -> Path | None:
@@ -916,10 +891,7 @@ class App:
         self.told_empty = False
         # A note such as "just arranged" kept in front of a song's details while it stays selected:
         # selecting a row also fires <<TreeviewSelect>> later, which redraws the details.
-        # (A third element, True, shows it as a warning.)
-        self.notice: tuple[Path, str] | tuple[Path, str, bool] | None = None
-        # The tempo given for a recording (quarter notes a minute, whether dotted), by its name, until arranged.
-        self.tempos: dict[str, tuple[float, bool]] = {}
+        self.notice: tuple[Path, str] | None = None
         self.cache: dict[Path, tuple[float, Score | ScoreError]] = {}
         self.worker: threading.Thread | None = None  # playing or recording
         self.recording = False
@@ -1482,10 +1454,7 @@ class App:
                 self.set_fraction(bar_seconds(score, bar, 1.0) / score.duration_seconds)
             self.say(GO_ON)
             return
-        if self.notice:
-            self.say(self.notice[1], warn=len(self.notice) > 2 and self.notice[2])
-        else:
-            self.say(READY)
+        self.say(self.notice[1] if self.notice else READY)
 
     def open_folder(self, folder: Path) -> None:
         folder.mkdir(parents=True, exist_ok=True)
@@ -1627,7 +1596,7 @@ class App:
         self.say(f"正在编配 {source.name}…")
         self.root.update_idletasks()
         try:
-            result = arrange_file(source, target, *self.tempos.pop(source.stem, (None, False)))
+            arrange_file(source, target)
         except (OSError, MidiError, ArrangeError) as error:
             try:
                 self.failed_midi[source] = source.stat().st_mtime
@@ -1636,25 +1605,26 @@ class App:
             self.say(f"{source.name} 无法编配：{error}", warn=True)
         else:
             self.refresh()
-            if result.doubt:
-                self.notice = (target, f"{done}。{result.doubt}，可以右键选「从 MIDI 重新编配」换个速度", True)
-            else:
-                self.notice = (target, done)
+            self.notice = (target, done)
             self.select(target)
 
     def rearrange(self) -> None:
-        """Arrange the selected score again from its MIDI file, replacing it.  A recording, whose beat is
-        found in its notes, is asked the tempo to read it at as well, the one it was given last time
-        filled in.  Once it is arranged, and before it is written, a tempo that plays the recording
-        clearly worse than the guess asks again, and a score that differs from the new arrangement asks
-        a second time, naming the bars that would be lost; one that does not is left alone."""
+        """Arrange the selected score again from its MIDI file, replacing it.  Once it is arranged, and
+        before it is written, a score that differs from the new arrangement asks a second time, naming
+        the bars that would be lost; one that does not is left alone."""
         score = self.selected()
         source = midi_for(score, self.midi_dir) if score and not self.worker else None
         if source is None:
             return
+        question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
+        if not dialogs.confirm("从 MIDI 重新编配", question, parent=self.root, yes="重新编配"):
+            return
+        # The whole arrangement runs again, here: a few seconds for a long song.  Say so before it starts.
+        self.say(f"正在重新编配 {source.name}…")
+        self.root.update_idletasks()
         try:
-            midi = load_midi(source)
-        except (OSError, MidiError) as error:
+            result = arrange(load_midi(source), title=source.name)
+        except (OSError, MidiError, ArrangeError) as error:
             self.say(f"{source.name} 无法编配：{error}", warn=True)
             dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
             return
@@ -1662,40 +1632,6 @@ class App:
             old = score.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             old = None  # (nothing that can be read to keep)
-        question = f"用 midi 文件夹里的 {source.name} 重新生成「{score.stem}」？\n\n这份曲谱里手动改过的地方会被覆盖。"
-        tempo = None
-        if finds_beats(midi):
-            written = tempo_written(given_tempo(old) if old else None)
-            message = f"{question}{TEMPO_NOTE}"
-            while True:
-                answer = dialogs.ask_fields("从 MIDI 重新编配", message, [(TEMPO_LABEL, written, TEMPO_HINT)],
-                                            parent=self.root, yes="重新编配")
-                if answer is None:
-                    return
-                written = answer[0]
-                try:
-                    tempo = tempo_answer(written)
-                    break
-                except ValueError:
-                    message = f"{question}{TEMPO_PROBLEM}"
-        elif not dialogs.confirm("从 MIDI 重新编配", question, parent=self.root, yes="重新编配"):
-            return
-        # The whole arrangement runs again, here: a few seconds for a long song.  Say so before it starts.
-        self.say(f"正在重新编配 {source.name}…")
-        self.root.update_idletasks()
-        bpm, dotted = tempo or (None, False)
-        try:
-            result = arrange(midi, title=source.name, tempo=bpm, dotted=dotted)
-        except (OSError, MidiError, ArrangeError) as error:
-            self.say(f"{source.name} 无法编配：{error}", warn=True)
-            dialogs.error("无法编配", f"{source.name}：{error}", parent=self.root)
-            return
-        if result.doubt and not dialogs.confirm(
-                "速度可能填错了", f"仍按{tempo_text(bpm, dotted)}编配「{score.stem}」吗？\n\n{result.doubt}。",
-                parent=self.root, yes="仍按这个速度", no="不编配了", danger=True):
-            self.notice = (score, "没有重新编配，曲谱保持原样")
-            self.show_selected()
-            return
         if old is not None:
             bars, other = differing_bars(old, result.text)
             if not bars and not other:
@@ -1737,14 +1673,9 @@ class App:
         if find_tools(self.tool_dirs) is None:
             dialogs.info("还不能录音", NO_TOOLS, parent=self.root)
             return
-        answer = self.ask_recording()
-        if answer is None:
+        name = self.ask_name()
+        if name is None:
             return
-        name, tempo = answer
-        if tempo is None:
-            self.tempos.pop(name, None)
-        else:
-            self.tempos[name] = tempo  # (arrange_one takes it when the recording has been transcribed)
         self.midi_dir.mkdir(exist_ok=True)
         self.cancel = threading.Event()
         self.recording = True
@@ -1758,27 +1689,6 @@ class App:
         self.say("等待声音：播放想编配的音乐，录完点 ■ 结束")
         self.worker = threading.Thread(target=self.run_recording, args=(self.midi_dir / f"{name}.wav",), daemon=True)
         self.worker.start()
-
-    def ask_recording(self) -> tuple[str, tuple[float, bool] | None] | None:
-        """The name to save a recording under and the tempo to read its beat at (None: guessed), or None
-        if the user cancelled.  A name or tempo that will not do asks again, with what was written kept."""
-        question = f"要录的是哪首曲子？\n\n曲谱会叫「曲名{RECORDING_SUFFIX}」。{TEMPO_NOTE}"
-        message, title, tempo = question, "", ""
-        while True:
-            answer = dialogs.ask_fields("录音", message, [("曲名", title, "不填就按时间起名"),
-                                                          (TEMPO_LABEL, tempo, TEMPO_HINT)], parent=self.root)
-            if answer is None:
-                return None
-            title, tempo = answer
-            name = recording_name(title)
-            problem = name_problem(name, self.scores_dir, self.midi_dir)
-            if problem is not None:
-                message = f"要录的是哪首曲子？\n\n{problem}"
-                continue
-            try:
-                return name, tempo_answer(tempo)
-            except ValueError:
-                message = f"要录的是哪首曲子？\n\n{TEMPO_PROBLEM}"
 
     def ask_name(self, title: str = "录音", suffix: str = RECORDING_SUFFIX, verb: str = "录") -> str | None:
         prompt = f"要{verb}的是哪首曲子？曲谱会叫「曲名{suffix}」（不填就按时间起名）："

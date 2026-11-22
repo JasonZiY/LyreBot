@@ -540,31 +540,6 @@ class Dialogs(unittest.TestCase):
         self.answer("命名", lambda d: d.event_generate("<Escape>"))
         self.assertIsNone(dialogs.ask_text("命名", "叫什么？", parent=self.root))
 
-    def test_ask_fields_gives_what_was_written_in_each_field_or_none(self):
-        seen = {}
-
-        def write(dialog):
-            found, labels = [], []
-
-            def walk(widget):  # in the order they were made: top to bottom
-                if isinstance(widget, tk.Entry):
-                    found.append(widget)
-                elif isinstance(widget, tk.Label) and widget.cget("text"):
-                    labels.append(widget.cget("text"))
-                for child in widget.winfo_children():
-                    walk(child)
-            walk(dialog)
-            seen["started"], seen["labels"] = [entry.get() for entry in found], labels
-            found[1].insert(0, "171")
-        self.answer("录音", write, lambda d: d.event_generate("<Return>"))
-        fields = [("曲名", "歌", "不填就按时间起名"), ("速度", "", "不填就自动判断")]
-        self.assertEqual(dialogs.ask_fields("录音", "录哪首？\n\n曲名和速度", fields, parent=self.root), ["歌", "171"])
-        self.assertEqual(seen["started"], ["歌", ""])
-        for text in ("录哪首？", "曲名和速度", "曲名", "速度", "不填就自动判断"):
-            self.assertIn(text, seen["labels"])  # the question, its details, each label, and the empty one's hint
-        self.answer("录音", lambda d: d.event_generate("<Escape>"))
-        self.assertIsNone(dialogs.ask_fields("录音", "录哪首？", fields, parent=self.root))
-
     def test_a_dialog_wears_the_leather_bar_its_window_wears(self):
         self.root.lyrebot_frame = chrome.Frame(edge=5, caption=40)  # as App.take_frame leaves it
         seen = {}

@@ -8,8 +8,7 @@ from unittest import mock
 
 from lyrebot import beats
 from lyrebot.beats import onset_times
-from lyrebot.arrange import (ArrangeError, _Clock, arrange, beat_readings, given_tempo, mixed_values,
-                             played_in_time, speed_lines)
+from lyrebot.arrange import _Clock, arrange, beat_readings, mixed_values, played_in_time, speed_lines
 from lyrebot.midi import parse_midi
 from lyrebot.score import find_score, load_score, parse_score
 
@@ -175,11 +174,6 @@ class SteadyStretches(unittest.TestCase):
 
 def loose_groove(jitter, seed, bars=40, bpm=150.0):
     """A steady 4/4 groove at ``bpm`` played with ``jitter`` seconds of slop."""
-    return parse_midi(loose_groove_file(jitter, seed, bars, bpm))
-
-
-def loose_groove_file(jitter, seed, bars=40, bpm=150.0):
-    """The bytes of ``loose_groove``'s MIDI file, as a transcription would write it."""
     rng = random.Random(seed)
     played = []
     for bar in range(bars):
@@ -189,64 +183,7 @@ def loose_groove_file(jitter, seed, bars=40, bpm=150.0):
             played += [(on, on + 0.3, 72 + (0, 4, 7, 4)[beat]), (off, off + 0.2, 67)]
         down = 0.5 + bar * 4 * 60 / bpm + rng.gauss(0, jitter)
         played.append((down, down + 4 * 60 / bpm, 36))
-    return smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])])
-
-
-class GivenTempo(unittest.TestCase):
-    """The tempo printed on a score, given when recording or arranging again (3.30.0)."""
-
-    def test_the_beat_is_read_at_the_tempo_given(self):
-        midi = loose_groove(0.025, 1)  # 150 a minute, guessed at the half note
-        guessed = arrange(midi)
-        self.assertAlmostEqual(guessed.timing.bpm, 75, delta=0.1)
-        self.assertIsNone(given_tempo(guessed.text))
-        result = arrange(midi, tempo=150)
-        self.assertTrue(result.timing.steady)
-        self.assertAlmostEqual(result.timing.bpm, 150, delta=0.1)
-        self.assertEqual(result.doubt, "")
-        self.assertIn("# 节拍按指定的每分钟 150 拍从音符读出：约每分钟 150 拍（四分音符），速度平稳，4/4 拍\n",
-                      result.text)
-        self.assertEqual(given_tempo(result.text), (150, False))  # so that arranging it again reads it at 150 too
-
-    def test_a_dotted_quarter_reads_the_bar_in_compound_time(self):
-        """♩.=100 is 150 quarter notes a minute, in dotted quarters: the bar is 6/8."""
-        result = arrange(loose_groove(0.025, 1), tempo=150, dotted=True)
-        self.assertEqual(result.timing.signature, "6/8")
-        self.assertIn("# 节拍按指定的 ♩.=100（每分钟 150 个四分音符）从音符读出：约每分钟 150 拍（四分音符）", result.text)
-        self.assertEqual(given_tempo(result.text), (150, True))
-
-    def test_a_tempo_far_from_the_music_is_doubted(self):
-        midi = loose_groove(0.025, 1)
-        self.assertIn("只有 70% 的音和录音对得上；不填速度时能对上 92%，速度可能填错了", arrange(midi, tempo=97).doubt)
-        self.assertIn("读不出一个稳定的速度，不填速度时整首稳定在每分钟 75 拍", arrange(midi, tempo=200).doubt)
-
-    def test_twice_or_half_the_guessed_tempo_is_not_doubted(self):
-        """The guess reads 75 a minute; 150 is the same music counted in quarters twice as fast, and a
-        reading at it that plays the recording worse is no sign of a mistyped tempo (微波轻摇, printed
-        ♩.=56, is guessed at 42); 97 is."""
-        midi = loose_groove(0.025, 1)
-        given_worse = lambda text, onsets: 0.8 if "指定" in text else 0.95  # noqa: E731
-        with mock.patch("lyrebot.arrange.played_in_time", side_effect=given_worse):
-            self.assertEqual(arrange(midi, tempo=150).doubt, "")
-            self.assertIn("只有 80% 的音和录音对得上；不填速度时能对上 95%", arrange(midi, tempo=97).doubt)
-
-    def test_a_given_tempo_follows_a_swaying_performance_when_that_plays_clearly_better(self):
-        """Fitted in stretches, a swaying performance drifts from each stretch's tempo; read at a given
-        tempo, the pulse followed beat by beat is read as well, and kept if it plays 3 points more."""
-        midi = loose_groove(0.025, 1)
-        found, timing = beats.find_beats(midi, playback=True, period=0.4)
-        stretched = [(found, replace(timing, steady=False, stretches=2))]
-        for followed, stretches in ((0.99, 0), (0.86, 2)):
-            scores = lambda text, onsets, followed=followed: 0.84 if "分 2 段" in text else followed  # noqa: E731
-            with mock.patch("lyrebot.arrange.beat_readings", return_value=stretched), \
-                    mock.patch("lyrebot.arrange.played_in_time", side_effect=scores):
-                self.assertEqual(arrange(midi, tempo=150).timing.stretches, stretches)
-
-    def test_a_tempo_counts_only_for_a_beat_found_in_the_notes(self):
-        written = parse_midi(song((0, [(0, 1, 60), (1, 2, 62), (2, 3, 64), (3, 4, 65)])))
-        self.assertEqual(arrange(written, tempo=150).text, arrange(written).text)
-        with self.assertRaises(ArrangeError):
-            arrange(loose_groove(0.025, 1), tempo=500)
+    return parse_midi(smf([[], notes(0, [(round(s * 960), round(e * 960), p) for s, e, p in played])]))
 
 
 class OneTempo(unittest.TestCase):

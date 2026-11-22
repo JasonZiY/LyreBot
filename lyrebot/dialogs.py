@@ -19,18 +19,7 @@ from .widgets import PillButton, TitleBar, WritingLine
 def ask_text(title: str, prompt: str, initialvalue: str = "", parent: tk.Misc | None = None) -> str | None:
     """What was written, or None if the dialog was cancelled."""
     answer = _show(parent, title, title, prompt, [("取消", "ghost", None), ("确定", "primary", True)],
-                   default=True, fields=[("", initialvalue, "")])
-    return answer[1][0] if answer[0] else None
-
-
-def ask_fields(title: str, message: str, fields: list[tuple[str, str, str]], parent: tk.Misc | None = None,
-               yes: str = "确定", no: str = "取消") -> list[str] | None:
-    """What was written in each of ``fields`` (its label, what it starts with, a hint shown while it is
-    empty), or None if the dialog was cancelled.  The first paragraph of ``message`` is the question, the
-    rest its details, as in ``confirm``; Enter answers yes, Tab goes from one field to the next."""
-    heading, _, body = message.partition("\n\n")
-    answer = _show(parent, title, heading, body.strip(), [(no, "ghost", None), (yes, "primary", True)],
-                   default=True, fields=fields)
+                   default=True, text=initialvalue)
     return answer[1] if answer[0] else None
 
 
@@ -126,8 +115,7 @@ def _beside(owner: tk.Misc, width: int, height: int) -> tuple[int, int]:
 
 
 def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: list[tuple[str, str, object]],
-          default: object, fields: list[tuple[str, str, str]] | None = None,
-          warning: bool = False) -> tuple[object, list[str]]:
+          default: object, text: str | None = None, warning: bool = False) -> tuple[object, str]:
     parent = parent or tk._get_default_root()  # type: ignore[attr-defined]
     owner = parent.winfo_toplevel()
     theme = Theme.of(parent)
@@ -140,7 +128,7 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
     leather = chrome.available() and getattr(owner, "lyrebot_frame", None) is not None
     if owner.winfo_viewable() and not leather:
         window.transient(owner)
-    answer: list[object] = [None, []]
+    answer: list[object] = [None, ""]
     cancel = buttons[0][2] if len(buttons) > 1 else default
     if leather:  # the owner's dress: a title bar of leather, × alone on it
         edges = chrome.Frame(edge=0, caption=0)  # (no edges to size it by: a press on the bar moves it)
@@ -159,22 +147,18 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
              wraplength=width).pack(side="left", fill="x")
     tk.Frame(frame, bg=GOLD_SOFT, height=max(1, px(1))).pack(fill="x", pady=(px(10), px(10)))
     if body:
-        tk.Label(frame, text=body, font=fonts.body, fg=INK if fields else MUTED, bg=PAPER, justify="left",
+        tk.Label(frame, text=body, font=fonts.body, fg=MUTED if text is None else INK, bg=PAPER, justify="left",
                  anchor="w", wraplength=width).pack(fill="x")
-    lines = []
-    for label, text, hint in fields or ():
-        if label:
-            tk.Label(frame, text=label, font=fonts.small, fg=MUTED, bg=PAPER, anchor="w").pack(
-                fill="x", pady=(px(12), 0))
-        line = WritingLine(frame, theme, hint=hint, text=text)
-        line.pack(fill="x", pady=(px(2) if label else px(12), 0))
-        lines.append(line)
+    line = None
+    if text is not None:
+        line = WritingLine(frame, theme, text=text)
+        line.pack(fill="x", pady=(px(12), 0))
     row = tk.Frame(frame, bg=PAPER)
     row.pack(fill="x", pady=(px(18), 0))
 
     def finish(choice: object) -> None:
         answer[0] = choice
-        answer[1] = [line.value.get() for line in lines]
+        answer[1] = line.value.get() if line else ""
         try:
             window.grab_release()
         except tk.TclError:
@@ -203,14 +187,14 @@ def _show(parent: tk.Misc | None, title: str, heading: str, body: str, buttons: 
         window.grab_set()
     except tk.TclError:
         pass
-    if lines:
-        lines[0].entry.focus_force()
-        lines[0].entry.select_range(0, "end")
-        lines[0].entry.icursor("end")
+    if line is not None:
+        line.entry.focus_force()
+        line.entry.select_range(0, "end")
+        line.entry.icursor("end")
     else:
         window.focus_force()
     owner.wait_window(window)
-    return answer[0], [str(value) for value in answer[1]]
+    return answer[0], str(answer[1])
 
 
 def _place(owner: tk.Misc, width: int, height: int) -> tuple[int, int]:
