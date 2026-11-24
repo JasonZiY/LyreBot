@@ -1,0 +1,66 @@
+# 由 MIDI 自动编配：游步欣愉-录音.mid
+# 原曲中途转调，各段分别移调，97% 的音落在白键上
+# 第 1–32 小节相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调
+# 第 33–57 小节相当于 E♭ 大调 / C 小调（3 个降号），降 3 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 105 拍（四分音符），速度平稳，4/4 拍
+speed=105
+0---g-|0----
+q--w--|z.b.a.b.s--
+d-.e.t.e.w.q.|v.v.b.d.s--
+w-.e.w-.q.|bfh.v.n.a.m--
+g-.s.a-g-|na.c.b---
+q--w--|c.b.a.b.s--
+d-.e.t.e~r~w.q.|v.v.b.d.s-0-
+w-.e.w-.q.|bg.v.n.a.m--
+q-.s.a-q.j.|nd.c.b-b-0-
+h-.j.q-.w.|zv----
+q-g-.q.w.e.|zc----
+r-.t.r-.e~w~|b.v.b.a.msf--
+q--g-y.~u'y't~|n.c.b.a.0--
+-q-r.e.w-|xad--vna--
+q--j--|bas--bs--
+q---.h.|z.b.a.b.d.s-0.
+g--y-u-|0----
+q--.q.j'q'j.h.|ndg----
+j-.e.e--|~bmd---.~
+h--.h.g.f.|v~na---.~
+g-.q.q--|s.b.a.s.g-.a.
+r--.r.e.w.|mf.x.b.a.f.f.d.s.  # 改动 伴奏♯5→b
+e-.q.q-.e.|nd.n.m.a.d-.d.
+w----|bs.v.n.s.a.m.n.v.
+b--h-j-|zx--zna-cm-
+q--.q.j.h.|na.c.a.c.s.a.m.n.
+j-.e.e--|bm.c.m.cd.ad.m.b.c.
+h~e-~w.h-.j.|vd.z.n.zs.ns.m.n.cm.
+w-.q.g-.g.|cs.x.b.a.bs-.b.
+g-.f.f-.q.|xb.n~x~c.v~n~va-.a.
+q--0-v.g.|xa.c.v.n.nd-.b.
+g-.f.f-.w.|b.v.n.va.va-.s.
+q--b-b-|d--zx--  # 转调到 E♭ 大调 / C 小调，从这里起降 3 个半音；改动 ♯1→q
+q-.g.w-.~0~|za.b.a.b.s--
+0-.e.t.e'r'e.w.q.|vd.v.b.d.sg-s.a.
+w-.e.w-.q.|bs.v.n.ad.ms-.a.
+g---g-|bn.c.b.s.a-b-
+q-.g.w--|ca.b.a.b.s--
+0-.e.t.e'r'e.w.q.|vd.v.b.d.sg-s.a.
+w-.e.w-.q.|bs.v.n.ad.ms-.a.
+q---a.m.|na.c.b.s.a--
+h-.j.q-.w.|v.z.v.b.n--
+q-g-w.q.w.e.|c.z.c.b.ba--
+r-.t.r-.e~w~|b.v.b.a.msf--
+q--a-y-|n.c.b.a.vb--
+t-q-r.e.w-|adg--x-s-
+q--j--|bfg--bsf--
+q----|zd.c.b.c.d.s.b.c.
+.c.a.b.d.s.a.b.|z----
+t--d.s.a.b.|z.v.b.v.0--  # 改动 ♯5→b 伴奏♯5→b
+r--q-g-|z.v.b.a.a-0-  # 改动 伴奏♯5→b
+q-.g.w--|z.c.b.c.d.s-.
+--d-g.f.|z.c.a.b.0--
+q-.g.w--|z.v.b.v.d.s-.  # 改动 ♯5→g 伴奏♯5→b
+--0-.a.|z.v.b.a.asg--  # 改动 伴奏♯5→b
+s~g~q---.|z----
+-0---|-0---
+0----|0----
