@@ -1543,6 +1543,11 @@ class App:
             return
         index = self.songs.index(score) if score in self.songs else 0
         rest = [path for path in self.songs if path != score]
+        # The last of the unfiled songs has no next song of its own: the list goes back to how it
+        # opens, nothing chosen, rather than on into OST.
+        unfiled = self.library.unfiled if self.library else ()
+        if unfiled and score == unfiled[-1]:
+            rest = []
         # The score goes last: left without its MIDI file and recording it stays as it is,
         # but they, left without it, would make it again.
         for path in reversed(files):
@@ -1556,10 +1561,16 @@ class App:
             self.failed_midi.pop(path, None)
             self.failed_audio.pop(path, None)
         self.refresh()
+        done = f"已把「{score.stem}」移到回收站"
         if rest:
             after = rest[min(index, len(rest) - 1)]
-            self.notice = (after, f"已把「{score.stem}」移到回收站")
+            self.notice = (after, done)
             self.select(after)
+        elif self.songs:  # as it opens: nothing chosen, the list at its top
+            self.browser.choose(None)
+            self.browser.yview_moveto(0)
+            self.show_selected()
+            self.say(done)
 
     def export_jianpu(self) -> Path | None:
         """Write the selected score as 简谱 into the jianpu_output folder and open it."""

@@ -2110,6 +2110,32 @@ class Folders(unittest.TestCase):
         self.assertTrue(hand.exists())
         self.assertEqual(app.selected(), hand)
 
+    def test_deleting_the_last_unfiled_song_goes_back_to_choosing(self):
+        """An unfiled song gives way to the next unfiled one; the last of them to nothing chosen,
+        as LyreBot opens, not on to the first song of OST."""
+        (self.scores / "OST").mkdir()
+        first, last = self.scores / "啊.txt", self.scores / "在.txt"
+        ost = self.scores / "OST" / "林中晨歌.txt"
+        for path in (first, last, ost):
+            path.write_text("speed=60\na-\n", encoding="utf-8")
+        from unittest import mock
+        from lyrebot.app import App
+        app = App(self.window(), self.scores, self.midi)
+        self.assertEqual(app.library.unfiled, (first, last))
+
+        def recycle(path):
+            path.unlink()
+        with mock.patch("lyrebot.app.dialogs.confirm", return_value=True), \
+                mock.patch("lyrebot.app.to_recycle_bin", side_effect=recycle):
+            app.select(first)
+            app.delete()
+            self.assertEqual(app.selected(), last)
+            app.delete()
+        self.assertIsNone(app.selected())
+        self.assertEqual(app.title_label.cget("text"), "选择乐曲")
+        self.assertIn("已把「在」移到回收站", app.status_label.cget("text"))
+        self.assertEqual(app.browser.yview()[0], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
