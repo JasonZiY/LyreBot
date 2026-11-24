@@ -1,0 +1,63 @@
+# 由 MIDI 自动编配：湮没的忆念-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，95% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 78 拍（四分音符），速度平稳，6/8 拍
+speed=78
+h.q.e.j.w.e.|0---
+h.q.e--|0---
+h.q.e.j.w.e.|0---
+h--.d.|0---
+q-j.h-j.|n.z.c.m.x.c.
+q--.d.|z.c.n.a-.
+j-h.g-h.|c.m.v.b.c.m.  # 改动 伴奏♯4→v
+j--.g.|cm---
+e-w.q-w.|z.c.b.m.z.b.
+e--w.q.|n.z.c.n.c-
+w---|b.x.b.a.m.n.
+--.h.|m---
+r-e.w-e.|x.v.n.c.n.a.  # 改动 伴奏♯1→a
+r--.h.|v.n.s.f-.
+e-w.q-w.|z.c.n.x.v.m.
+e--.d.|c.n.a.d-.
+q--j.h.|v.c.n.a.0-
+j--h.g.|c.x.n.m-.  # 改动 ♯5→g
+h---|n.z.c.m.x.c.
+n.a.d--|0---
+n.a.d.m.s.d.|0---
+n---|0---
+r-.r-.|x~v~n-z~v~n-
+r-.r.e.w.|m~v~n-b~x~m-
+e.j-e.j-|z~c~0-m~c~0-
+e.h-e.w.q.|z~c~0-b~c~m-
+w-.w-.|m~x~n-n~x~n-
+w.j-w.q.j.|b~c~0-c~x~b-  # 改动 伴奏♯5→b 伴奏♯5→b
+q-.w-.|n~z~c-m~x~c~x.~
+e-.q.w.e.|z~c~n~c.~n~c~s~c.n~  # 改动 ♯1→q
+r-.r-.|x~n~s~f.~z~n~s~f.~
+r-.r.e.w.|m~v~n~s.~b~x~b~m.~
+e-.e-.|z~b~m~d.~m~b~m~d.~
+e-.e.w.q.|n~c~m~a~d.b~c~m~a.~
+w-.w-.|v~x~n~m~s~m~f~m~s~m~n~v~  # 改动 ♭3→w ♭3→w 伴奏♯4→v 伴奏♭3→x 伴奏♭3→s 伴奏♯4→f 伴奏♭3→s 伴奏♯4→v
+w-.w.q.w.|m~x~n~m~f--  # 改动 ♭3→w ♭3→w ♯1→q ♭3→w 伴奏♭3→x 伴奏♯4→f
+e-.f-.|c~x~v~n~s~n~0-.
+~x~b~m~d-.d.|c~0--.~  # 改动 ♯5→b
+q-j.h-j.|n-0--
+q--.d.|0---
+j-h.g-h.|c-0--
+j--.g.|0---
+e-w.q-w.|z-0--
+e--w.q.|0---
+w---|b.x.a--
+t--.h.|m---
+r-e.w-e.|x.v.n.z.v.n.
+r--e.w.|m.v.n.c-c.
+e-w.q-w.|n.z.c.b.z.c.
+e-.q-.|v.c.n.0-c.  # 改动 伴奏♯4→v
+q-.h.j.h.|v.z.c.0-.
+j-.f.h.g.|c.m.x.0-.  # 改动 ♯5→g
+h-d.0-d.|n.z-m.x.0.
+n.a.d--|0---
+n.a.d.m.s{2/3}d{1/3}|0---
+~n--.~|0---
+0---|0---

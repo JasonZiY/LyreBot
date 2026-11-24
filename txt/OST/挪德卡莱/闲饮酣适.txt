@@ -1,0 +1,52 @@
+# 由 MIDI 自动编配：闲饮酣适-录音.mid
+# 原曲中途转调，各段分别移调，98% 的音落在白键上
+# 第 1–16 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 第 17–32 小节相当于 E 大调 / C♯ 小调（4 个升号），降 4 个半音移成 C 大调 / A 小调
+# 第 33–42 小节相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 105 拍（四分音符），速度平稳，4/4 拍
+speed=105
+e{2/3}w{1/3}q.w~e~w~q~j.j.~w~|0----
+q.h.h.q.q'j'q'j'q'j'q-j-|0----
+w'e.~w~q.w~e~w~q~j.j.~w~|0----
+q.h.j.g.h--|0----  # 改动 ♯5→g
+w.~w~q.w~e~w~q~j.j.~w~|ndg.~f~d.f.cmd-s.~f~
+q.h.h.q.j-j'q'j'q'j-|ndh.a.a.d.cs~d~m~g~s-  # 改动 伴奏♯5→g
+e.~w~q.w~e~w~q~j.j.~w~|ng.~afh~d.afh.f.cmd.msd.~f~
+q.h.j.g.h-.e~r~|vaf.a.cmd.m.na~c~a~c~n.na~s~  # 改动 ♯5→g
+t.~y~t~q~u~y~t~t~r~e~w.e~r~|zd.~afg~d.agj~f~d~d~bs~a~sgj.a~s~
+t.~y~t.r~e~w-.q~w~|zd.~bad~d.adg.j.xb.msg.~j~
+e.~r~e~y~t~r~e'r'e.w~q~j.q~w~|cna.~s~a.adh~s~a~a~bj~h~mdg.h~j~
+e.~r~e~w~q~w~j'q'j.j-d~f~|na.~adh~a.adh~j~g'h'g.cg.mdg.a~s~
+g.~h~g~q~j~h~g'h'g.f~d~s.d~f~|zd.~bdf~d.bad~f~d'f'd.bs~a~xbm.a~s~
+g.~h~h'g.f~d~s.~s~a's'a'm.a~s~|zd.~bad~g'f'd.cba.bm~x~b~0.~b~xm~
+d.~f~d~h~g~f~d'f'd.s~a~m.a~s~|na.~cas~a.nad.m.c.c-
+d.~f~d~s~a~s~m'a'm-h~j~q~w~|va~va.na~a.zv~n~c-c-  # 改动 ♯1→q
+g.~f~d.f~g~f~d~s.s.~f~|zb--.zb-.  # 转调到 E 大调 / C♯ 小调，从这里起降 4 个半音
+d.a.a.d.s'd's-m-|--.xbm.xb-
+f'g.~f~d.f~g~f~d~s.s.~f~|zb----
+d.a.s.m.a.n~m~a~s~d~f~|--0-b-
+f'g.f~f~d.f~g~f~d~s.s.~f~|z.cba~cba~0.cba-b.xbm-
+d.a.a.d.s'd's--|n.~zcn~0.cna-b.xbm-
+f'g.~f~d.f~g~f~d~s.s.~v~|z.~cba~0.cba~0.~b.xbm-
+n.a.s.m.a-.a~m~|zcv-xb-zcb-z-
+n.~m~a.n.s.~a~m.d~f~|zv~v~zv~xv~zcv.zv.xb~b~xb~v~xb.xb~b~
+g.~h~g~f~d~s~a-.b.|zba.zb~na~zba.zbm.cn~n~cn~n~cb~b~c.
+n.~m~a.n.s~d~s~a~m.b.|zv.v~xv~zcv.zv.xb.xb.xb.x.
+n.s.d.~s~a.0-q~j~|zv.zv~v~xb.xb~m~zcb.zcb~zcb~zcb.zd~s~
+h.~j~q.h.w.~q'w'q.~e~r~|va.zvn~as~zvn~a~zvn.bg.xbm~f~xbm.xbm~sf~
+e.~r~e~r~e~w~j'q-.g.|zg.cba~dh~cag~f~cad~s~n~g~cn~a~b~m~b~m~
+h.~j~q.e.w.~q~j.g.|zva.~ns~nd~a~vnd.xbg~b~bm~f~bs.m~xb~
+h.f.d.~s~d--|zvn.s.xb.~m~zba.cba.cba.0.
+w'e.~w~q.w~e~w~q~j~d~j.~w~|0.d~f~g~h~j~a~j~g~d.s~m~g~d~  # 转调到 G 大调 / E 小调，从这里起升 5 个半音；改动 伴奏♯4→f 伴奏♯5→g 伴奏♯5→g 伴奏♯5→g
+q.h.h.q.j'q'j.d.g-|s.~f~d.s~a~m.c.cd-  # 改动 ♯5→g
+w~e.w~q.w~e~w~q~j.j.~w~|h.d~s~a~d~s~d~s.~m~g~d~s~d~  # 改动 伴奏♯5→g
+q.h.j.g.h--|vfh.f.cmd.d.nad--  # 改动 ♯5→g
+r'e.~r~e.r~t~r~e~w.w.~r~|ngh.nd~sh~nad~h~nsd~h~cmd~d~cmd~d~cdj.cmd~sd~
+e.q.q.e.w-w'e'w'e'w-|vad.vah~f~vah~f~va~f~csj~d~cm~d~cm~d~cm~d~
+t.~r~e.t~y~u.t.w.j.|f'nd.nad~sh~nad~h~nad~h~bgj~g~bgj.msj.g~ms~
+e.w~q~g.~j~q.~0-r~|vad~f~vaj~h~cms~d~cm~cm~ndh.nad~h~nad~h~nad~sfh~  # 改动 ♯5→g
+e.h.j.g-w'r't.y-|vdf.a.cmd.m-c.nh-  # 改动 ♯5→g ♯5→t
+----|----
+0----|0----

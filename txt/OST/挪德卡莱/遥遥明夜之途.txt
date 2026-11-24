@@ -1,0 +1,47 @@
+# 由 MIDI 自动编配：遥遥明夜之途-录音.mid
+# 原曲中途转调，各段分别移调，93% 的音落在白键上
+# 第 1–17 小节相当于 A♭ 大调 / F 小调（4 个降号），升 4 个半音移成 C 大调 / A 小调
+# 第 18–24 小节相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调
+# 第 25–37 小节相当于 A♭ 大调 / F 小调（4 个降号），升 4 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 90 拍（四分音符），速度平稳，4/4 拍
+speed=90
+r.e.r.e.r.t.y.w.|sh----  # 改动 ♯4→r ♯4→r ♯4→r
+e.w.e.w.e.r.y.w.|nd----  # 改动 ♯4→r
+j--h--|bg----
+w--e--|n--a--  # 改动 伴奏♭7→n
+r.e.r.e.r.t.y.w.|sh----  # 改动 ♯4→r ♯4→r ♯4→r
+e.w.e.w.e.r.y.w.|n----  # 改动 ♯4→r
+j--h--|bg----
+r--e--|n--a--  # 改动 伴奏♭7→n
+w.q.w-e.w.e.h.|n.v.s.f.z.b.d-  # 改动 伴奏♭7→n
+r--q-.w~e~|x.n.d.f.f--
+r.e.r-t.r.t.q.|x.n.f.h.c.a.g-
+r-.h.q-h.j~q~|va.a.f-h-0-  # 改动 ♭7→j
+w.q.w-e.w.e.h.|n.v.n.sf.z.b.a.d.  # 改动 伴奏♭7→n 伴奏♭7→n
+r--f-.w~e~|x.n.s.d.0--
+r.e.r.w.e.w.e.q.|x.n.s.f.z.b.a.d.
+q--j--|b.x.b.a.s--
+b.x.b.m.s--|0----
+e.w.e.w.e.r.t.q.|z.bm.z.cm.zb.x.c.b.  # 转调到 F 大调 / D 小调，从这里起降 5 个半音
+w.q.w.q.w.e.t.q.|bm.xn.bm.nm.xm.m-b.
+h-f.h.q.r.t.r.|v.z.0-cb--
+q.a.f.g.w-.h.|v.0-.n.x.v-  # 改动 ♯5→g ♭7→h 伴奏♭7→n
+t.w.e.t.e.r.t.q.|zcb.bm.z.xcm.zcb.x.c.b.
+t.q.w.t.w.e.t.q.|xbm.xn.bm.znm.xm.m-b.
+h.a.f.h.q.r.t.r.|v.0-.cb--
+a-x.v.m-.f~g~|xvn.n.0-xb-x.b.  # 转调到 A♭ 大调 / F 小调，从这里起升 4 个半音
+h.g.h-j.h.j.d.|vn.z.v.na.bm.x.b.m.
+q.m.a-s.a.s.h~j~|na.c-zc.zb.z.m.bm.
+q.j.q-w.q.w.g.|na.c.n.zd.ms.b.m-
+q~r-~e.e-.f~g~|zg.b.z.c.fg.b.z.c.
+h.g.h-j.h.j.d.|vn.z.v.na.bm.x.b.m.
+q.m.a-s.a.s.q~w~|na.c-zc.b.z.m.b.
+e.w.e.q.w.q.w.j.|b.x.b.z.n.v.n.x.  # 改动 ♭3→e ♭3→e ♭7→j 伴奏♯5→b 伴奏♭3→x 伴奏♯5→b 伴奏♭7→n 伴奏♭7→n
+j-.h.h--|vaf.z.v.n.z--  # 改动 ♭7→j
+.a.h.q.t-.y~q~|v.0---~h~  # 改动 ♭7→y 伴奏♭7→h
+y--y--|v.z.v.n.z--
+.a.h.q.t--|v.0---.
+r----|zvn----
+0----|0----

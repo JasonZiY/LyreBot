@@ -1,0 +1,45 @@
+# 由 MIDI 自动编配：岬石与细浪之舞-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，99% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 113 拍（四分音符），速度平稳，4/4 拍
+speed=113
+s-h.w-q-w.|0----
+.h-q.j.h.g.h.|0----
+s-h.w-q-w.|x-n.s-a-s.
+.h-q.j.h.g.h.|.n-a.m.n.b.n.
+r-r.e.e-w-|x-n.s-a-s.
+w-q-w--|.n-a.m.n.b.n.
+r-r.e.e-t-|x-n.s-a-s.
+t-r.e.e--|.n-a.m.n.b.n.
+r-r.e.e--|x-n.s-a-s.
+w-q-w-q.j.|.n-a.m.n.b.n.
+h----|x-n.s-a-s.
+.n-a.m.n.b.n.|.0---.
+h-h'j'h.g.h-j-|x-n.s-a.c.s.
+q-j-w--|v.n.n.a.m.n.b.n.
+q-q'w'q.j.g-j.q.|n-c.a-m-a.
+y-r.e.w--|v.n.v.a.s.a.m.a.
+w-.q.w-e-|b-v.s-a.n.s.  # 改动 伴奏♭7→n
+r-e-t-e'r'e-|c.n.c.a.n.b.v.b.
+w----|xf-n.s-a-s.
+h----|f.n-a.m.n.b.n.  # 改动 伴奏♯4→f
+f-f.d.d-s-|x-zcb.zcb-zcb-zcb.
+d's-a-s-n-|zcb-cbn-xn-x-
+f-f.d.d-g-|x-zcb.zcb-zcb-zcb.
+g.f.f.d.f--|zcb-cbn-xcn-xn-
+h-j'h.g.h-j-|n-zcb.zcb-xbn-xbn.  # 改动 伴奏♭7→n
+q-j-g-j.q.|cbn-cbn-xbn-xbn-
+h-f.d.s.~d's.~a.|x-zcb.zcb-zcb-zcb.
+s-s.a.n.q.w.e.|xn-.xn-cba.cbs.cbd.
+r-r.e.e-w-|xbf-nf.xd.d.z.s.x.
+w.w.q-w--|s.ns.a.z.ms.n.b.n.
+r-r.d.d-g-|xf-nf.x-z-x.
+g.f.f.d.f.0-.|.n-z.m.n.b.n.
+h-j'h.g.h-w-|x-n.xn.x.z.s.x.
+q-u.y.t-u.q.|a.n.j.zh.mg.n.bj.na.
+y-r-y't-r.e.|xh-nf.x.xg~g~z.f.xd.
+w-w.q.w--|ns-ns.a.xns--
+----|----
+--0--|--0--
+0----|0----

@@ -1,0 +1,70 @@
+# 由 MIDI 自动编配：银鸥的回旋-录音.mid
+# 原曲中途转调，各段分别移调，98% 的音落在白键上
+# 第 1–32 小节相当于 B♭ 大调 / G 小调（2 个降号），升 2 个半音移成 C 大调 / A 小调
+# 第 33–53 小节相当于 C 大调 / A 小调（没有升降号），不用移调
+# 第 54–60 小节相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 102 拍（四分音符），速度平稳，6/8 拍
+speed=102
+s.~h~h.j.~q~j.|xvn---
+g.~f~d.d.d's.a.|bms---
+s.~h~h.j.~q~j'q'j.|xvn---
+g---|x.m~s.b~n.b.s.
+s.~h~h{2/3}j{7/12}q~j.|xvn---
+g.~f~d.d.d's.a.|bms---
+s.~d~f.g.f'g'f.d.|n.xvn-z.~cba.~  # 改动 伴奏♭7→n
+s---|xvn---
+w.~y~y.u.~q~u.|x.~nsf.~sh.f.h.
+t.~r~e.e.e'w.q.|x.~msg.~msg.m.s.
+w.~y~y.u.~q~u.|x.~nsf.~sh.f.h.
+t--h~g~f~d~|x.ms.g.h~j~0-
+w.~y~y.y'u.~q~u.|x.~nsf.~nsh.f.h.
+t.~r~e.e.e'w.q.|x.~msg.~msg.m.s.
+w.~e~r.t.r't'r.e.|n.v.s.z.ad.b.  # 改动 伴奏♭7→n
+w.x~v~n~a~s.n~a~d~h~|xsf.0-x.0-
+h.h~h~h~g~h.h~h~h~g~|xns.0-xns.0-
+j.j~j~j~h~j.q.j.|xms.0-xs.b.s.
+h.h~h~h~g~h.h~h~h~h~|xns.0-xns.0-
+g.g~g~g~a~s~a~n~a~d~a~|zba.0-z~0.z.~
+h.h~h~h~g~h.h~h~h~g~|xs-.x.d.f.
+j.j~j~g~h~j.q.w.|xg-.x.bf.d.
+h.h~h~f~h~g.f'g'f.d.|s-v.ba.n.n.
+s.s~s.a~s.r~t~y~q~|x.0--.
+w.~h~w.r.t.y.|x.~nsf.~nh.s.f.
+u.~q~u~t~y-w.|x.~msg.~fh.s.n.
+t'y.~t~r.r't.~r~e.|n.s~f~h~f~ag.~f~d.  # 改动 伴奏♭7→n
+w.~e'w'q.~h-h.|x.~nsf.~n.d.na.
+w.~h~w.r.t.y.|xs.~nsf.~nh.s~f~h.
+u.~q~w.y'u'y-w.|xs.~msg.~ns~f~h-
+t'y.~t~r~y~t-h.|n.~s~f~h~za.adg~adg.bad~  # 改动 伴奏♭7→n
+w.~e'w'q.~w-w'e'w'e'w'e'w'e'w'e'w'e'w'e'w'e.|xn.s~d~h.h~g~s~g~h~g~
+-.z~x~b~c~b~n~|zba~d~g~f~d~a~0-.  # 转调到 C 大调 / A 小调，从这里起不移调
+m~a~s~d~f~g~s.~n~s.|0.~b~n~a~x-xv~n~  # 改动 ♯1→a
+f.g.h.j.~q~j~g~|vs.n.sf.b.~msg.~
+h-s.g'h.~g~f.|b.~b~xm~b~n.~vs.~  # 改动 伴奏♭7→n
+g.~f~d.s.~d's'a.~|z.ad.b.x-xvn.
+n-n.s.~n~s.|x.~z~x~c~x-xv~n~
+f.g.h.j.~q~w.|vs.n.sf.x.~msg.~
+h'j'h-.h.~g~f~h~|n.~n~bs~v~n-vbs.  # 改动 伴奏♭7→n
+g'h'g-n.s.~d's'a.~|z.nad-xn.~b~v~c~
+s-h.w.~y~y.|x.~n~n~n~x.ns~f~ns~f~
+u.~q~u.t.~r~e.|n.ns~f~ns~f~x.ns~g~ns~g~
+e.e'w.q.w.~y~y.|n.ns~g~ns~g~x.ns~f~ns~f~
+u.~q~u.t-.|n.ns~f~ns~f~x.bm~s~g~s~
+e~w~q~g~d.w.~y~y.|n.n.b~a~x.ns~f~ns~f~
+u.~q~u.t.~r~e.|n.ns~f~ns~f~x.ns~g~ns~g~
+e.e'w.q.w.~e~r.|n.ns~g~ns~g~f.v~sg~vh~s~
+t.r't'r.e.w-.|za.bad.bdg.xf.nsf~nsf.naf~
+-.s.~w~w.|xns.nsf.nsf.x.xvn~nfh~sfh~a~
+e.~r~e.w.~q~j.|nj.sf~nsf~sfj~a~xg.sg~nf~sdg~a~
+j.h.g.h.~w~w.|xsd.vsf.cad.xs.sf~nh~sfh~a~
+e.~r~e.q-.|nj.sf~na~sfj~a~zag.ad~b~ad~b~
+m~n~b~c~c~b~n.~d~d.|b~0-~v.z~v~na~b~  # 转调到 F 大调 / D 小调，从这里起降 5 个半音
+h.~q~h.g.~f~d.|vf.na~vg~naf~b~cs.bm~ca~bm~c~  # 改动 ♭7→h ♭7→h
+d.s.a.s.~d~f.|cm.bnm~z~xb.xvn.zn~vm~na~v~
+s.f.a.s-.|cb.bma~n~b~c~n.zcn~zcn.zcb~
+-s.n.~f~g.|n.cn.b~cb~v.v~zm~cba~z~
+h.g'h'g.f.n-.|bs~x~a's'bma.bnm~x~c.c~0.~
+n~0--.~|0---
+0---|0---

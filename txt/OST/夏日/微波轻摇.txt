@@ -1,0 +1,46 @@
+# 由 MIDI 自动编配：微波轻摇-录音.mid
+# 原曲的音阶相当于 G 大调 / E 小调（1 个升号），升 5 个半音移成 C 大调 / A 小调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 41 拍（四分音符），速度分 2 段各自平稳，段与段之间逐拍跟随，6/8 拍
+speed=42
+c~b~a~s~a~b~c~b~a~s.~|z--~b.~
+c~b~a~s~a~b~c~b~a~s.g~|z---
+g-~q~q-~g~|z~b~x~cb--~
+g-~w~w-~g~|n~v~z~vb--~
+r~e~w~h~n~a~f.~r~e~w~|xh~ng~xf~va~0-~h~g~f~
+g.~a.~m-~g~|ba~b~x~vb.~vb-.
+g-~q~q-~g~|c~m~z~zxb.z~z-.
+g-~w~w-~g~|x~n~z~vb.vf~vf-.
+r~e~w~g-.r~e~w~|bh~bg~xf~b~a~n~vm.~m~xvg~f~
+w-.q-~g~|zf~x~v~xa.~zad-.
+speed=38.9
+t-.t-.|z~b~x~c.~c~m~z~b.~
+speed=43.4
+r.t.y.r.e.~w~|xfh~n~zg~v~vh.bfh~x~vd.~s~
+speed=41.5
+e-.e-.|zd~b~x~c.m~ndg~c~ba~z.m~
+w.e.r.w.q.~j~|xsf~n~xd~v~f.cs~m~xa~b.m~  # 改动 伴奏♯5→b
+q-.q-.|nad~c~m~z~c.d~c~z~c~b~z~  # 改动 伴奏♯5→b
+q.w.e.y.e.~w~|bad~c~bs~z~zd.sh~x~d~z.s~
+q--~q~w~e~|vaf~z~x~b~z~b~v.~z~x~c~  # 改动 伴奏♯5→b 伴奏♯5→b
+q-.q.w.g.|sf~b~x~b~x~b~bsf~b~x~v~c~x~  # 改动 伴奏♯5→b 伴奏♯5→b
+t-.t-.|z~b~m~a~g.n~c~m~a~g.
+r.t.y.r.e.~w~|xah-.xfh.d~b~b~s~
+e-.e-.|zdg~b~m~z~b~m~ndh~c~m~z~c~n~
+w.e.r.w.q~0.j~|xsf~n~cd~v~nf~v~csf~x~a~m.m~
+q-.q-.|nad~c~m~z~c~n~d~z~c~b~a~b~  # 改动 伴奏♯5→b 伴奏♯5→b
+g.w.e.y.u.q.|bd~z~cs~b~ad~d~h.j.a.
+q-.q-~j~|baf~z~v~n.~xaf-.
+q-.0-~g~|z~b~x~v.~zc-.
+g-~q~q-~g~|zbd-.zcb-.
+g-~w~w-~g~|vna---
+r~e~w~g-.r~e~w~|m~b~s~0-.vb.~
+w-.e-~b~|zf~b~s-adg-.
+b-~a~a-~b~|zc---
+b-~s~s-~b~|zx-.v-.
+f~d~s--f~d~|bn~b~v--a~0~
+speed=39.5
+~s~s--a.|0.zv--zcb.
+---|---
+0---|0---

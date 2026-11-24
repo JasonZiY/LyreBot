@@ -1,0 +1,66 @@
+# 由 MIDI 自动编配：宵晖下的笑颜-录音.mid
+# 原曲中途转调，各段分别移调，100% 的音落在白键上
+# 第 1–42 小节相当于 B 大调 / G♯ 小调（5 个升号），升 1 个半音移成 C 大调 / A 小调
+# 第 43–49 小节相当于 D 大调 / B 小调（2 个升号），降 2 个半音移成 C 大调 / A 小调
+# 第 50–56 小节相当于 B 大调 / G♯ 小调（5 个升号），升 1 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 116 拍（四分音符），速度平稳，4/4 拍
+speed=116
+v.n.d.s.g.j-.|0----
+d--d--|a--x--
+v.b.s.m.g.j-.|0----
+d--d--|a--m--
+c.b.s.a.d.j-.|0----
+d--g--|x--d--
+.b.s.m.g.j-.|n.0---.
+a--q.w.e.r.|bn--sf~a~h-.
+e-d.s.g.j-.|v.h.0---
+d--d--|a--x--
+v.b.s.m.g.j-.|0----
+d--q.w.e.r.|a--mad--
+w-s.a.d.j-.|c.g.0---
+d--g--|x--bd--
+t.b.s.a.g.j-.|n-nm-n--
+a--s--|zn--xm--
+d.0-f~d~s-a-|va.n.c.s.v.n.c.x.
+s-.d~s~a-m-|v.n.c.x.b-c.x.
+a-0-g-0-|zcb.b.x.z.zb.b.s.a.
+s--a-s-|cbm.b.c.m.cb.b.xm.m.
+d-.f~d~s-a-|va.n.c.s.v.n.c.x.
+s-.d~s~a-m-|v.n.c.x.b-c.x.
+a--g--|xb.b.x.z.xbs.b.s.b.
+h--j--|cna.n.d.b.cms.m.d.m.
+q-.w~q~j-h-|vah.n.d.s.vm.n.nd.s.
+j-.q~j~h-g-|vmg.n.d.s.bn.m.bd.s.
+d----|xna.b.x.a.x.b.x.a.
+d-f-g-a-|xca.b.vs.m.xb.b.zx.z.
+a--.v.d-|zcb.c.b.z.v-c.a.
+s-.d~s~a-m-|xb.x.m.x.b.c-x.
+a--h'j-.q~j~|cn.c.b.z.b.x.b.m.
+h----|zvb~n---.~
+----|----
+g--q--|bs----
+e--w--|gh--h--
+--w-d.h.|--0--
+t~w---.~|a~ag---.~
+--d--|----
+d--y--|va----
+0--u--|asg----
+t--g--|bna--d--
+--q-w-|----
+e-.w~q~j-h-|vad----  # 转调到 D 大调 / B 小调，从这里起降 2 个半音
+j-.q~j~t--|--h-g-
+s----|cbm----
+q--w--|----
+d--h--|xna--nad--
+h---g-|----
+h--{2/3}g-{1/3}|vad----
+q--w--|bsg--g--  # 转调到 B 大调 / G♯ 小调，从这里起升 1 个半音
+----|----
+---h.j.|---0-
+q-.w~q~j-h-|v.b.s.m.b.m-.
+j-.q~j~h-g-|----
+d-.d.~s.~t-|v.~b.~0-.g-
+w----|s----
+0----|0----

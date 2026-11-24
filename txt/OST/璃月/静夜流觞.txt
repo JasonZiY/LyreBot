@@ -1,0 +1,61 @@
+# 由 MIDI 自动编配：静夜流觞-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，100% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 125 拍（四分音符），速度有起伏，逐拍跟随，4/4 拍
+speed=127.7
+0.x.n.m.s--|b.0---.
+---w.e.|0----
+j.w.h.j.d--|z.b.n.m.0--
+----|0----
+z.b.n.m.d--|0----
+speed=127.9
+---w.e.|0----
+j.w.h.j.s--|b.x.n.m.0--
+----|0----
+w~e~w---.|b.x.n.m.s--
+---w'e-|----
+j.w-.d--|zg.b.n.d.m--
+speed=128.1
+---s-|---0-
+d-g.s.h-.j.|n.c.b-n--
+h---w.e.|---g-
+.w.h.j.s--|bm.x.n.s.m--
+----|----
+w~e~w---.|b.x.n.m.s--
+---w'e-|----
+.w.g.d.m--|zd.b.n.0--.
+speed=126.1
+---.s.|0----
+speed=130
+d-g.s.h-j-|n.c.b-n-0-
+h---.j.|0----
+speed=127.9
+h~j~h~j~h~j~j~h~g--|b.x.n.m.s--
+s.d.s.d.s.d.s.d.|n.m.n.m.n.m.n.m.
+.x.n.s.m-s.d.|b--c-n.m.
+s.d.s.d.s.d.s.d.|xn.m.n.m.bn.m.n.m.
+w.e.w.e.w.e.y.e.|zbh.j.h.j.h.j-j.
+w--.y~t~e.w.|ch--.0-.
+h.j.h.j.h.j.w.h.|ms.d.s.d.s.d.g.d.
+g---m.s.|cs----
+d--d-j-|n----
+d-.g.h-w-|xn----
+j.w.h.g-.j-|b--n-m-
+j--s-.y't{1/3}e'w{1/6}|vms----
+.e.w.e.w.e.y.e.|zh.j.h.j.h.j-j.
+w---.e.|h----
+h.j.h.j.h.j.w.j.|ms.d.s.d.s.d.g.d.
+g--s--|cs--m--
+d-h.j--w.|n----
+d----|xn----
+h*e*y---.~|----
+---h.j.|----
+h-.j~h~g--|b.x.c.n.m--
+----|c---.x.
+.w.e.y.u--|b.x.c.n.m--
+w---.w.|s----
+g.w.e.y.u--|b.x.c.n.m--
+e----|cd----
+w----|xcs----
+0----|0----

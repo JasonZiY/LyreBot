@@ -1,0 +1,55 @@
+# 由 MIDI 自动编配：飘曳的眠梦-录音.mid
+# 原曲的音阶相当于 E♭ 大调 / C 小调（3 个降号），降 3 个半音移成 C 大调 / A 小调，100% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 89 拍（四分音符），速度平稳，4/4 拍
+speed=89
+w.e.q.g.w.e.q.g.|zb---.z.
+w.e.r.w.w'e-w.q.|----
+w.e.q.f.w.e.q.f.|zv---.0.
+w.e.r.w.w'e-w.q.|0----
+s.d.a.u--t.|zb-.b.s.d.a.b.
+w--s'd-s.a.|s.d.f-0--
+s.d.a-s.d.a-|zv-.v--v.
+s.d.f.s.s'd-s-|--.b-b.
+b.n.a.s.b.n.a.s.|z----
+j--q--|b.n.a.s.b.n.a.s.
+h-.d.e--|zvb.n.s-b.n.s.d.
+-.d.b.n.s.j.|b.n.s.0--d.
+g.n.d.g.q-.g.|cbn--b.n.d.0.
+b.n.d.g.b.n.d.g.|0---.s.
+a.v.b.a.c.v.b.a.|xcn----
+c.v.b.a.c.v.b.a.|----
+b.n.a.s-n.a.s.|z----
+j--q--|b.n.a.s.b.n.a.s.
+w--e--|zvb.n.s.d.b.n.s.d.
+b.n.s.d.y--|0--b.n.s.d.
+t-d.g.w-d.g.|cbn.n.0-b.n.0-
+b.n.d.g.b.n.d.g.|0----
+0-w.q--a.|xcn.v.b.a.c.v.b.0.
+c.v.b.a.c.v.q'w'q'w'q.~q'w~|0---b.a.
+a-a.~s~a.~s~d.~g~|v-vn-vn-zn-
+g'h-j'h.~g~d-j'q.~j~|v-vn-z.z.xb.z.
+h.~j~g'h.g.s'd.g.d.~a~|x-xva-n-zn-
+n-b-b-c-|z-zc-zc-.z.
+a-a.~s~s.~s~d~g.~|v-vn-zvn-zn-
+g'h-j'h.~g~d-q.~j~|v-vn-z.z.xb.z.
+g'h-g-d-f'd.~a~|x-vna-z-cba-
+s-s~d.~a-b'n-|b-xb-zc.z.c.z.
+q-q.~w~q.~w~e~t.~|va.z.vna.z~s~za.z~s~vbd~g~z.
+t'y-u'y.~t~e-q.~u~|g'vh.z.cnh.z~g~zd.z.xba.z~j~
+y-t'y't-w'e.t.e.~q~|zh.z.g'h'cbg.z.zd.zg.cdh.z~ag~
+g'h-g-g--|zn.b.cba.b.zba.z.c.z.
+q-q.~w~q.~w~e~t.~|va-zna.~s~vna.~s~vad~g.~
+t'y-u'y.~t~e-j'q.~u~|vh-j'cah.~g~zd.b.as.b~j~
+y-t-e-e.~q~|xh-cag-zd-bad.~a~
+w-w'e-q--|zs.c.bad.c.zag.v.ba.v.
+b.n.a.s.b.n.a.s.|z----
+j--q--|b.n.a.s.b.n.a.s.
+t-w.e.e-w.e.|zcb.b.0-c.b.0-
+d.g.w.e.d.g.w.e.|0---.s.
+q.h.e.t.g.h.e.t.|cbn----
+g.h.e.t.g.h.e.t.|0----
+g.f.w.q.d.f.g.q.|zv-b.0--.  # 改动 ♯5→g
+d.f.g.q.d.f.g.q.|0----
+0----|0----

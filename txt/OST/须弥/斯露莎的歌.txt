@@ -1,0 +1,48 @@
+# 由 MIDI 自动编配：斯露莎的歌-录音.mid
+# 原曲中途转调，各段分别移调，97% 的音落在白键上
+# 第 1–25 小节相当于 E 大调 / C♯ 小调（4 个升号），降 4 个半音移成 C 大调 / A 小调
+# 第 26–39 小节相当于 D♭ 大调 / B♭ 小调（5 个降号），降 1 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 88 拍（四分音符），速度平稳，4/4 拍
+speed=87.9
+0---g-|0----
+w-.q.e--|zad----
+g--.g.q.w.|bmd----
+w-.t.e--|cng----
+g--.e.r.t.|cba----
+q--.g-t.|zah--v.n.a-
+w-q--q.w.|zbg--c.b.c-
+e-r--q-|xna---c.v.
+e-.~r~w--|xbf-.~d~n-v.n.
+m-a-s-g-|xb----
+w-.q.e--|z.b.c.b.s.b.c.ba.
+d-.e.r.e.w.q.|m--x-b-  # 改动 伴奏♯5→b
+w-.t.e--|n.c.a.c.zm-.n.
+0-.e.r.e.r.t.|ba.c.a.c.bm.z.c-
+q--f.g-t.|vh.z.n.z.b'v'b'v'c-a-
+w-q-g'h'g.d.q.r.|cg.z.b.z.0-a-
+e-w-e-m.a.|xd.n.vs.z.vs.n.vb-
+s--f--|z.b.z.x.xba--
+d---j-|zba---m-
+q-{2/3}y{7/12}y-.~|a-{2/3}h{7/12}vh.z.v.n~
+--.0-g.|{1/3}a--{1/6}x-.
+f.g-m--.|.c.m.xb--.
+.q-.w.s.f-|.zba-.s.0-.  # 改动 ♭3→s
+.g-a.f.q-.|0.a.b-.vaf-.
+.g-.f-g.f.|.a.z-b.a-z.  # 改动 伴奏♯1→z 伴奏♯5→b
+w.r---.|.xfj.m.v.b.m-.  # 转调到 D♭ 大调 / B♭ 小调，从这里起降 1 个半音；改动 ♭3→w 伴奏♯5→b
+t.w--b~m~s~f~g~j~|g.bgj.x.v.m.0-.
+w~r~t~u~w~r~w'e'w'e'w'e'w'e'w'e'w'e'w--g.|0----
+.w-.q.e-.|0.zdg.bad-bad.bad.bad-
+--.d.g-|bad.m.bmd-bmd.bm.bmd-
+w.h~w-~t.e-.|bmd.nd.nad-nad.bad.ad.a.
+.s.d-g.d.e.r.|nad.b.bm-bmd.bm.bmd.f.
+t.w-q--.|bdg.vs-vna--.
+y.t-q--j.|vah.cg-cba--m.
+q.r-e--w.|a.xs-na-xa-g.
+.e---.|.bsf--m-.
+---.q.|----
+.q---.|.zdg---.
+.b.s.~a.~g-.|--.0-.
+0----|0----

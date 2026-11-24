@@ -1,0 +1,56 @@
+# 由 MIDI 自动编配：深夕映繁星-录音.mid
+# 原曲的音阶相当于 B 大调 / G♯ 小调（5 个升号），升 1 个半音移成 C 大调 / A 小调，94% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 136 拍（四分音符），速度平稳，4/4 拍
+speed=136
+e-.t.e--|a-g-a--
+j---h.j.|0----
+d-.g.d--|z-b-a--
+m--f-.g.|0--s--
+d-.h.d--|v--n--
+a---q-|0----
+e--y--|va-z-ad-z-
+w--e--|sj-z-ad--
+e-.y.e--|x-n-ah--
+h---a-|f--a--
+d-.j.d--|b-v-n--
+w---x-|sg--b--
+s--d--|z-b-a-b-
+--m-b-|z-b-0--
+s--d--|z-b-a-b-
+g--q--|zm-b-m-b-
+e-.t.e-.h.|z-a.ns.md.b-.
+j.g-s.d-h.j.|m-a-n.m.a-
+d-a.g.q--|z-.ns.md.b-h.
+u.0-.t--|bj.g.m.s.nd.m.a-
+y-.h-d-d.|vd-z.b.nd-z-
+j--q-w-|m.d.z-.a.s.a.
+e--q.0-.|vd-z-nh.d.z.d.
+w.0-.q--|mj.d.z-n.n.a.d.
+e-.y.e--|xd-n.d.adh.d.n.a.
+h---a-|na.a.n-a-cn-
+d--j--|ba-v-mf--
+g.b--.s-|bm~s~x--.0-
+s--d-.n.|zm-z-bma-a-
+m.b.z.x.c-d~g~q.|0----
+w-h-g-s-|z-b-a-b-  # 改动 ♭7→h
+d-a-b-c-|z-n-z-0-  # 改动 伴奏♭7→n
+g-0-h-f-|v-b-a-0-  # 改动 ♯5→h 伴奏♯5→b
+t-b-a-g-|f-0---  # 改动 ♯5→b
+g-h-t-r-|v-b-a-f-  # 改动 ♯5→h 伴奏♯5→b
+y---y-|v-g-a-f-  # 改动 ♭7→y ♯5→y 伴奏♯5→g
+t---s-|a-g-a-0-
+d----|0---b-
+0-g-q-j-|z-b-a-b-
+w-q-g-d-|ms-b-ad-b-
+g-0-h-0-|vb-a-f-a-  # 改动 ♯5→h
+t-z-0-g-|vg-0--ba-
+g-h-t-r-|vb-a-fg-af-  # 改动 ♯5→h
+q---r-|a-f-a-f-
+r--e--|zf-b-ad-b-
+---w-|a-d-a-b-
+w--q--|z-b-a-b-
+--b--|a-d-0--
+d~q---.~|za~bag---.~
+0----|0----

@@ -1,0 +1,87 @@
+# 由 MIDI 自动编配：湖色映蓝-录音.mid
+# 原曲的音阶相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调，98% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 6/8；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 83 拍（四分音符），速度有起伏，逐拍跟随，6/8 拍
+speed=82.1
+0--n{1/3}d{2/3}|0---
+j.e.d.j-d.|0.h.0-n-
+j.e.d.j-d.|.h.0-n.0.
+j.e.d.j-d.|0.h.0-n.0.
+speed=76.9
+j.e--d.|0.h-.n.0.
+speed=82.5
+j.e.d.j-d.|0.h.0-n.0.
+j.e.d.j-f.|0.h.0-v.0.
+g.w--f.|0.f.f.g.v.0.
+g.w-.b.s.|0.f.f.g.0-
+g.w--.|0.g.s.g.b.s.
+.w--n.|g.g.s.g.x.0.
+d.h-d-n.|0.s.n-x.0.
+speed=76.6
+d.h.n-n.d.|0.s.0--
+speed=82
+j.e.d.j-d.|0.h.0-n.0.
+j.e.d.j.0-|0.h.0-c.m.
+g.j-g-a.|.d.m-v.0.
+speed=73.1
+h.q-h.b.s.|0.f.a.0-.
+speed=85.8
+g.w.s.g.b.s.|0.g.0--
+speed=81.8
+g.w.s.g-n.|0.g.0-x-
+d.h.n.d-n.|.s.0-x-
+speed=79
+f.h-f-.|.s.n.0-.  # 改动 ♯4→f ♯4→f
+speed=87.7
+n.d.j.e.e.e~y~|0--d.j.
+speed=81.7
+q~u~y-e.e.t.|n.d.j-d.j.
+t~y.~u'y--|v.f.g.s.f.g.
+v.f.g.w.f.g.|0---
+speed=82.6
+b.s.g.w-e~y~|0--s.g.
+q~j~h-s.g-|b.s.b-s.b.
+f~g~h--h.|x.n.d.n.n.d.  # 改动 ♯4→f
+w'e---|x.n.d.h.n.d.
+n.c.m.d-e~h~|0--c.j.
+q~j~h-d-g.|n.d.m-c.m.
+g-.e-.|c.m.b.j.m.g.
+r'e---|v.a.h.a.a.h.
+b.x.b.s-t~q~|0--x.g.
+j~q~w-.g-|b.s.g.s.s.b.
+g'h-.j-.|x.n.d.n.n.d.
+speed=80.2
+q-.w-.|x.n.f.h-n.  # 改动 伴奏♯4→f
+speed=91.1
+-.n~d~h~w~t~u~|-.0-.
+speed=83.4
+~d~h~w~t~u.d~h~w~t~u~|n-.n-.
+~d~h~w~t~u.a~f~j~w~t~|n-.v-.
+v~a~f~j~w~t~v~a~f~j~w~t~|0---
+~a~f~j~w~t~b~s~g~j~w~y~|v-.0-.
+b~s~g~j~w~y~b~s~g~j~w~y~|0---
+b~s~g~j~w~y.n~s~d~f~h~|0-.x-.  # 改动 ♯4→f
+x~n~s~d~f~h.n~s~d~f~h~|0-.x-.  # 改动 ♯4→f ♯4→f
+speed=84.5
+~n~d~f~h~s~n~d~h~w~t~u~|x-.0-.  # 改动 ♯4→f
+n~d~h~w~t~u~n~d~h~w~t~u~|0---
+n~d~h~w~t~u.a~f~j~w~t~|0-.v-.
+n-s'd'f'g'h-.h'j'h'g'h.|v~z~v.s~b~v~a~f~m~s~b~
+-g.s-~n~|v~a~f~m~s~b~b~x~b~m~x~0~
+~x~b~m~x~s'a'm-a~s~n~|0-.c.c.x.
+d.g.j.q'w'q.j'q-|c~m~d~m~s~n~v~a~f~m~s~g~
+speed=82.5
+~z~v~m~q'w'q'j'q--|v~0.~s~g~b~s~g~m~s~h~
+q~j--.~|b~ns~g.m~s~n-.
+.n.c.m.d-|.0--c.
+e~h~q~j~h-d-|j.h.d.m-c.
+g.g~h-t'e-~|m.s.n.d.h.h.
+.w-.r't-|d.s.h.d.h.h.
+speed=88.3
+-.y'u~y~t-|-.dh-.
+speed=83.3
+---|---
+---|---
+.0--.|.0--.
+0---|0---
