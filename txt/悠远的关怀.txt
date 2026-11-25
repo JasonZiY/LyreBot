@@ -1,0 +1,37 @@
+# 由 MIDI 自动编配：悠远的关怀-录音.mid
+# 原曲的音阶相当于 C 大调 / A 小调（没有升降号），不用移调，98% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 74 拍（四分音符），速度平稳，4/4 拍
+speed=74
+h.e.w.e.t.y.w.e.|0----
+h.e.w.e.t.y.w.e.|0----
+h.d.s.d.t.y.w.e.|cn--g-d.s.
+h.e.w.e.t.y.w.e.|bad.g.s-a.n.a.s.
+h.e.w.e.t.y.w.e.|vnd-g-g-h-
+h.e.w.e.t.y.w.e.|cmd---d.h.
+h.e.w.e.t.y.w.e.|vf-.g.bmd.s.a.s.
+h.e.w.e.t.y.w.e.|nd-s.a.bn-d.s.
+h.e.w.e.t.y.w.e.|zvn--xbn-.b.
+h.e.w.e.t.y.w.e.|cn---.cn.
+.e.w.e.t.y.w.e.|----
+h.e.w.e.t-e.w.|n.n.x.c.b-n-
+e.t.w-q.h.q.w.|m.m.x.c.b-m-
+e-t-t-y-|z.z.x.c.b-z-
+e---e.y.|z.c.n.c.n.c.c.c.  # 改动 伴奏♯1→z
+y-.t.e.w.q.w.|x.n.d.f.c.m.g.d.
+e-w.q.h-e.w.|v.n.s.d.s.n.cs.d.
+h-.d.h-.g.|x.n.a-c.m.n.b.
+h-d.g.h-y.u.|n.a.0-n-ch.j.
+q-j.h.g-d.s.|va.z.nm.cn.b.x.cm.x.
+d-h--d.f.|cn.c.na.c.n.c.cn.m.  # 改动 ♯4→f
+g-f.d.f-.s.|zb.b.c.cn.x.c.a.xn.  # 改动 ♯4→f ♯4→f
+d~c~n~m~d~d~h~j~e-h.j.|c-c.n.c-cn.m.
+q-j.h.g-w-|zna-m.n.xbm-s-
+e-t-w-q.j.|zad-bag-xms-a.m.
+h--h-.g.|zvn--xnm-.b.
+h~g~h-d.g.h.s.d.|cn.nd.s.0-.b-
+n.d.s.d.g.h.s.d.|c---b-
+q~y---.~|nh~d---.~
+--.0-.|--.0-.
+0----|0----

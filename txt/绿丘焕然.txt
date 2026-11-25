@@ -1,0 +1,68 @@
+# 由 MIDI 自动编配：绿丘焕然-录音.mid
+# 原曲中途转调，各段分别移调，98% 的音落在白键上
+# 第 1–20 小节相当于 B 大调 / G♯ 小调（5 个升号），升 1 个半音移成 C 大调 / A 小调
+# 第 21–37 小节相当于 A♭ 大调 / F 小调（4 个降号），升 4 个半音移成 C 大调 / A 小调
+# 第 38–58 小节相当于 F♯ 大调 / D♯ 小调（6 个升号），升 6 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 130 拍（四分音符），速度平稳，4/4 拍
+speed=130
+0-.n-d.h.q.|0----
+j-g.q.j-g.q.|0----
+j-g-.d.h.q.|0-.n--.
+j-g.q.j-g.q.|----
+j-g.e.h.j.q-|-.n-c.n.a.
+w-e---|m-b.a.m-b.a.
+w.e.q.u-.t.f.|m-b.z-b.a.0.
+d-a.f.d-a.f.|0----
+d-a.w.g.h.j-|0-.b-x.b.s.
+q-w-a-.s.|a-m.s.0--
+q.w.t.r-.h.h.|a-m.x-n.s.0.  # 改动 ♯4→r
+g-f.h.g-f.w.|0----  # 改动 ♯4→f ♯4→f
+h-f.e.h.j.q-|0-.n-c.n.a.  # 改动 ♯4→f
+w-e---|m-b.a.m-b.a.
+w.e.q.u.t-e.f.|m.b.b.z-b.a.0.
+d-a.f.d-a.f.|0----
+d-a.w.g.h.j-|0-.x-b.s.d.
+q-w.d.s-n.e.|s-n.c--d.
+-w~e~w.g.h.j-|s-n.x-b.s.d.
+t-w.d.s-m.e.|s-m.c--d.
+-.q-j.q.h.|f-s.n-c.n.a.  # 转调到 A♭ 大调 / F 小调，从这里起升 4 个半音
+-.e-.q.j.|m-b.a.m-n.mg.
+q.w-e-w.e.q.|.f.m.zg-b.a.f.
+-.t-.e.q.|d-a.af.d-a.g.
+w.e-r-e.r.h.|d-a.xh-n.s.f.
+-.r-.e.w.|d-s.fh.d-s.f.
+e.r-t.~q.~j.j.|d-s.x-v.n.a.
+.q-w.~q.~j.g.|m.a.b.c-m.d.s.
+.d-q-j.q.h.|a.m.c.n-c.n.a.
+-.e-.q.g.|m-b.a.m-b.a.
+q.w-e-w.e.q.|.f.m.zg-b.a.f.
+-.t-.e.q.|d-a.af.d-a.g.
+w.e-r-e.r.h.|d-a.xh-n.s.f.
+-.r-.e.w.|d-s.fh.d-s.f.
+e.r-t.~q.~j.j.|d-s.v-f.a.c.
+.g-h--.|b.m.s.na-c.n.a.
+-.n-d.h.q.|m-b.0--.
+w-h.r.e-q.r.|0----  # 转调到 F♯ 大调 / D♯ 小调，从这里起升 6 个半音；改动 ♯1→w
+e-q.h.w.e.r-|0-.x-n.s.f.
+t-y---|dg-ah.f.d-a.f.
+t.y.r.e-.q.j.|d-nf.vd-a.af-  # 改动 ♭7→j
+h-f.j.h-f.j.|-0---  # 改动 ♭7→j ♭7→j
+h-f.t.q.w.e-|0-.zg-b-g.
+r-t.g--g.|f-dg-v-d-
+r.t.q.u-.w.w.|f-ad.bj-s.g.0.
+q-j.w.q-j.t.|0----
+w-j.y.w.e.r-|0-.xh-n.s.f.
+t-y---|dg-ah.f.d-a.f.
+t.y.r.e.q-y-|d-af.vd-a.f.h.  # 改动 伴奏♭7→h
+---f.j.|h-f.h.h-0-  # 改动 ♭7→j 伴奏♭7→h
+h-f.t.q.w.e-|0-.b-a.g.h.
+r-t.h.g-d.t.|g-d.n--h.
+~r.~e.w--.|g-d.xf-n.s.f.
+-.f.d-a.f.|d-a.0--.
+d-a.s-h.w.r.|0----
+e-q.r.e-q.r.|0----
+e-q---|0----
+y----|df----
+0----|0----

@@ -1,0 +1,67 @@
+# 由 MIDI 自动编配：海沫的欢语-录音.mid
+# 原曲中途转调，各段分别移调，95% 的音落在白键上
+# 第 1–8 小节相当于 A♭ 大调 / F 小调（4 个降号），升 4 个半音移成 C 大调 / A 小调
+# 第 9–26 小节相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调
+# 第 27–39 小节相当于 A♭ 大调 / F 小调（4 个降号），升 4 个半音移成 C 大调 / A 小调
+# 第 40–56 小节相当于 F 大调 / D 小调（1 个降号），降 5 个半音移成 C 大调 / A 小调
+# 旋律：第 1 部分
+# 拍号 4/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 120 拍（四分音符），速度平稳，4/4 拍
+speed=120
+h-d.e.j-.e.|n-0-m-d-
+e----|h----
+~w-~e.u-.e.|~h.~d-j-d-
+y--u.y.w-|h---.s.
+y-.e.u-.e.|nh-d-j-.c.
+e--e-w.q.|ndh-d-0--  # 改动 ♯1→q
+r-.t.r-.e.|xf-sf-dfj-.n.
+w--h.g-.|sfh--.0-n.
+d-0-e--|zb-cb--.b.  # 转调到 F 大调 / D 小调，从这里起降 5 个半音
+t--j--|z-cb--.z.
+h----|va-vn--.z.
+b.a.s.g.b.a.q.j.|0-cb-0-s.g.
+g--s-g-|z-cb--.b.
+---q.j.|z-cb--.z.
+g--s--|v-bn--.z.
+.a.s.g.t.r.e.q.|vb-vn-d.s.a.vg.
+g--e--|zbd-cb-cba-.b.
+t--j--|zs-cb-g-.b.
+h-a-s-g-|vaf-vn--.z.
+.a.s.g-.w.q.|vb-vn-b.a.sd.g.
+w.e-.g--|z-cb--.b.
+b-b-s'd-w.q.|z-c-c-n.zb.
+w.e--.h.q.|va---s.z.
+-f.g.g-s.g.|vb.a.vns-b.a-v.
+--d--|z-zba-zcb-.b.
+g--w--|z-zcb-zcb-zcb.b.
+h--s--|xn-nsf-xvn-xvn.n.  # 转调到 A♭ 大调 / F 小调，从这里起升 4 个半音
+q---h.g.|xa-sfh-sfh-nsf-
+d--q--|zc-cna-adh-ad.c.
+j--s-h.g.|zm-mdg-cbm-ad.c.
+q--f-0-|mas-msf-vn-vs.m.
+j--q--|cm-nsd-adh-ad.c.
+w--w--|n-dh-dh-dh.c.  # 改动 ♯1→w ♯1→w
+d--j--|n-cn-nmd-nd.v.
+q-f-f-.j~q~|va-vna-cna-bna.z.
+w.~q{7/12}j{2/3}h{2/3}g{2/3}s{2/3}|vs.~a~sf{1/3}m{2/3}nsf{2/3}b{1/3}v{1/3}x{2/3}
+d--w'e--|zc-cba-adg-dg.b.
+u--t-.h.|z-adg-adg-dg.b.
+w.e.f-f-f.m.|m-ms-ms-s-
+a-a-m--|xb-xb-xb-.b.  # 转调到 F 大调 / D 小调，从这里起降 5 个半音
+q-.t.w-.t.|z-cb-b-z.b.
+t--g-s-|zag-cb-b-.b.
+f-.t.e--|v-v--.z.
+t--h-.g.|v-vn-b.a.s-
+g--s-g-|z-cb-n-.b.
+q--g-w-|zba-cb-cb-.b.
+f-.y.y-.t.|v-v-vs-.z.  # 改动 ♭7→y ♯5→y
+0--h.h.g.f.|vf-v-n.b.b.v.  # 改动 ♭7→h ♯5→h 伴奏♭7→n 伴奏♯5→b
+q-.g.w-.g.|za-cb-cbs-.b.
+q--g--|zag-cb-cbs-.b.
+r-.t.e--|vaf-v--.v.
+t--h--|v-vn-b-a.m.
+g--s-g-|zb--cb-.b.
+q--g-s-|z-cba-cb-.b.
+f-a-s--|v-v--.z.
+q--h--|v--b--  # 改动 ♭7→h
+0----|0----

@@ -1,0 +1,45 @@
+# 由 MIDI 自动编配：漪澜摇漾-录音.mid
+# 原曲的音阶相当于 C 大调 / A 小调（没有升降号），不用移调，97% 的音落在白键上
+# 旋律：第 1 部分
+# 拍号 3/4；第 1 声部是旋律，第 2 声部是原曲伴奏弹的音
+# 节拍是从音符推断的：约每分钟 80 拍（四分音符），速度平稳，3/4 拍
+speed=80
+g~g~g~g~g~g~g~g~g~g~g~g~|zad-xsd--
+h~h~h~h~h~h~h~h~h~h~h~h~|xsf.b.xna--
+j~j~j~h~j~j~j~j~j~j~j~j~|bsg-xbm--  # 改动 ♭7→h
+h-h--|bms-bsf--
+g--.d~j~|zad-zc-~a~0.
+h-.g.~f~d~f~|xsd.b.xna--
+j---|cdg-xbm-{1/3}d{1/3}m{1/3}
+h---|vaf-zv-m.n~n~  # 改动 伴奏♭7→n
+g--.d~j~|zad-zc-~a~0.
+h-.g.~f~d~f~|xas.b.xna--  # 改动 ♭7→h
+j---|cdg-xbm-.xbm.
+-h--|b-xsf--
+d'f-.d.f{1/3}h{1/3}q{1/3}|x-xna--
+w'e-.w{5/6}t{1/3}r{1/3}|bgj-xbm--
+e-.j-q'w.|cgj-xbm-xbm-
+-q.q{5/6}h{1/3}d{1/3}|ngh-cn--  # 改动 ♯1→q ♯1→q
+q--~f~h~q~|ngh-cba.d-.
+j-.w'e-j.|bsg-xna--
+h.~j~g--|zad.~n~cna--
+---|cna-cna--
+g--.d~j~|zad-zc-~a~0.
+h-.g.~f~d~f~|xsd.b.xna--
+g--{1/3}d{2/3}|c-xbm-{2/3}m{1/3}
+n-v-m.m~n~|v-z--  # 改动 ♭7→m
+b-c-~a~d~j~|z-z--
+j'h-.g.~f~d~f~|x.b.xna--
+f'g---|c-xbm-.xbm.
+-n--|b-xv--
+d'f-a.d.f{1/3}h{1/3}q{1/3}|x-xn--
+w'e-.w{5/6}t{1/3}r{1/3}|b-xbm--
+e-.j-q'w.|c-xbm-xbm~0.~
+-.q{5/6}h{1/3}d{1/3}|n-cn--  # 改动 ♯1→q
+j'q-.d.f{1/3}h{1/3}q{1/3}|n-cba--
+j-.w'e-.|b-xna--
+q---|z-bmd--
+-e--|zna.s.zdg--
+e---|zdg---
+-.~0-~|-.~0-~
+0---|0---
