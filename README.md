@@ -116,7 +116,7 @@ python -m lyrebot.jianpu txt/OST/枫丹/柔灯轻漾时.txt
 
 ## 曲谱来源
 
-`txt` 文件夹里的曲谱，一部分转写自 <https://space.bilibili.com/76052941> 发布的诗琴简谱，其余来自公开的音频和乐谱资源。乐曲和编曲归各自的作者所有。
+`txt` 文件夹里的曲谱，一部分转写自 <https://space.bilibili.com/76052941> 发布的诗琴简谱，一部分编配自 <https://space.bilibili.com/616803264> 发布的演奏录音，其余来自公开的音频和乐谱资源。乐曲和编曲归各自的作者所有。
 
 ## 许可证
 
