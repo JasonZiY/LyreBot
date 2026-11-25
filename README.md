@@ -105,11 +105,13 @@
 
 录音编出来的和键盘记下来的曲谱，导出时节奏会整理得便于阅读，右上角有注明；曲谱本身不改，演奏仍照曲谱。版式和各类曲谱的导出方式见 [导出简谱](docs/原理与开发记录.md#导出简谱)。
 
-命令行也可以导出，可以一次给多个曲谱：
+命令行也可以导出，在 LyreBot 文件夹里运行，可以一次给多个曲谱：
 
 ```text
-python -m lyrebot.jianpu txt/OST/枫丹/柔灯轻漾时.txt
+python\python.exe -m lyrebot.jianpu txt/OST/枫丹/柔灯轻漾时.txt
 ```
+
+这是便携版自带的 Python。用自己装的 Python 运行源码的，把开头的 `python\python.exe` 换成 `python`。
 
 ## 更多文档
 
